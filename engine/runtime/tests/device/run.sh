@@ -44,7 +44,7 @@ out=$repo/artifacts/engine/device/$name${RESULT_SUFFIX:-}
 mkdir -p "$out"
 log "target $serial ($name) abi=$abi api=$api -> $out"
 case "$abi" in
-  arm64-v8a) layout=$repo/artifacts/image-research/debian-13-slim-arm64 ;;
+  arm64-v8a) layout=$repo/artifacts/engine/fixtures/debian-13-slim-arm64 ;;
   x86_64) layout=$repo/artifacts/engine/debian-13-slim-amd64 ;;
   *) echo "unsupported ABI $abi" >&2; exit 1 ;;
 esac
@@ -61,7 +61,7 @@ apk=$harness/build/outputs/apk/debug/EngineHarness-debug.apk
 test_apk=$harness/build/outputs/apk/androidTest/debug/EngineHarness-debug-androidTest.apk
 if [[ ${HARNESS_BUILD:-1} != 0 ]]; then
   log "build harness APKs ($abi) under the Gradle lock"
-  flock "$repo/artifacts/.gradle.lock" "$repo/gradlew" -p "$harness" --console=plain -q \
+  "$repo/tools/with-build-lock.sh" "$repo/gradlew" -p "$harness" --console=plain -q \
     -PengineAbis="$abi" -PengineOut="$test_engine_out" assembleDebug assembleDebugAndroidTest
 fi
 [[ -f $apk && -f $test_apk ]] || { echo "harness APKs missing (run without HARNESS_BUILD=0)" >&2; exit 1; }

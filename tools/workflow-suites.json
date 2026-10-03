@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "suites": {
+    "core": {"command": ["./gradlew", ":core:test"], "heavy": true, "reports": ["core/build/test-results/test"]},
+    "agent": {"command": ["./gradlew", ":agent:test"], "heavy": true, "reports": ["agent/build/test-results/test"]},
+    "proxy": {"command": ["./gradlew", ":proxy:test"], "heavy": true, "reports": ["proxy/build/test-results/test"]},
+    "app-unit": {"command": ["./gradlew", ":app:testEmulatorDebugUnitTest"], "heavy": true, "reports": ["app/build/test-results/testEmulatorDebugUnitTest"]},
+    "lint": {"command": ["./gradlew", ":app:lintEmulatorDebug"], "heavy": true, "reports": ["app/build/reports/lint-results-emulatorDebug.txt"]},
+    "android-apk": {"command": ["./gradlew", ":app:assembleEmulatorDebug", ":app:assembleEmulatorDebugAndroidTest"], "heavy": true, "apkSnapshot": true},
+    "rust-server": {"command": ["cargo", "test", "--manifest-path", "engine/Cargo.toml", "--locked", "-p", "workflow-engine", "-j", "2"], "heavy": true},
+    "runtime-host": {"command": ["engine/runtime/test-host.sh"], "heavy": true},
+    "native": {"command": ["native/test-host.sh"], "heavy": false},
+    "web": {"command": ["npm", "test"], "cwd": "web", "heavy": false},
+    "image": {"command": ["python3", "-m", "unittest", "discover", "-s", "image/tests", "-v"], "env": {"PYTHONPATH": "image"}, "heavy": false},
+    "infrastructure": {"command": ["python3", "-m", "unittest", "discover", "-s", "tools/tests", "-v"], "env": {"PYTHONPATH": "tools"}, "heavy": false},
+    "documentation": {"command": ["python3", "tools/check-docs.py"], "heavy": false}
+  }
+}

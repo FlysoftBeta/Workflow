@@ -43,7 +43,7 @@ import top.flysoftbeta.workflow.core.store.WorkspaceStore
 import top.flysoftbeta.workflow.ui.design.dnd.FilesDragPayload
 
 /**
- * Activity-retained owner of the live panel controllers (docs/report/initial/w5b-shell.md §2.4). Only
+ * Activity-retained owner of the live panel controllers (docs/implementation/android-client.md). Only
  * the active session has a [SessionRuntime]; switching sessions disposes the previous one. Leaving to
  * the Launcher keeps it, so returning is instant and nothing reloads.
  */

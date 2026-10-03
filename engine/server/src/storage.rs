@@ -1,4 +1,7 @@
-use crate::{Error, Result, layout};
+use crate::{
+    layout,
+    protocol::{Error, Result},
+};
 use serde_json::{Value as V, json};
 use sha2::{Digest, Sha256};
 use std::{
@@ -155,7 +158,7 @@ pub fn read_json(path: &Path) -> Result<V> {
     if bytes.len() > 32 * 1024 * 1024 {
         return Err(Error::business("too_large", "document exceeds limit"));
     }
-    crate::strict_json(&bytes).map_err(|e| Error::business("corrupt", &e.to_string()))
+    crate::protocol::strict_json(&bytes).map_err(|e| Error::business("corrupt", &e.to_string()))
 }
 pub fn write_json(path: &Path, v: &V) -> Result<()> {
     atomic(

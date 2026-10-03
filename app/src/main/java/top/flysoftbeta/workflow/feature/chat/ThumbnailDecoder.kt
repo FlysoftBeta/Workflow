@@ -12,4 +12,3 @@ internal fun decodeThumbnail(data: ByteArray, sizePx: Int): ImageBitmap? = runCa
     while (bounds.outWidth / sample > sizePx * 2 || bounds.outHeight / sample > sizePx * 2) sample *= 2
     BitmapFactory.decodeByteArray(data, 0, data.size, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
 }.getOrNull()
-

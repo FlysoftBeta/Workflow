@@ -1,11 +1,21 @@
-# 历史归档
+# Historical archive
 
-这里保存已退出生产的实现与设计，不作为当前行为的来源；当前文档从 [README](../../README.md) 进入。
+This directory preserves original implementation history, retired source, reports, and licenses. It is not a source of current product behavior. Start at the [repository README](../../README.md) for maintained documentation.
 
-- [initial](initial/)：重写前的长久文档快照，路径/所有权已经被 Rust Workspace Engine 取代。
-- [native-engine](native-engine/ARCHIVE.md)：原 C 容器/loader/生成器及许可证的完整源码快照；当前实现为 `engine/{runtime,loader}`。
-- [web-chat](web-chat/README.md)：原 WebView 聊天/Markdown 源码、资产、npm lockfile 与退役依赖许可证；当前聊天为原生 Compose。
-- `legacy-runtime/proxy/`：无生产调用的旧代理示例配置。
-- `android-workspace/AndroidFileWatcher.kt`：不再使用的客户端文件监视器。Android 文件系统适配仅被 instrumented reference-store 测试使用，位于 `app/src/androidTest/`。
+Historical originals retain their original language, bytes, commands, links, and evidence. Relative paths and references inside them describe their original locations; they are not maintained instructions. Use the [relocation manifest](relocations-2026-10-03.json) to find moved material. To reproduce a historical experiment, restore its recorded layout in an isolated checkout; do not add archived implementations to production builds.
 
-归档文件中的相对路径、章节引用和命令记录原始位置；复现实验应在隔离 checkout 恢复原目录，不能加入生产构建。现行验收 oracles 与 harness 已迁至 `engine/runtime/tests/`。过程证据继续位于 [report](../report/README.md)，初始交付 checkpoint 位于被忽略的 `artifacts/checkpoints/initial-1.0.0/`。
+| Archive | Original location and purpose |
+| --- | --- |
+| [Initial design documents](initial/) | Existing frozen documentation from before the Rust Workspace Engine rewrite. |
+| [Native C engine](native-engine/ARCHIVE.md) | Existing frozen C runtime, loader, syscall generator, harness, and upstream licenses. Production code is in `engine/runtime` and `engine/loader`. |
+| [Web chat](web-chat/README.md) | Existing frozen WebView chat and Markdown sources, generated assets, lockfile, and upstream licenses. Current chat uses native Compose. |
+| [Legacy proxy examples](legacy-runtime/proxy/) | Existing retired proxy configuration examples with no production callers. |
+| [Android file watcher](android-workspace/AndroidFileWatcher.kt) | Existing retired client-side watcher. Android reference-store test adapters remain under `app/src/androidTest`. |
+| [Implementation 1.0.0 reports](implementation-1.0.0/README.md) | Original `docs/report/initial/` and `docs/report/rewrite/`, plus their former catalog and the former archive catalog. |
+| [Retired experiments](experiments/README.md) | Original diagnostic source retired from `tools/`; kept with its original documentation. |
+
+New verification records belong in [docs/report](../report/README.md). Historical reports only substantiate the source and test matrix recorded at their own dates.
+
+Local build output, research downloads, temporary workspaces, old prototype artifacts, and the original brief are kept separately in ignored `artifacts/archive/implementation-2026-10-03/`. Its `README.md` and `relocations.json` index those opaque local moves. They are not public release artifacts. No local history or credentials are copied into this source archive.
+
+The initial delivery checkpoint remains at `artifacts/checkpoints/initial-1.0.0/`; signed delivery and signing material remain under their existing `artifacts/delivery/` and `artifacts/signing/` roots. Active runtime and image inputs, emulator storage, workflow state, and build/device locks remain under the retained roots listed in the manifest. The active ARM64 device-test fixture moved from `artifacts/image-research/debian-13-slim-arm64` to `artifacts/engine/fixtures/debian-13-slim-arm64`.

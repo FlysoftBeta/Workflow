@@ -119,7 +119,7 @@ echo "== pack from inside the guest"
 podman run -d --name "$repack" "$tag" sleep infinity >/dev/null
 podman exec "$repack" mkdir -p /tmp/workflow-image
 for part in guest wfimage versions.env; do podman cp "$image_dir/$part" "$repack:/tmp/workflow-image/$part"; done
-flock "$project/artifacts/.gradle.lock" podman exec "$repack" bash /tmp/workflow-image/guest/pack-in-guest.sh /tmp/out podman-roundtrip >"$work/repack.log" 2>&1 \
+"$project/tools/with-build-lock.sh" podman exec "$repack" bash /tmp/workflow-image/guest/pack-in-guest.sh /tmp/out podman-roundtrip >"$work/repack.log" 2>&1 \
     || { tail -20 "$work/repack.log"; failures=$((failures + 1)); }
 mkdir -p "$work/repacked"
 podman cp "$repack:/tmp/out/image.tar.zst" "$work/repacked/" 2>/dev/null || true

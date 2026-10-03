@@ -1,0 +1,41 @@
+# Workspace Server
+
+`engine/server` is the only production writer of workspace state. Android connects through the [JSONL protocol](protocol.md) and holds a disposable projection of the Server's replies. The local process starts with `workflow-engine serve --root <user-file-root>`; Android packages it as `libworkflow-engine.so`. Runtime, loader, and customized image locations are supplied explicitly. Missing environment components do not cause a fallback to a host shell or historical Kotlin repository.
+
+`main.rs` handles bootstrap and request dispatch. `protocol.rs` contains strict JSON decoding, frame and blob bounds, raw request-ID handling, and error envelopes. Workspace policy belongs in `workspace.rs`, filesystem operations in `storage.rs`, layout semantics in `layout.rs`, and environment and process lifecycle in their respective modules. This separation keeps transport mechanics independent of persistence decisions.
+
+## Transactions and recovery
+
+Workspace settings live in `.workspace/config.json`, the environment declaration in `.workspace/env.json`, and sessions, layouts, file drafts, and composer drafts in `.workspace/state/workspace.json`. The Server holds an exclusive workspace process lock and serializes state changes. It writes temporary files, synchronizes them, renames atomically, and synchronizes the containing directory before acknowledging a new revision.
+
+Recovery retains a valid snapshot backup and preserves corrupt original bytes in `.workspace/corrupt/`. Unknown state, draft, or composer formats remain read-only instead of being migrated. A damaged environment record does not make sessions and ordinary files inaccessible. Invalid external workspace configuration leaves the last valid configuration in use and exposes a `configProblem`; it must not be overwritten simply because parsing failed.
+
+Layouts are calculated inside the Server using the current wire model and the same invariants as the reference Kotlin reducer. Closing a panel leaves its Working Resource intact. Automatic archive protection applies to the latest live session referencing each dirty resource. Manual archival requires `save_all`, `keep_drafts`, or `discard` when dirty resources exist. `save_all` checks every file version before archiving and retains unsent conversation input. A composer acknowledgement clears input only when owner, revision, text, and attachments match exactly; an empty tombstone preserves monotonic revisions. The [workspace model](workspace.md) explains these rules in detail.
+
+## Files and service documents
+
+File paths cannot be absolute, traverse parents, or cross a symlink, including a symlink pointing back inside the workspace. Most internal state is inaccessible to file operations. Explicit configuration files and safe `.workspace/services/<serviceId>/...` paths are exceptions so settings and service assets can be edited through the same Engine APIs.
+
+Moving a file updates panel targets across sessions, drafts, and attachment references. A destination with an unsaved draft prevents the move. Saving an existing file preserves its permissions. New files, uploads, moves, and trash restores publish through `renameat2(RENAME_NOREPLACE)`, preventing a competing file created at the destination from being overwritten. Uploads are staged and synchronized before publication; their original length must match the declared length.
+
+Backend indexes use opaque documents so Server core does not need to understand Codex or Claude state. Service text documents share a single original file with the editor. Their revision sidecars contain a hash and revision only, and external edits invalidate stale compare-and-set writes. Local service state is persisted after executors report measured results. Network reports generate a resolver file for the guest only; they never change host settings.
+
+## Environments and process ownership
+
+Each environment build starts from a verified customized image and creates an independent generation. Home and toolchains reside in persistent stores, separate from generation root filesystems. The Server calls the image's `envctl` to install versions and packages, verifies every requested language and package with `verify-many`, and runs ordered post-scripts before publishing an activation. Home changes from those scripts are staged privately, checked against concurrent changes, and merged only on successful activation. Both success and failure clean up staging.
+
+First explicit reconciliation enrolls the environment in declaration monitoring. Saved or external changes then trigger builds, while file-only and local-service-only connections remain lazy. A failed declaration is not retried endlessly. Existing usable generations and cached toolchains survive failures; current code conservatively retains old generations and does not implement automatic garbage collection.
+
+A background build does not replace a running environment. A verified candidate becomes pending while managed processes are still active, and explicit restart stops those process groups before switching. Without running processes, activation can proceed directly. The [environment document](environment.md) describes the complete sequence and status model.
+
+Terminals use PTYs; other processes use bidirectional stdio. Every product process runs through the configured Rust runtime and generation root. Caller-supplied variables are applied by guest `/usr/bin/env`, preventing them from injecting a host-runtime dynamic loader. Stdout and stderr retain vendor bytes without interpreting approvals. Explicit stop, restart, and Server shutdown clean up owned process groups. A persistent reaper thread owns the parent-death relationship rather than leaving it attached to a short-lived request thread.
+
+Environment building, output reading, watches, and process waits do not hold the workspace commit lock for their duration. This is why a long toolchain download or terminal read need not freeze file and session operations.
+
+## Bounded resources
+
+Protocol frames are limited to 32 MiB and raw blob chunks to 64 KiB. Editable text and service documents are limited to 16 MiB; the persisted authoritative state document is limited to 24 MiB. A combined response that exceeds the frame limit fails explicitly with `too_large`; large binary contents use `files.read` and uploads.
+
+Each process output stream retains a 4 MiB ring buffer, and clipped reads disclose their actual starting offset. The Server permits up to 128 pending long requests, 128 active processes, and 16 incomplete uploads, each no larger than 8 GiB. These are implementation limits, not evidence that every extreme combination has device acceptance coverage.
+
+The [Server report](../archive/implementation-1.0.0/reports/rewrite/rust-workspace.md) and [integration report](../archive/implementation-1.0.0/reports/rewrite/integration.md) record protocol, filesystem, layout-oracle, environment, and process tests. Host results and Android integration results remain distinct; the [current status](../status.md) states their limits.

@@ -10,11 +10,14 @@ import top.flysoftbeta.workflow.feature.terminal.TerminalPanelProvider
 import top.flysoftbeta.workflow.feature.settings.SettingsPanelProvider
 
 /**
- * The single integration point of feature panels. Each feature workstream replaces its placeholder
- * here with its own provider (and deletes the placeholder when none is left using it).
+ * The composition point for independent feature panels. A caller can supply a scoped proxy provider
+ * without replacing the process-wide service, for example when hosting an isolated acceptance UI.
  */
 object PanelWiring {
-    fun create(context: Context): PanelRegistry {
+    fun create(
+        context: Context,
+        proxy: PanelProvider = ProxyPanelProvider(context.applicationContext),
+    ): PanelRegistry {
         val editor = EditorPanelProvider()
         val chat = ChatPanelProvider(top.flysoftbeta.workflow.app.AndroidChatFeatureServices(context.applicationContext))
         return PanelRegistry(
@@ -24,7 +27,7 @@ object PanelWiring {
                 PanelKind.DIFF to editor,
                 PanelKind.TERMINAL to TerminalPanelProvider(context),
                 PanelKind.CONVERSATION to chat,         // feature.chat
-                PanelKind.PROXY to ProxyPanelProvider(context.applicationContext),
+                PanelKind.PROXY to proxy,
                 PanelKind.SETTINGS to SettingsPanelProvider(top.flysoftbeta.workflow.app.AndroidSettingsFeatureServices(context.applicationContext)),
             ),
             explorer = FilesExplorerProvider(context),

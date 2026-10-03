@@ -1,17 +1,29 @@
-# 状态
+# Current implementation and verification status
 
-当前交付版本为 **1.0.0 Rust Workspace Engine 重写**：Server 拥有工作区状态，Android 是连接 shell，对话已改为原生 Compose。初始接续基线冻结在 `artifacts/checkpoints/initial-1.0.0/`；其 [历史验收](report/initial/continuation-1.0.0.md) 不替代重写后的验证。
+The delivered baseline is **Workflow 1.0.0, version code 10000**, with the Rust Workspace Engine owning workspace state and Android acting as its connection shell. Chat uses native Compose; the terminal alone uses WebView. The original continuation baseline is frozen under `artifacts/checkpoints/initial-1.0.0/`, and the Rust delivery snapshot under `artifacts/checkpoints/rust-1.0.0/`. [Initial acceptance](archive/implementation-1.0.0/reports/initial/continuation-1.0.0.md) is historical evidence, not proof that the rewritten architecture passed the same checks.
 
-| 范围 | 已记录证据与边界 |
-| --- | --- |
-| Rust runtime / loader | host 优化/Debug 各 68/68；API 28 x86_64 app sandbox 基础 24/24 + M5 29/29；两个 Android ABI 构建。见 [运行时报告](report/rewrite/rust-runtime.md) |
-| Workspace Server | 权威状态、布局 oracle、协议/文件/文档 CAS、真实定制镜像生命周期；host 结果与 Android 集成区分。见 [Server 报告](report/rewrite/rust-workspace.md) |
-| 定制环境 | ARM64 与 amd64 完整镜像，多版本工具链、验证与 envctl；`base` 不是产品 fallback。见 [镜像报告](report/rewrite/custom-images.md) |
-| 原生对话 | Compose Markdown、公式、表格、代码、流式长文与滚动；单元测试及 API 28 截图/交互证据见 [chat 报告](report/rewrite/native-chat.md) |
-| 客户端服务 | 工作区配置/代理文档与状态经 Engine；Android 只执行本机能力。见 [服务报告](report/rewrite/client-services.md) |
-| 工作台 | 真实 Engine 交互、菜单、拖放、终端和已发现的集成问题分别记录；不能以参考 store 测试冒充。见 [工作台报告](report/rewrite/workbench-qa.md) |
-| 仓库边界 | Kotlin writer 仅在 test fixtures；C runtime、旧 chat WebView、旧设计已归档；生产资源仅保留 xterm。见 [清理报告](report/rewrite/repository-cleanup.md) |
+The [integration report dated 2026-10-03](archive/implementation-1.0.0/reports/rewrite/integration.md) ties source snapshots, signed artifacts, and the recorded acceptance runs together. Its delivered baseline passed 432 JVM tests, with Android lint reporting zero errors and 32 warnings. Those are results for the report's identified source and artifacts, not a claim that every later repository edit has rerun the full matrix. Each subsystem report retains the snapshot it tested.
 
-最终整合与源码/签名产物对应关系见 [集成交付报告](report/rewrite/integration.md)。432 项 JVM 测试通过，Android lint 为 0 errors / 32 warnings；实际 API 28 矩阵覆盖首启连接、工作台三种尺寸、原生聊天、环境构建/重启/失败回滚、客户端恢复及 Engine 所有权下的本机服务。各子报告仍保留其当时的源码/产物快照，不从历史结果推定最终验收。未知协议版本明确拒绝，没有旧数据迁移、跨版本适配、宿主进程 fallback 或远程/SSH 实现。
+The subsequent [workspace organization report](report/2026-10-03-workspace-organization.md) records the module separation, English documentation, coordination tools and targeted regression checks performed after that delivery.
 
-旧 generation 保守保留，暂不自动回收。仍需独立记录真实账户模型轮次、ARM64 日常平板/OEM Root、API 29+ 与真实 16 KiB 设备验收。4 KiB 链接的 amd64 glibc 动态库存在 16 KiB 页限制；Rust 的 unsafe 低层兼容实现也不等同于内存安全重构。所有破坏性/Root 验证仅使用 wrapper 管理的隔离 AVD，不改用户日常设备。
+## Implemented boundaries
+
+The production Server, runtime, and loader are Rust components under `engine/`. Workspace configuration and private state live beneath `<workspace-root>/.workspace/`. The Server commits sessions, layouts, files, drafts, settings, environments, and service state. Android retains only connection profiles and workspace-delivered local configuration. Historical Kotlin writers are test fixtures, and the archived C runtime and WebView chat are outside production build inputs. The [repository cleanup report](archive/implementation-1.0.0/reports/rewrite/repository-cleanup.md) records the earlier separation; current module ownership is documented in the [implementation overview](implementation/README.md).
+
+Both Android ABIs package customized workspace images. First environment use requests reconciliation; subsequent saved or external declarations are monitored by the Server, while unused file/service-only connections remain lazy. Verified builds preserve the running generation until activation is safe or the user confirms restart. Failed post-script home changes are not published. Old generations are conservatively retained: automatic garbage collection is not implemented.
+
+The protocol requires an exact version match. There is no legacy migration, cross-version adapter, host terminal/agent fallback, or implemented remote/SSH connection. Remote bootstrap and transport are abstraction boundaries only. Capability state reflects measured executor results rather than switches, installed packages, or the presence of `su`.
+
+## Recorded acceptance
+
+The [Rust runtime report](archive/implementation-1.0.0/reports/rewrite/rust-runtime.md) records 68/68 host acceptance cases in optimized and debug configurations, API 28 x86_64 app-sandbox results of 24/24 baseline and 29/29 M5 cases, and builds for both Android ABIs. The [Server report](archive/implementation-1.0.0/reports/rewrite/rust-workspace.md) covers authoritative state, the Kotlin/Rust layout oracle, JSONL and file contracts, document/configuration compare-and-set, process ownership, and customized-image lifecycle. Host tests and Android integration results remain separate in those reports.
+
+The [image report](archive/implementation-1.0.0/reports/rewrite/custom-images.md) records complete ARM64 and amd64 image checks, real toolchains and compilers, multiple and disabled language selections, and profile verification. The [native-chat report](archive/implementation-1.0.0/reports/rewrite/native-chat.md) records Compose Markdown, formulas, tables, code, long streaming content, scroll behavior, unit checks, and API 28 screenshot/interaction evidence. Successful image construction or protocol replay does not by itself demonstrate a live account's model turn on a device.
+
+The [workbench report](archive/implementation-1.0.0/reports/rewrite/workbench-qa.md) distinguishes real Engine interaction from reference-store fixtures and records menus, drag/drop, terminal integration, and discovered repairs. The integration matrix covers API 28 first connection, three workbench sizes, environment build/restart/failure recovery, client reconnect, and services under Engine ownership. The [client-services](archive/implementation-1.0.0/reports/rewrite/client-services.md), [service acceptance](archive/implementation-1.0.0/reports/rewrite/service-acceptance.md), [client-boundary](archive/implementation-1.0.0/reports/rewrite/client-boundary.md), and [editor](archive/implementation-1.0.0/reports/rewrite/editor-repair.md) reports identify the later service, lifecycle, and editor checks and their limits.
+
+## Remaining acceptance and limitations
+
+Real-account model turns, physical ARM64 daily-tablet behavior, OEM Root managers, API 29 and later, and real 16 KiB devices still need their own recorded acceptance. API 28 x86_64 emulator success must not be presented as coverage for those targets. Low-level runtime code still contains unsafe Rust, and the ptrace compatibility layer is not a security sandbox. Real 16 KiB systems retain limitations with 4 KiB-linked amd64 glibc shared libraries. Protocol, text, state, and output buffers also have the explicit limits documented in the [Workspace Server](implementation/workspace-engine.md).
+
+New verification follows the [testing guide](development/testing.md). Destructive and Root tests run only in isolated AVDs managed by the emulator wrapper. The user's daily tablet, its other applications, routes, DNS, and system settings are not test fixtures.

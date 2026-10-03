@@ -26,7 +26,7 @@ import top.flysoftbeta.workflow.ui.design.dnd.DragPayload
 
 /*
  * The panel contract between the Workbench shell (feature.workbench) and the feature workstreams
- * (files/editor, terminal, chat, proxy, settings). See docs/report/initial/w5b-shell.md §2.
+ * (files/editor, terminal, chat, proxy, settings). See docs/implementation/android-client.md.
  *
  * The shell owns layout, chrome and routing: tab rows, the More menu's layout (②) and session (③)
  * groups, region docking, drag and drop between stacks, the corner clusters. A feature owns what one

@@ -219,4 +219,3 @@ class ClaudeBackendReplayTest {
         assertTrue(failed.items.none { it is AgentMessageItem })
     }
 }
-

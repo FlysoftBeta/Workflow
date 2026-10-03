@@ -6,7 +6,7 @@
 #   ENGINE_ORACLE=1 engine/runtime/test-host.sh m2   # also re-run the podman oracle
 #
 # Inputs: a pristine Debian trixie amd64 rootfs (ENGINE_ROOTFS, default
-# artifacts/engine/rootfs-amd64, pinned digest in docs/report/initial/w2-engine.md).
+# artifacts/engine/rootfs-amd64, pinned digest in docs/archive/implementation-1.0.0/reports/initial/w2-engine.md).
 # Every suite works on a fresh reflink copy in $build/rootfs; the pristine tree
 # is never modified.  Output: $ENGINE_HOST_BUILD (default artifacts/engine/host-build).
 set -euo pipefail

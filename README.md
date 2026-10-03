@@ -1,29 +1,29 @@
 # Workflow
 
-Workflow 1.0.0 面向 Android 9+：Launcher 是工作入口，同一 Session 可在文件工作台与对话之间切换。Sora 编辑器、原生 Compose 对话、xterm 终端、Codex/Claude Code、代理与设置共享 Rust Workspace Engine。
+Workflow 1.0.0 is an Android workbench backed by a Rust Workspace Engine. The Workbench presents files, native Compose conversations, Sora editors, and xterm terminals as panels. A Workspace owns the user's files, sessions, drafts, services and complete execution environment. Codex, Claude Code and terminal processes run only inside that environment.
 
-Engine 是会话、布局、文件、草稿、环境与服务状态的唯一拥有者。Android 通过连接读取权威快照；关闭面板或切换会话不会丢弃已提交草稿。终端和编码代理只在定制的 Debian 环境内运行。远程/SSH 仅预留接口，当前实现为本机连接。
+The Android client connects to the embedded Engine and keeps only connection profiles and workspace-delivered local preferences. Workspace configuration lives at `<workspace-root>/.workspace/`. Both Android ABIs ship customized images with their default development tools. Remote and SSH bootstrapping have an extension interface, but no remote connection is implemented in this release.
 
-## 构建
+## Find the right document
 
-要求 JDK 25、Rust 1.93.1、Android SDK 37 与固定 NDK/CMake；在 `local.properties` 配置 SDK。预编译依赖按 `third_party/*/manifest.json` 校验摘要。两个 ABI 均使用完整定制镜像，镜像构建见 [环境](docs/environment.md)。
+[Product design](docs/product/README.md) explains the work model and supported behavior. [UX design](docs/ux/README.md) describes visual rules and interaction. [Implementation](docs/implementation/README.md) explains the modules and their contracts. [Development](docs/development/README.md) describes how to propose, implement, verify and integrate a change. The [status record](docs/status.md) distinguishes measured acceptance from known limits.
+
+Historical reports, retired implementations and their original licenses are indexed in [the archive](docs/archive/README.md). Historical originals retain their original language; maintained documentation is written in English. New change-specific evidence belongs in [reports](docs/report/README.md), while large local logs and artifacts remain ignored.
+
+## Build and test
+
+Use JDK 25, Rust 1.93.1, Python 3.11 or newer, and the Android toolchain versions listed in [dependencies](docs/implementation/dependencies.md). Configure the SDK locally and build the two customized images as described in [environment construction](docs/implementation/environment.md). Prebuilt executables are verified against checked-in manifests.
 
 ```sh
-mkdir -p artifacts
-flock artifacts/.gradle.lock ./gradlew :app:assembleEmulatorDebug
-tools/init-release-key.sh
-tools/build-release.sh
+tools/workflow init
+tools/workflow check core
+tools/workflow check android-apk
 ```
 
-- `device` 为 ARM64，`emulator` 为 x86_64；两者都打包 `workspace` 镜像、Rust Server/runtime/loader。
-- 工作区根保存用户文件；配置与内部状态位于 `<workspace-root>/.workspace/`。客户端仅保存连接配置与工作区下发的本地配置缓存。
-- 版本为 1.0.0；没有旧数据迁移、跨版本协议适配或宿主进程回退。
-- 签名包、摘要与检查结果输出到 `artifacts/delivery/1.0.0/`；实际范围见 [集成交付报告](docs/report/rewrite/integration.md)。
+The APK check records a frozen app/test pair. Use its run directory with `tools/workflow device` for acceptance on the one shared disposable emulator. The [testing guide](docs/development/testing.md) explains suite selection, host fixtures, root gating and release verification. `device` packages target ARM64 and `emulator` packages target x86_64; minSdk remains 28.
 
-## 文档与目录
+## Work in parallel
 
-[产品](docs/product.md) · [UI](docs/ui.md) · [架构](docs/architecture.md) · [协议](docs/protocol.md) · [会话与资源](docs/workspace.md) · [Workspace Server](docs/workspace-engine.md) · [容器运行时](docs/container-runtime.md) · [环境](docs/environment.md) · [对话后端](docs/agents.md) · [代理](docs/proxy.md) · [测试](docs/testing.md) · [完成状态](docs/status.md)
+`tools/workflow task create` creates an isolated Git worktree, reserves explicit source ownership, and writes a task packet. Checks run independently, while heavy builds and device use share separate global locks. A handoff records a clean scoped commit and matching evidence; the coordinator reviews and integrates it. Read the [multi-agent workflow](docs/development/multi-agent.md) before starting concurrent work.
 
-`engine/{server,runtime,loader}` 为 Rust 工作区服务与运行时；`:core`、`:agent`、`:proxy` 是纯 JVM 契约/模型与适配器；`:app` 是 Android shell。`native/` 保留 PTY/JNI 与 proxy guardian，`web/` 只维护离线 xterm 资源，`image/` 定义两个 ABI 的定制镜像，`third_party/` 保存供应链清单与许可证。
-
-历史实现与旧设计在 [docs/archive](docs/archive/README.md)，验收与过程记录在 [docs/report](docs/report/README.md)。旧 Kotlin 状态写入器仅保留在 test fixtures。生成物与本地签名文件位于被忽略的 `artifacts/`，不会进入生产源码或 APK。
+Source modules have their own READMEs. Generated output, local workspace data and signing material live outside the tracked source. Release packages are written to `artifacts/delivery/1.0.0/`; release commands and the documented device restrictions remain part of the working agreement in [AGENTS.md](AGENTS.md).

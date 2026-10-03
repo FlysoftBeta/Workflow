@@ -16,4 +16,3 @@ object StatePaths {
     fun draft(path: String) = "$DRAFTS/${Hashing.sha256(path).take(40)}.json"
     fun composer(conversationId: String) = "$COMPOSERS/${Hashing.sha256(conversationId).take(40)}.json"
 }
-

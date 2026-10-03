@@ -38,4 +38,3 @@ interface AgentProcess {
 fun interface ProcessLauncher {
     suspend fun launch(spec: LaunchSpec): AgentProcess
 }
-

@@ -121,7 +121,7 @@ wfimage metadata "${metadata_args[@]}"
 
 say "pack (zstd -$level)"
 start=$(date +%s)
-flock "$project/artifacts/.gradle.lock" env PYTHONPATH="$image_dir" python3 -m wfimage pack --rootfs "$work/tree/rootfs" --manifest "$manifest" --out "$out/$name.tar.zst" --arch "$arch" \
+"$project/tools/with-build-lock.sh" env PYTHONPATH="$image_dir" python3 -m wfimage pack --rootfs "$work/tree/rootfs" --manifest "$manifest" --out "$out/$name.tar.zst" --arch "$arch" \
     --profile "$profile" --type "$IMAGE_TYPE" --type-version "$IMAGE_TYPE_VERSION" --base-json "$work/base.json" \
     --prune-file "$image_dir/guest/prune.list" --canonical-file "$image_dir/guest/canonical.list" --level "$level" "${overrides[@]}" "${extra[@]}" 2>>"$log" | tee -a "$log"
 say "pack took $(( $(date +%s) - start ))s"

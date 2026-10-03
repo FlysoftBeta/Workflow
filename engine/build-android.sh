@@ -4,7 +4,7 @@ set -euo pipefail
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo=$(dirname "$here")
 if [[ ${WORKFLOW_BUILD_LOCK_HELD:-0} != 1 ]]; then
-  exec flock "$repo/artifacts/.gradle.lock" env WORKFLOW_BUILD_LOCK_HELD=1 "$0" "$@"
+  exec "$repo/tools/with-build-lock.sh" "$0" "$@"
 fi
 ndk=${ANDROID_NDK:-$HOME/Android/Sdk/ndk/30.0.15729638}
 tc="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"

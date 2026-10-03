@@ -43,26 +43,6 @@ fn cmd(w: &mut workspace::Workspace, name: &str, a: V) -> V {
     w.command(name, &a).unwrap()["value"].clone()
 }
 #[test]
-fn strict_json_rejects_duplicate_keys_and_trailing_documents() {
-    assert!(strict_json(br#"{"a":1,"a":2}"#).is_err());
-    assert!(strict_json(b"{} {}").is_err());
-    assert!(strict_json(br#"{"id":{"unknown":[1,true,null]}}"#).is_ok());
-}
-#[test]
-fn bounded_frames_and_blobs() {
-    let mut reader = io::Cursor::new(b"{\"x\":1}\r\n{}\n".to_vec());
-    assert_eq!(line(&mut reader).unwrap().unwrap(), b"{\"x\":1}");
-    assert_eq!(line(&mut reader).unwrap().unwrap(), b"{}");
-    assert!(line(&mut reader).unwrap().is_none());
-    assert!(decode_blob(&encode_blob(&vec![0; 65537]), 65536).is_err());
-    assert_eq!(
-        decode_blob(&encode_blob(&[0, 255, 3]), 65536).unwrap(),
-        vec![0, 255, 3]
-    );
-    let mut over = io::Cursor::new(vec![b'a'; MAX_FRAME + 2]);
-    assert!(line(&mut over).is_err());
-}
-#[test]
 fn draft_detects_external_change_before_first_keystroke_and_survives_restart() {
     let (t, mut w) = temp_workspace();
     fs::write(t.path().join("a.txt"), "base").unwrap();

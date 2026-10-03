@@ -13,4 +13,3 @@ interface TranscriptCallbacks {
     fun viewport(anchor: String?, offset: Int, atBottom: Boolean) {}
     suspend fun resource(path: String, maxBytes: Int): ByteArray? = null
 }
-

@@ -1,6 +1,6 @@
 use crate::{
-    Error, Result,
     layout::{self, s},
+    protocol::{Error, Result},
     storage::{self, now},
 };
 use serde_json::{Value as V, json};
@@ -244,12 +244,12 @@ impl Workspace {
     fn validate_text(&self, path: &str, text: &str) -> Result<()> {
         if path == ".workspace/config.json" {
             let v =
-                crate::strict_json(text.as_bytes()).map_err(|e| Error::invalid(&e.to_string()))?;
+                crate::protocol::strict_json(text.as_bytes()).map_err(|e| Error::invalid(&e.to_string()))?;
             storage::config(&v)?;
         }
         if path == ".workspace/env.json" {
             let v =
-                crate::strict_json(text.as_bytes()).map_err(|e| Error::invalid(&e.to_string()))?;
+                crate::protocol::strict_json(text.as_bytes()).map_err(|e| Error::invalid(&e.to_string()))?;
             crate::environment::validate(&v)?;
         }
         Ok(())
@@ -537,7 +537,7 @@ impl Workspace {
                     let raw = required(a, "path")?;
                     let path = storage::path(&self.root, raw, false)?;
                     let data =
-                        crate::decode_blob(a.get("data").and_then(V::as_str).unwrap_or(""), 65536)?;
+                        crate::protocol::decode_blob(a.get("data").and_then(V::as_str).unwrap_or(""), 65536)?;
                     storage::create_atomic(&path, &data)?;
                     self.refresh()?;
                 }

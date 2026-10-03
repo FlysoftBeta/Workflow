@@ -2,17 +2,12 @@ package top.flysoftbeta.workflow.core.io
 
 import java.io.IOException
 import java.io.OutputStream
-import java.security.MessageDigest
 
 data class FileStat(val isDirectory: Boolean, val size: Long, val modifiedAt: Long)
 
-data class FileEntry(val path: String, val isDirectory: Boolean, val size: Long, val modifiedAt: Long) {
-    val name: String get() = WorkspacePaths.name(path)
-}
-
 /**
- * Port for all workspace IO. Paths are normalized workspace-relative paths ("" = root);
- * implementations reject paths that resolve outside the root (including through symlinks).
+ * Blocking filesystem port for the reference-store fixtures. Paths are normalized and relative to
+ * the workspace ("" = root); implementations reject paths outside it, including through symlinks.
  * Calls block; callers run them on an IO dispatcher. Every method may throw [IOException].
  */
 interface FileSystem {
@@ -45,19 +40,3 @@ fun FileSystem.writeAtomic(path: String, text: String) = writeAtomic(path, text.
 fun FileSystem.readText(path: String): String = readBytes(path).toString(Charsets.UTF_8)
 fun FileSystem.exists(path: String): Boolean = stat(path) != null
 fun FileSystem.readTextOrNull(path: String): String? = if (stat(path)?.isDirectory == false) readText(path) else null
-
-object Hashing {
-    fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).toHex()
-    fun sha256(text: String): String = sha256(text.toByteArray(Charsets.UTF_8))
-
-    private val digits = "0123456789abcdef".toCharArray()
-    private fun ByteArray.toHex(): String {
-        val out = CharArray(size * 2)
-        forEachIndexed { index, byte ->
-            val value = byte.toInt() and 0xff
-            out[index * 2] = digits[value ushr 4]
-            out[index * 2 + 1] = digits[value and 0x0f]
-        }
-        return String(out)
-    }
-}

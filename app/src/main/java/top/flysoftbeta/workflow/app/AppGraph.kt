@@ -49,7 +49,7 @@ object AppGraph {
     fun workspaceStore(context: Context): WorkspaceStore =
         top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionManager.get(context).requireSession().store
 
-    /** Panel providers and region slots (docs/report/initial/w5b-shell.md §2), built once. */
+    /** Panel providers and region slots (docs/implementation/android-client.md), built once. */
     fun panelRegistry(context: Context): PanelRegistry = panels ?: synchronized(this) {
         panels ?: PanelWiring.create(context.applicationContext).also { panels = it }
     }

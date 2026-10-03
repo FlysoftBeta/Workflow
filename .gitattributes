@@ -1,0 +1,12 @@
+* text=auto
+*.sh text eol=lf
+*.bat text eol=crlf whitespace=cr-at-eol
+
+# Frozen originals, upstream assets and byte-exact protocol/syscall specimens retain their bytes.
+docs/archive/** -text -whitespace linguist-vendored
+app/src/main/assets/notices/** -text -whitespace
+app/src/main/assets/web/vendor/** -text -whitespace linguist-vendored
+app/src/main/assets/textmate/** -text -whitespace linguist-vendored
+agent/src/main/resources/protocol/** -text -whitespace linguist-generated
+engine/runtime/tests/native/guest/*.golden -text -whitespace
+third_party/**/LICENSE* -text -whitespace

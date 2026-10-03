@@ -9,7 +9,7 @@ tc=$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin
 out_root=${ENGINE_ANDROID_OUT:-$repo/artifacts/engine/rust-android}
 mkdir -p "$repo/artifacts"
 if [[ ${WORKFLOW_BUILD_LOCK_HELD:-0} != 1 ]]; then
-  exec flock "$repo/artifacts/.gradle.lock" env WORKFLOW_BUILD_LOCK_HELD=1 "$0" "$@"
+  exec "$repo/tools/with-build-lock.sh" "$0" "$@"
 fi
 abis=("$@"); ((${#abis[@]})) || abis=(arm64-v8a x86_64)
 for abi in "${abis[@]}"; do

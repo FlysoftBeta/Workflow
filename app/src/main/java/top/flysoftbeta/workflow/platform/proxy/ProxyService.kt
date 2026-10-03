@@ -3,7 +3,6 @@ package top.flysoftbeta.workflow.platform.proxy
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import androidx.annotation.VisibleForTesting
 import java.io.File
 import top.flysoftbeta.workflow.core.io.WorkspacePaths
 import top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionManager
@@ -22,7 +21,6 @@ import top.flysoftbeta.workflow.proxy.runtime.ProxyApi
 import top.flysoftbeta.workflow.proxy.runtime.ProxyFiles
 import top.flysoftbeta.workflow.proxy.runtime.ProxyPorts
 import top.flysoftbeta.workflow.proxy.runtime.ProxyRuntime
-import top.flysoftbeta.workflow.proxy.runtime.ProxyTiming
 import top.flysoftbeta.workflow.proxy.runtime.RootShell
 import top.flysoftbeta.workflow.proxy.runtime.SuGuardianLauncher
 import top.flysoftbeta.workflow.proxy.runtime.SuRootShell
@@ -48,10 +46,8 @@ class ProxyService private constructor(
         const val LOG_PATH = WorkspacePaths.PROXY + "/runtime.log"
 
         @Volatile private var instance: ProxyService? = null
-        @Volatile private var testApi: ProxyApi? = null
 
         fun get(context: Context): ProxyApi {
-            testApi?.let { return it }
             val session = WorkspaceConnectionManager.get(context).requireSession()
             return synchronized(this) {
                 instance?.takeIf { it.token == session.token } ?: run {
@@ -60,13 +56,6 @@ class ProxyService private constructor(
                 }
             }
         }
-
-        /**
-         * Instrumentation only: makes [get] return [api] (an [isolatedForTesting] runtime) so UI tests can
-         * drive a real kernel through a test root channel. Null restores the production service.
-         */
-        @VisibleForTesting
-        internal fun installForTesting(api: ProxyApi?) { testApi = api }
 
         /** Disposable staging and kernel data; canonical workspace files are accessed only by Engine RPC. */
         fun directory(context: Context): File = File(context.cacheDir,
@@ -84,14 +73,6 @@ class ProxyService private constructor(
         internal fun ports(context: Context, rootShell: RootShell = SuRootShell(), launcher: GuardianLauncher = SuGuardianLauncher()) =
             ProxyPorts(rootShell, launcher, ProcessKernelTool(), AndroidNetworkProbe(context.applicationContext), RuntimeServiceLease(context.applicationContext))
 
-        /**
-         * Instrumentation only: a separate runtime over [directory] with injected root channels. Never
-         * redirects the production singleton.
-         */
-        internal fun isolatedForTesting(context: Context, directory: File, ports: ProxyPorts, timing: ProxyTiming = ProxyTiming()): ProxyApi {
-            require(!directory.canonicalPath.startsWith(File(context.cacheDir, "proxy-executors").canonicalPath + File.separator)) { "Fixture must not use the production proxy directory" }
-            return ProxyRuntime(ProxyFiles(directory), kernel(context), guardian(context), ports, timing)
-        }
     }
 }
 

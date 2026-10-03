@@ -103,7 +103,6 @@ class ProxyPanelEmulatorTest {
 
     @After fun tearDown() {
         if (::api.isInitialized) runBlocking { withTimeout(20_000) { api.stop() } }
-        ProxyService.installForTesting(null)
         if (::runtime.isInitialized) compose.runOnUiThread { runtime.dispose() }
         servers.forEach { runCatching { it.close() } }
         if (::root.isInitialized) { root.run("ip link delete Meta 2>/dev/null; true"); root.restoreTunTool() }
@@ -117,13 +116,12 @@ class ProxyPanelEmulatorTest {
         val context = compose.activity.applicationContext
         api = engine.bind(ProxyService.ports(context, rootShell, root.Launcher()),
             ProxyTiming(controllerReadyMs = 20_000))
-        ProxyService.installForTesting(api)
         store = engine.session.store
         runBlocking {
             store.awaitReady()
             store.updateConfig { it.copy(appearance = it.appearance.copy(theme = theme)) }
         }
-        shell = Shell(context, store, PanelWiring.create(context), scope)
+        shell = Shell(context, store, PanelWiring.create(context, proxy = ProxyPanelProvider { api }), scope)
         runtime = WorkbenchRuntime(context, store, shell.registry, shell)
         val dnd = DragDropState()
         compose.setContent { WorkflowApp(shell, runtime, dnd) }

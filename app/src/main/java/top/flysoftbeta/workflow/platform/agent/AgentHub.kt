@@ -426,7 +426,7 @@ class AgentHub(
             } else if (event.state is ProcessState.Exited || event.state is ProcessState.Failed) {
                 if ((event.state as? ProcessState.Exited)?.exitCode == SIGSYS_EXIT && event.backend !in readySeen) {
                     // Killed by the app's seccomp filter (e.g. x86_64 musl `readlink`): this launcher cannot
-                    // run here; the environment engine's launcher is required (docs/report/initial/w7-chat.md).
+                    // run here; the environment engine's launcher is required (docs/implementation/agents.md).
                     unsupported.value = unsupported.value + event.backend
                 }
                 resumed.removeAll { it.backend == event.backend }

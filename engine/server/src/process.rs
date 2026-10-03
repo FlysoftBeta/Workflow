@@ -1,5 +1,7 @@
 use crate::{
-    Error, Result, decode_blob, encode_blob, environment::Environment, workspace::required,
+    environment::Environment,
+    protocol::{Error, Result, decode_blob, encode_blob},
+    workspace::required,
 };
 use serde_json::{Value as V, json};
 use std::{

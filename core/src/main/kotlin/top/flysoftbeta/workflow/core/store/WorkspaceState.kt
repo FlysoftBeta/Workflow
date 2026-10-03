@@ -124,4 +124,3 @@ sealed interface FileOpResult {
     data object Done : FileOpResult
     data class Failed(val message: String) : FileOpResult
 }
-

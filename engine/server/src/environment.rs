@@ -1,6 +1,6 @@
 use crate::{
-    Error, Result,
     layout::s,
+    protocol::{Error, Result},
     storage::{self, now},
 };
 use serde_json::{Value as V, json};
@@ -665,7 +665,7 @@ fn image(opts: &Options) -> Result<(PathBuf, PathBuf, V)> {
             asset.read_to_end(&mut bytes)?;
             bytes
         };
-        let metadata = crate::strict_json(&index_bytes)
+        let metadata = crate::protocol::strict_json(&index_bytes)
             .map_err(|_| Error::business("invalid_image", "invalid image index"))?;
         let sha = crate::workspace::required(&metadata, "sha256")?;
         if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -853,7 +853,7 @@ fn build(
         .arg(spec["node"].to_string())
         .args(packages.iter().map(s));
     let bytes = checked(cmd, "toolchain verification")?;
-    let verified = crate::strict_json(&bytes).map_err(|_| {
+    let verified = crate::protocol::strict_json(&bytes).map_err(|_| {
         Error::business(
             "verification_failed",
             "invalid toolchain verification response",

@@ -14,7 +14,7 @@ import top.flysoftbeta.workflow.core.resource.ResourceRef
 import top.flysoftbeta.workflow.platform.agent.AgentHub
 
 /**
- * The chat feature's side of the panel contract (docs/report/initial/w5b-shell.md §2): conversation
+ * The chat feature's side of the panel contract (docs/implementation/android-client.md): conversation
  * panels and Chat's conversation rail, both backed by the process-scoped [AgentHub].
  */
 class ChatPanelProvider(private val services: ChatFeatureServices) : PanelProvider, RailProvider {

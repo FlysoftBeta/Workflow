@@ -65,4 +65,3 @@ internal class EmbeddedWorkspaceTransport(private val process: Process) : Worksp
         runCatching { input.close() }
     }
 }
-

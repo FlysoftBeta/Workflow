@@ -12,4 +12,3 @@ object Guest {
     const val CODEX_HOME = "$HOME/.codex"
     const val CLAUDE_CONFIG = "$HOME/.claude"
 }
-

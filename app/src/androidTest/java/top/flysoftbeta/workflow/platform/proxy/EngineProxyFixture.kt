@@ -17,6 +17,7 @@ import top.flysoftbeta.workflow.platform.connection.ConnectionStatus
 import top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionManager
 import top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionSession
 import top.flysoftbeta.workflow.proxy.runtime.ProxyApi
+import top.flysoftbeta.workflow.proxy.runtime.ProxyFiles
 import top.flysoftbeta.workflow.proxy.runtime.ProxyPorts
 import top.flysoftbeta.workflow.proxy.runtime.ProxyRuntime
 import top.flysoftbeta.workflow.proxy.runtime.ProxyTiming
@@ -34,7 +35,10 @@ internal class EngineProxyFixture private constructor(
 
     fun bind(ports: ProxyPorts, timing: ProxyTiming = ProxyTiming()): ProxyApi {
         check(executor == null)
-        val runtime = ProxyService.isolatedForTesting(context, staging, ports, timing) as ProxyRuntime
+        require(!staging.canonicalPath.startsWith(File(context.cacheDir, "proxy-executors").canonicalPath + File.separator)) {
+            "Fixture must not use the production proxy directory"
+        }
+        val runtime = ProxyRuntime(ProxyFiles(staging), ProxyService.kernel(context), ProxyService.guardian(context), ports, timing)
         executor = runtime
         session.scope.coroutineContext[Job]!!.invokeOnCompletion { runtime.closeOwnedChannel() }
         session.scope.launch { session.rpc.failure.filterNotNull().first(); runtime.closeOwnedChannel() }

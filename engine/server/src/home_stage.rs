@@ -1,6 +1,9 @@
 //! Transactional post-script home: scripts write a private copy; activation merges
 //! only their delta, detects intervening user edits, and exchanges directories.
-use crate::{Error, Result, storage};
+use crate::{
+    protocol::{Error, Result},
+    storage,
+};
 use serde_json::{Value as V, json};
 use std::{
     collections::{BTreeMap, BTreeSet},

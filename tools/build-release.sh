@@ -3,6 +3,9 @@
 set -euo pipefail
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$repo"
+if [[ ${WORKFLOW_BUILD_LOCK_HELD:-0} != 1 ]]; then
+  exec "$repo/tools/with-build-lock.sh" "$0" "$@"
+fi
 version=1.0.0
 output="$repo/artifacts/delivery/$version"
 sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}
@@ -20,8 +23,6 @@ if [[ ! -f artifacts/signing/Workflow-release.p12 ]]; then
 fi
 mkdir -p -- "$output"
 # Keep both build and immutable copies under the same lock; image-profile builds share output paths.
-exec 8> artifacts/.gradle.lock
-flock 8
 ./gradlew :app:assembleDeviceRelease :app:assembleEmulatorRelease \
   > "$output/build.log" 2>&1
 for spec in device:arm64-v8a emulator:x86_64; do
