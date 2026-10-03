@@ -2,7 +2,7 @@
   "version": 1,
   "suites": {
     "core": {"command": ["./gradlew", ":core:test"], "heavy": true, "reports": ["core/build/test-results/test"]},
-    "agent": {"command": ["./gradlew", ":agent:test"], "heavy": true, "reports": ["agent/build/test-results/test"]},
+    "agent": {"command": ["./gradlew", ":agent-model:test", ":agent:test", ":engine-chat:test", ":engine-chat:serviceJar"], "heavy": true, "reports": ["agent-model/build/test-results/test", "agent/build/test-results/test", "engine/chat/build/test-results/test"]},
     "proxy": {"command": ["./gradlew", ":proxy:test"], "heavy": true, "reports": ["proxy/build/test-results/test"]},
     "app-unit": {"command": ["./gradlew", ":app:testX86_64DebugUnitTest"], "heavy": true, "reports": ["app/build/test-results/testX86_64DebugUnitTest"]},
     "lint": {"command": ["./gradlew", ":app:lintX86_64Debug"], "heavy": true, "reports": ["app/build/reports/lint-results-x86_64Debug.txt"]},
