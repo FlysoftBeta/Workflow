@@ -4,7 +4,7 @@ Use this directory for new, dated implementation reports, acceptance evidence, a
 
 A useful report identifies the source revision, exact commands and environment, observed results, artifact locations, and untested cases. Compilation, a successful package build, and device acceptance are separate results. Do not commit credentials, private workspace data, transcripts, or large generated artifacts.
 
-The current [workspace organization report](2026-10-03-workspace-organization.md) records the documentation, module and coordination-tool changes and their checks.
+The [ABI build report](2026-10-03-abi-build-names.md) records architecture naming, package inspection and fresh-checkout verification. The [workspace organization report](2026-10-03-workspace-organization.md) records the documentation, module and coordination-tool changes and their checks.
 
 The original 1.0.0 history is preserved without rewriting in [the implementation archive](../archive/implementation-1.0.0/README.md):
 
