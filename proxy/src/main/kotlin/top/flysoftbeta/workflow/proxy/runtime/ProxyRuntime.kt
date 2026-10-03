@@ -149,7 +149,8 @@ class ProxyRuntime(
 
     /** Creates the starter template on first use; an existing config.yaml is never touched. */
     override suspend fun ensureConfig(): Result<File> = outcome {
-        if (files.createTemplate()) readInspection()
+        check(files.config.isFile) { "Engine configuration has not been staged" }
+        readInspection()
         files.config
     }
 

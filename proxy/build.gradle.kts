@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 // Pure Kotlin/JVM: Mihomo config inspection, controller client, guardian protocol, proxy lifecycle state machine.
 plugins {
+    `java-test-fixtures`
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.android.lint)
 }

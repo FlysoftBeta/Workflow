@@ -60,7 +60,9 @@ class ProxyRuntimeTest {
 
     private val safeTun = "tun:\n  enable: true\n  device: workflow-tun\n  iproute2-table-index: 9500\n  iproute2-rule-index: 9500\n"
 
-    @Test fun firstUseCreatesTheTemplateOnceAndRefreshNeedsNoRoot() = runBlocking<Unit> {
+    @Test fun executorRequiresEngineConfigurationAndRefreshNeedsNoRoot() = runBlocking<Unit> {
+        assertTrue(runtime.ensureConfig().isFailure)
+        runtime.importConfig(top.flysoftbeta.workflow.proxy.config.MihomoConfigTemplate.render("ab").toByteArray()).getOrThrow()
         runtime.ensureConfig().getOrThrow()
         val first = File(directory, "config.yaml").readText()
         runtime.ensureConfig().getOrThrow()

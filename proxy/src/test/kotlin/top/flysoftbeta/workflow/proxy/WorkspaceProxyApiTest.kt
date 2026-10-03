@@ -107,18 +107,54 @@ class WorkspaceProxyApiTest {
         assertTrue(root.scripts.isEmpty())
     }
 
+    @Test fun noLocalStartWithoutAnEngineTicket() = runBlocking<Unit> {
+        workspace.text = "mode: rule\ntun: {enable: false}\n"
+        workspace.commandFailure = IOException("stale executor")
+        assertTrue(api.start().isFailure)
+        assertTrue(root.scripts.isEmpty())
+        assertTrue(workspace.completions.isEmpty())
+    }
+
+    @Test fun controllerMutationExecutesCanonicalTicketArguments() = runBlocking<Unit> {
+        var selected: top.flysoftbeta.workflow.proxy.controller.ProxyMode? = null
+        val executor = object : ProxyApi by runtime {
+            override suspend fun setMode(mode: top.flysoftbeta.workflow.proxy.controller.ProxyMode): Result<Unit> { selected = mode; return Result.success(Unit) }
+        }
+        val controlled = WorkspaceProxyApi(executor, workspace, scope)
+        workspace.canonicalArgs = mapOf("mode" to "direct")
+        controlled.setMode(top.flysoftbeta.workflow.proxy.controller.ProxyMode.RULE).getOrThrow()
+        assertEquals(top.flysoftbeta.workflow.proxy.controller.ProxyMode.DIRECT, selected)
+        assertEquals(listOf("setMode"), workspace.commands)
+        assertTrue(workspace.completions.contains("setMode" to true))
+    }
+
     private class MemoryWorkspace : ProxyWorkspace {
         @Volatile var text: String? = null
         var revision = 0L
         var writes = 0
         var acceptedText: String? = null
         var writeFailure: Exception? = null
+        var commandFailure: Exception? = null
+        var canonicalArgs: Map<String, Any?>? = null
+        val commands = mutableListOf<String>()
+        val completions = mutableListOf<Pair<String, Boolean>>()
         @Volatile var reportFailure: Exception? = null
         @Volatile var reportGate: CompletableDeferred<Unit>? = null
         val reportEntered = CompletableDeferred<Unit>()
         val reports = java.util.concurrent.CopyOnWriteArrayList<ProxyState>()
         var log: String? = null
         val assets = mutableMapOf<String, ByteArray>()
+        override suspend fun ensureConfig(): ProxyWorkspace.Config {
+            if (text == null) writeConfig(top.flysoftbeta.workflow.proxy.config.MihomoConfigTemplate.render("ab"), revision)
+            return readConfig()
+        }
+        override suspend fun command(name: String, args: Map<String, Any?>): ProxyWorkspace.Ticket {
+            commandFailure?.let { throw it }
+            commands += name
+            val config = if (name in setOf("start", "checkConfig", "refreshProviders")) readConfig().also { check(it.text != null) } else null
+            return ProxyWorkspace.Ticket(java.util.UUID.randomUUID().toString(), name, canonicalArgs ?: args, config)
+        }
+        override suspend fun complete(ticket: ProxyWorkspace.Ticket, success: Boolean, measured: ProxyState) { completions += ticket.name to success; report(measured) }
         override suspend fun readConfig() = ProxyWorkspace.Config(text, revision)
         override suspend fun writeConfig(text: String, expectedRevision: Long) {
             writeFailure?.let { throw it }
