@@ -19,10 +19,12 @@ Dependency versions are exact repository inputs, not a claim about the latest up
 | esbuild / core-js-bundle | 0.28.2 / 3.50.0 | Chromium 66 transpilation and built-in compatibility |
 | Android NDK / CMake | 30.0.15729638 / 4.3.0 | Native adapters; build scripts currently target Linux hosts |
 | OkHttp / SnakeYAML | 5.5.0 / 2.7 | Proxy controller and configuration parsing |
-| Codex / Mihomo | 0.157.1 / 1.19.31 | SHA256-pinned binaries for arm64-v8a and x86_64 |
+| Codex / Mihomo | 0.157.1 / 1.19.31 | SHA-256-pinned guest CLI / Android local proxy executable |
+| Eclipse Temurin JRE | 17.0.20.1+1 | Pinned Linux amd64/arm64 guest runtime in `third_party/jre/manifest.json` |
+| Claude Code | 2.1.283 | Pinned optional Engine-managed binary in `third_party/claude-code/manifest.json` |
 | zstd-sys | 2.0.16 | Rust runtime compression library, containing zstd 1.5.7 |
 
-Prebuilt executables are declared in `third_party/*/manifest.json`, downloaded to the ignored `third_party/.cache/`, and verified before packaging. Android's PackageManager extracts the packaged executable files. Upstream licenses and provenance stay with their manifests; account credentials do not accompany binaries. Customized environment image inputs have their own pins in `image/versions.env`, described in the [environment document](environment.md).
+Prebuilt executables are declared in `third_party/*/manifest.json`, downloaded to the ignored `third_party/.cache/`, and verified before packaging. Android's PackageManager extracts native Engine/local-service executables. Codex, the Linux JRE and chat service are instead carried in the verified Engine tools archive under APK assets; Engine validates and binds them into the guest. Optional Claude installation is also Engine-owned. Upstream licenses and provenance stay with their manifests; account credentials do not accompany binaries. Customized environment image inputs have their own pins in `image/versions.env`, described in the [environment document](environment.md).
 
 Only terminal frontend assets are copied into `app/src/main/assets/web/vendor/`. Their generated manifest records SHA256 and licenses, and first launch does not request a CDN. Regenerate and test them from `web/`:
 

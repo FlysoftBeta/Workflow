@@ -12,14 +12,15 @@ The `app-unit`, `lint`, and `android-apk` suites select the `x86_64` flavor for 
 
 | Suite | What it establishes |
 | --- | --- |
-| `core`, `agent`, `proxy` | JVM contracts, models and adapters in their respective modules. Reference-store tests explicitly use test fixtures. |
+| `core`, `proxy` | JVM workspace contracts and local executor behavior. Reference-store tests explicitly use test fixtures. |
+| `agent` | Shared `agent-model` codec/model tests, Engine-only vendor adapter tests, `engine-chat` service tests and the guest service JAR build. |
 | `app-unit` | Pure app-level formatting, rendering projections, interaction models and adapter helpers. |
-| `rust-server` | Authoritative workspace, layout, file, environment and protocol behavior in Rust. |
+| `rust-server` | Authoritative workspace, layout, imports, tools, terminal resources, local-service tickets, environment and protocol behavior in Rust. |
 | `runtime-host` | The Rust container runtime against the real host syscall and filesystem oracles. |
 | `native` | Remaining native PTY and proxy guardian checks. |
 | `image` | Image format, manifest, schema and rejection cases. |
 | `web` | Offline terminal input, links and retained rendering behavior. Chat is native Compose. |
-| `infrastructure` | Real temporary Git worktrees, ownership, locks, source-bound results, integration recovery and device-result parsing. |
+| `infrastructure` | Real temporary Git worktrees, ownership, locks, source-bound results, integration recovery, device-result parsing and source architecture guards for the Android/Engine boundary. |
 | `documentation` | Maintained English prose, balanced fences and local links; frozen historical originals are excluded. |
 | `lint` | Android lint, including API-level and Compose integration checks. |
 | `android-apk` | A successful app/test build plus an immutable, digested APK pair; this is preparation, not device acceptance. |
@@ -29,6 +30,10 @@ Run only the checks needed by the change, then broaden when another boundary or 
 The runtime host oracle needs a pristine `artifacts/engine/rootfs-amd64` and the customized image. It creates its own disposable working copy. `ENGINE_HOST_BUILD` selects its output directory, while `ENGINE_ROOTFS` can select a different pristine input. The Android harness's ARM64 fixture is now `artifacts/engine/fixtures/debian-13-slim-arm64`, not the retired research directory.
 
 Additional Server black-box, differential layout and real-image lifecycle checks are in `engine/server/tools/`. Their arguments and proven scope are documented in the [Server implementation](../implementation/workspace-engine.md). The source-level Kotlin reducer is an oracle for Rust behavior, not a production state writer. Keep fixture process tests distinct from real runtime execution.
+
+The separation worker's `agent` run `20261003T083733Z-4df7e37c` passed 67 JVM tests: 53 adapter tests, two shared codec tests and twelve service tests, and built the service JAR. That evidence belongs to its recorded source fingerprint and establishes host contracts, not final merged-source or guest/device acceptance. The service cases cover bounded journals and snapshot transfers, process epochs, submission deduplication and ambiguous outcomes, and index concurrency/recovery. Final runtime and device validation must use the integrated source and frozen artifacts.
+
+`tools/tests/test_client_boundary.py` guards the production dependency graph, vendor process/import boundaries, absence of client vendor paths/installers, host-PTY fixture isolation, terminal lifecycle ownership, workspace-root encapsulation and guest-only Codex packaging. These source checks complement behavior tests; they cannot prove a JRE executes under Android 9's app UID.
 
 ## Android acceptance
 
@@ -42,7 +47,7 @@ tools/workflow device --apk-run /absolute/path/to/the/build/run \
 
 The default AVD is `workflow-tablet-api28`, an API 28 x86_64 device at 1920×1200 and 261 dpi. Set `WORKFLOW_AVD` to an existing disposable AVD when another matrix entry is needed. `tools/with-emulator.sh` is the only entry point for an emulator: it owns the global device lease, starts one 1536 MiB/two-core emulator, puts writable overlays on disk, and cleans up its own process. Never edit a running or queued script.
 
-The main acceptance surfaces are `ConnectionBoundaryAcceptanceTest`, `WorkbenchEngineAcceptanceTest`, `EditorEngineAcceptanceTest`, `EngineIntegrationTest`, `NativeTranscriptTest`, and `OfflineRendererTest`. Together they exercise real connection retirement and recovery, files and drafts, layout interactions, Sora reading position, customized environment lifecycle, native streaming markup, and Android 9 xterm input. Reference-store UI tests cover focused interaction regressions and are named separately in reports.
+The main acceptance surfaces are `ConnectionBoundaryAcceptanceTest`, `WorkbenchEngineAcceptanceTest`, `EditorEngineAcceptanceTest`, `EngineIntegrationTest`, `TerminalAttachmentTest`, `NativeTranscriptTest`, and `OfflineRendererTest`. Together they exercise real connection retirement and recovery, files and drafts, layout interactions, Sora reading position, customized environment lifecycle, native streaming markup, and Android 9 xterm input. `TerminalAttachmentTest` uses a managed fixture to test repeated EOF, another client's restart, metadata/output resets and cancellation without stopping a resource. JNI Android-shell fixtures remain instrumentation-only. Neither those fixtures nor a host JRE probe establishes the real guest service path. The integrated matrix must verify guest Java startup, the service handshake, chat snapshots/watches, optional tool jobs, terminal attachment/restart, import connection identity and executor ticket retirement on an isolated API 28 target. Reference-store UI tests cover focused interaction regressions and are named separately in reports.
 
 `ProxyExecutableTest`, `ProxyEmulatorRootTest`, `ProxyPanelEmulatorTest`, `DeviceControlsEmulatorTest`, and `OverlayEmulatorTest` establish actual local-service behavior. Root tests require `--root` plus their instrumentation arguments and also check emulator hardware and shell UID. The tests preserve foreign routes and clean up their own interfaces and processes. Android 9 accessibility nodes may retain old coordinates after rotation; geometry acceptance reads the settled overlay window, preserving the existing strict position tolerance.
 
