@@ -4,8 +4,7 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * What to run in a terminal. [directory] is workspace-relative ("" = the workspace root); the backend
- * maps it into its own namespace (the Android shell uses the real path, the Debian environment
- * `/workspace/...`). [argv] null means the backend's interactive login shell. [env] is added on top of
+ * maps it into its own namespace (`/workspace/...` for Engine terminals). [argv] null means the backend's interactive login shell. [env] is added on top of
  * the backend's own terminal environment (TERM, HOME, PATH, LANG are the backend's business).
  */
 data class TerminalSpec(
@@ -45,14 +44,14 @@ interface TerminalProcess {
 
     /**
      * The shell's current directory in the backend's namespace (for relative links), or null when the
-     * backend cannot tell. The Android shell reads `/proc/<pid>/cwd`.
+     * backend cannot tell. Managed resources return Engine-measured metadata.
      */
     suspend fun currentDirectory(): String?
 }
 
 /**
- * Port for terminal execution (docs/architecture.md §1). `:app/platform` implements it with the JNI PTY
- * (Android shell today, the Debian environment engine later).
+ * Port for terminal streams. Production uses Engine-owned managed resources; test fixtures may
+ * supply an isolated process implementation.
  */
 interface TerminalBackend {
     /** How paths printed by the shell map to the workspace (links, pasted paths). */
@@ -105,4 +104,37 @@ internal object ShellPathSyntax {
         }
         return "/" + parts.joinToString("/")
     }
+}
+
+/** Engine terminal resources survive UI attachments; metadata is always server-authoritative. */
+data class TerminalMetadata(
+    val id: String,
+    val ordinal: Int,
+    val generation: Long,
+    val cwd: String,
+    val title: String?,
+    val customTitle: String?,
+    val status: String,
+    val exitCode: Int?,
+    val error: String?,
+    val rows: Int,
+    val columns: Int,
+)
+
+/** A metadata/output frame is applied atomically by the presentation adapter. */
+data class TerminalFrame(val terminal: TerminalMetadata, val bytes: ByteArray, val reset: Boolean, val eof: Boolean)
+
+interface ManagedTerminalProcess : TerminalProcess {
+    val initial: TerminalMetadata
+    /** Continues after EOF so another client's restart or rename remains observable. */
+    val frames: Flow<TerminalFrame>
+    suspend fun restart(rows: Int, columns: Int): TerminalMetadata
+    suspend fun rename(title: String?): TerminalMetadata
+    suspend fun clear(): TerminalMetadata
+}
+
+interface ManagedTerminalBackend : TerminalBackend {
+    suspend fun create(spec: TerminalSpec): ManagedTerminalProcess
+    suspend fun attach(id: String, rows: Int? = null, columns: Int? = null): ManagedTerminalProcess
+    override suspend fun start(spec: TerminalSpec): TerminalProcess = create(spec)
 }
