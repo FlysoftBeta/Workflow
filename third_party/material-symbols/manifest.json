@@ -1,0 +1,669 @@
+{
+  "name": "material-symbols-rounded",
+  "license": "Apache-2.0",
+  "source": "https://github.com/google/material-design-icons",
+  "commit": "bd8cb85bd4bad964fe6918f79665bb40c3a8efef",
+  "style": {
+    "family": "Material Symbols Rounded",
+    "opticalSize": 20,
+    "weight": 400,
+    "grade": 0,
+    "fill": [
+      0,
+      1
+    ]
+  },
+  "packagedAs": "app/src/main/res/drawable/sym_*.xml (vector drawables, only the glyphs listed here)",
+  "files": [
+    {
+      "file": "symbols/web/home/materialsymbolsrounded/home_20px.svg",
+      "sha256": "b3cfeb18973554535bd2aef555aac9d37d9d5ac01f2e70771364d580c8a56d5b",
+      "bytes": 538
+    },
+    {
+      "file": "symbols/web/home/materialsymbolsrounded/home_fill1_20px.svg",
+      "sha256": "302ff520de2439e5934cb521089a07cf5cbfc2a82aed94f0ff61a3fcac406f9b",
+      "bytes": 486
+    },
+    {
+      "file": "symbols/web/left_panel_open/materialsymbolsrounded/left_panel_open_20px.svg",
+      "sha256": "294d10e336b5a1e58a6654a0a7c43feb98955e4e570babbb637036e1a7d86d8e",
+      "bytes": 424
+    },
+    {
+      "file": "symbols/web/left_panel_close/materialsymbolsrounded/left_panel_close_20px.svg",
+      "sha256": "69d52c2e85f74ecddacb498d1cdf2f5f57faa0b1f92ca2484a72a47fc587c460",
+      "bytes": 425
+    },
+    {
+      "file": "symbols/web/left_panel_close/materialsymbolsrounded/left_panel_close_fill1_20px.svg",
+      "sha256": "1aacef3989919cdaebcc005b3e740a3c9def22c4feea50fb15fc637a64c1b824",
+      "bytes": 387
+    },
+    {
+      "file": "symbols/web/right_panel_open/materialsymbolsrounded/right_panel_open_20px.svg",
+      "sha256": "4e051edf1793ecc8db0750f2e229ef695c339bb3a7fe9ed59b889a2c9661df88",
+      "bytes": 425
+    },
+    {
+      "file": "symbols/web/right_panel_close/materialsymbolsrounded/right_panel_close_20px.svg",
+      "sha256": "9499a8ea439da91d2d249636f1c1b7d7478faa00b9d830acc5cafb2a8b76060a",
+      "bytes": 424
+    },
+    {
+      "file": "symbols/web/right_panel_close/materialsymbolsrounded/right_panel_close_fill1_20px.svg",
+      "sha256": "4428f40cb91fafa1d42b85719191b9d9dadb292e726c97ad58c99c3867cbbf54",
+      "bytes": 386
+    },
+    {
+      "file": "symbols/web/settings/materialsymbolsrounded/settings_20px.svg",
+      "sha256": "7a6f752d0bdfb77ee194d189f1872fe00bafa0c3b6991b1601d6d1f831059503",
+      "bytes": 993
+    },
+    {
+      "file": "symbols/web/settings/materialsymbolsrounded/settings_fill1_20px.svg",
+      "sha256": "c8e363c233a96ded67978833aebf6c2da2a902bac6841f3a36b76175092933f0",
+      "bytes": 709
+    },
+    {
+      "file": "symbols/web/more_horiz/materialsymbolsrounded/more_horiz_20px.svg",
+      "sha256": "649ca5a339fa79a296868bf61eafdeb615487c8710247fc0b570d1b135a22cff",
+      "bytes": 438
+    },
+    {
+      "file": "symbols/web/keyboard_arrow_down/materialsymbolsrounded/keyboard_arrow_down_20px.svg",
+      "sha256": "9802c62be8f937eee6f808e478a20a72e70ddb35793e5e0db422e23e83858678",
+      "bytes": 313
+    },
+    {
+      "file": "symbols/web/keyboard_arrow_up/materialsymbolsrounded/keyboard_arrow_up_20px.svg",
+      "sha256": "6d4c89b0092504556d0d1c95fe72926088ed34f3fada42576e96dde70b44d9f6",
+      "bytes": 253
+    },
+    {
+      "file": "symbols/web/chevron_right/materialsymbolsrounded/chevron_right_20px.svg",
+      "sha256": "186abebee7bef0b2bc9dc8598c057074d932b355bc37239c5a0ddb308fbf588f",
+      "bytes": 309
+    },
+    {
+      "file": "symbols/web/arrow_drop_down/materialsymbolsrounded/arrow_drop_down_20px.svg",
+      "sha256": "170946c6b68c18b3ae1d2d14869ab8f31087506b71ace849d98c144f2280fe8e",
+      "bytes": 282
+    },
+    {
+      "file": "symbols/web/close/materialsymbolsrounded/close_20px.svg",
+      "sha256": "f481a2803e86f930026f82eb8e82cdb409f9f8dae6311b4b166db463685a7a69",
+      "bytes": 358
+    },
+    {
+      "file": "symbols/web/add/materialsymbolsrounded/add_20px.svg",
+      "sha256": "01f5ae2f8592d506def2935bcc0f14658c1451f201bfe73cb562dcc9b45e53e3",
+      "bytes": 436
+    },
+    {
+      "file": "symbols/web/check/materialsymbolsrounded/check_20px.svg",
+      "sha256": "b743edee1e451d4b5dd62cccddd8b2726d3eb8587806c2dcf341e527edf95607",
+      "bytes": 300
+    },
+    {
+      "file": "symbols/web/check_box/materialsymbolsrounded/check_box_20px.svg",
+      "sha256": "0b69809a12133831c4e61a3cc92488120679a76d9a4513934fda89e729e12a5b",
+      "bytes": 467
+    },
+    {
+      "file": "symbols/web/check_box_outline_blank/materialsymbolsrounded/check_box_outline_blank_20px.svg",
+      "sha256": "65371a2788ab6cb8a8d772bf9d7cb686bdebd40e61853055a57cdcb25065f49c",
+      "bytes": 304
+    },
+    {
+      "file": "symbols/web/arrow_back/materialsymbolsrounded/arrow_back_20px.svg",
+      "sha256": "5b3c7a73ad12d31947a3165d4590346d6d1d0e486ba73786300861c43a92cca1",
+      "bytes": 447
+    },
+    {
+      "file": "symbols/web/save/materialsymbolsrounded/save_20px.svg",
+      "sha256": "04edeeb748b4436fb5035a0be2cdec9698d90e1b249b80c7b078dad588d23370",
+      "bytes": 652
+    },
+    {
+      "file": "symbols/web/undo/materialsymbolsrounded/undo_20px.svg",
+      "sha256": "292677ceeba349ff302b61f2192edd00e26c73c3a34383a9c7d960b5b1ca545b",
+      "bytes": 410
+    },
+    {
+      "file": "symbols/web/redo/materialsymbolsrounded/redo_20px.svg",
+      "sha256": "36d17ef43f467a4a13d22aed47739cbd72f765cee6f340b0a4479a1c8496bbea",
+      "bytes": 415
+    },
+    {
+      "file": "symbols/web/search/materialsymbolsrounded/search_20px.svg",
+      "sha256": "494f48b4ac89abb56d89d54b8f58cb0b8f2d4978f8e36766d131ab55cea93af4",
+      "bytes": 406
+    },
+    {
+      "file": "symbols/web/add_comment/materialsymbolsrounded/add_comment_20px.svg",
+      "sha256": "2d82b0cb1982817ca4e123aa715f650a997904ad7725d1ba7d8519e3ac043f7b",
+      "bytes": 663
+    },
+    {
+      "file": "symbols/web/wrap_text/materialsymbolsrounded/wrap_text_20px.svg",
+      "sha256": "c75a55e7e520527eb1a1cf72990bd3ccb2e28d201ef3617ed03388bc4f65c612",
+      "bytes": 869
+    },
+    {
+      "file": "symbols/web/content_copy/materialsymbolsrounded/content_copy_20px.svg",
+      "sha256": "d882bf3863356bd7a231a8b11b5a029455232c9422e5669c22b6b199bd9a5180",
+      "bytes": 526
+    },
+    {
+      "file": "symbols/web/account_tree/materialsymbolsrounded/account_tree_20px.svg",
+      "sha256": "cf8937e8fc6ea175658f45056bb371062b5ee5bacf738f1305e3357f789e17b2",
+      "bytes": 829
+    },
+    {
+      "file": "symbols/web/open_in_new/materialsymbolsrounded/open_in_new_20px.svg",
+      "sha256": "3d9c3377b25e82ab9cbde34a7255eb94457bc69dda629bfba69075246f0bd1a3",
+      "bytes": 672
+    },
+    {
+      "file": "symbols/web/delete/materialsymbolsrounded/delete_20px.svg",
+      "sha256": "182ee0761ec043e3a64e05939e1effd95a7ae8f9265bae7880d4bb3c7bbe130f",
+      "bytes": 803
+    },
+    {
+      "file": "symbols/web/share/materialsymbolsrounded/share_20px.svg",
+      "sha256": "c57dbae65aaaadda2d9e28a889c67c4957732da3e04d4bc5f7f11303b41e13b7",
+      "bytes": 958
+    },
+    {
+      "file": "symbols/web/fit_screen/materialsymbolsrounded/fit_screen_20px.svg",
+      "sha256": "05411c48676b4ca448620d890cbe8056d7b7b98c907fe8940e075664545ad084",
+      "bytes": 1145
+    },
+    {
+      "file": "symbols/web/open_in_full/materialsymbolsrounded/open_in_full_20px.svg",
+      "sha256": "23d2dd395be811f24f9b4acf27cf6d564a88f25dbffd56d093a9ddfbb54ac61a",
+      "bytes": 577
+    },
+    {
+      "file": "symbols/web/close_fullscreen/materialsymbolsrounded/close_fullscreen_20px.svg",
+      "sha256": "beb1232fb3690e8b47926912590abd366bfdaca4f295454796d6e806a61fd5a5",
+      "bytes": 693
+    },
+    {
+      "file": "symbols/web/splitscreen_right/materialsymbolsrounded/splitscreen_right_20px.svg",
+      "sha256": "6972f4ec8a4c9063141258dd7421660afe76b6825c05872f1648b7038a97f0e7",
+      "bytes": 419
+    },
+    {
+      "file": "symbols/web/splitscreen_bottom/materialsymbolsrounded/splitscreen_bottom_20px.svg",
+      "sha256": "abe5d771ec4797423893e1b54c5452cd097be83a3a2b4473f8744ee0eda2edb2",
+      "bytes": 420
+    },
+    {
+      "file": "symbols/web/move_item/materialsymbolsrounded/move_item_20px.svg",
+      "sha256": "e26c4a0ca025082e65c87b4e54ac2723ea2092068acd65b074650f3626c7600f",
+      "bytes": 737
+    },
+    {
+      "file": "symbols/web/tab_close/materialsymbolsrounded/tab_close_20px.svg",
+      "sha256": "9831327d9495fe1684e136a894970a1d57faa510b2f2a49b13b37907719d942d",
+      "bytes": 761
+    },
+    {
+      "file": "symbols/web/library_add/materialsymbolsrounded/library_add_20px.svg",
+      "sha256": "93e5e8ee560e70b5840529481338a21df7c67f625d21356a65fa539860088a78",
+      "bytes": 848
+    },
+    {
+      "file": "symbols/web/edit/materialsymbolsrounded/edit_20px.svg",
+      "sha256": "e32a8939232800b2cf69316a00a12bd942ca0a1926459a77148debcb20363dc0",
+      "bytes": 444
+    },
+    {
+      "file": "symbols/web/swap_horiz/materialsymbolsrounded/swap_horiz_20px.svg",
+      "sha256": "58697eb78d1d9a1b694d8e603ceeb4870f85667c6117ba8271ca3f74ef633d0f",
+      "bytes": 698
+    },
+    {
+      "file": "symbols/web/history/materialsymbolsrounded/history_20px.svg",
+      "sha256": "bc9808e1e0dd51bf6a4271110da4212e4e347ef7e4a0b5f957342479230e66c9",
+      "bytes": 866
+    },
+    {
+      "file": "symbols/web/terminal/materialsymbolsrounded/terminal_20px.svg",
+      "sha256": "ff5c1a2b8c90ef50eefe7991d3650638e52088bf193d1f3f5983acb8b602683c",
+      "bytes": 612
+    },
+    {
+      "file": "symbols/web/terminal/materialsymbolsrounded/terminal_fill1_20px.svg",
+      "sha256": "ff5c1a2b8c90ef50eefe7991d3650638e52088bf193d1f3f5983acb8b602683c",
+      "bytes": 612
+    },
+    {
+      "file": "symbols/web/clear_all/materialsymbolsrounded/clear_all_20px.svg",
+      "sha256": "f75055e3e97b2e00a661f9029ce4d929e845b551606d2e1f843df0e59ce76edb",
+      "bytes": 587
+    },
+    {
+      "file": "symbols/web/restart_alt/materialsymbolsrounded/restart_alt_20px.svg",
+      "sha256": "56152755ec9daab72b5bf49917505d8d9ef6cadcb2a15007ca177d6b8d8bec40",
+      "bytes": 578
+    },
+    {
+      "file": "symbols/web/stop_circle/materialsymbolsrounded/stop_circle_20px.svg",
+      "sha256": "561389862047514bde319324e617532efeff91d928f8de5ad258d67ba0ffed21",
+      "bytes": 663
+    },
+    {
+      "file": "symbols/web/stop_circle/materialsymbolsrounded/stop_circle_fill1_20px.svg",
+      "sha256": "0e33321aa30813d1ff2b7f23d81719dd3f78d3c0af5eb3f5ab667d3bd90e146c",
+      "bytes": 564
+    },
+    {
+      "file": "symbols/web/keyboard/materialsymbolsrounded/keyboard_20px.svg",
+      "sha256": "160fb0fa07f024b74fb99796ae8a834858fb4795d9e85b08081b3e3764c77368",
+      "bytes": 1804
+    },
+    {
+      "file": "symbols/web/bolt/materialsymbolsrounded/bolt_20px.svg",
+      "sha256": "0ad4b96c7fc8b184d77a65026e5053561fd6b4c07f3b35fb89b0b0f49e005434",
+      "bytes": 341
+    },
+    {
+      "file": "symbols/web/bolt/materialsymbolsrounded/bolt_fill1_20px.svg",
+      "sha256": "16f535da0dae5bce970f8c6444e92e28e66875f5185cea3990fcd994eed21642",
+      "bytes": 285
+    },
+    {
+      "file": "symbols/web/speed/materialsymbolsrounded/speed_20px.svg",
+      "sha256": "d929694b1e58541bea6099d97c40008450292eecca8c65bc66af1f3afe6bd672",
+      "bytes": 667
+    },
+    {
+      "file": "symbols/web/edit_document/materialsymbolsrounded/edit_document_20px.svg",
+      "sha256": "a17cef80f7e5874703842908c3a0d1b4c65d850545d0eb4b3c9386c4d0488c6f",
+      "bytes": 850
+    },
+    {
+      "file": "symbols/web/receipt_long/materialsymbolsrounded/receipt_long_20px.svg",
+      "sha256": "5357aacc71cd13fa306253756989f63c11167fdb0792f6244753502a3686c86d",
+      "bytes": 974
+    },
+    {
+      "file": "symbols/web/lan/materialsymbolsrounded/lan_20px.svg",
+      "sha256": "cc57b6bf842ea833c7308c0943c6466989f234829442280f8005602c54492ca9",
+      "bytes": 842
+    },
+    {
+      "file": "symbols/web/language/materialsymbolsrounded/language_20px.svg",
+      "sha256": "1ab930a4409209e5c88200c628c8b1937471644389d45116a7c0c652153f1c26",
+      "bytes": 933
+    },
+    {
+      "file": "symbols/web/power_settings_new/materialsymbolsrounded/power_settings_new_20px.svg",
+      "sha256": "5c5a4555513d0795b777b93238bb9617106bcd67d10d16b29dbd41094abb894b",
+      "bytes": 762
+    },
+    {
+      "file": "symbols/web/shield/materialsymbolsrounded/shield_20px.svg",
+      "sha256": "39a0e4013e14ba285210d56587212221317b509aa12d8f68bfc210f1688c9259",
+      "bytes": 392
+    },
+    {
+      "file": "symbols/web/note_add/materialsymbolsrounded/note_add_20px.svg",
+      "sha256": "514f1ffe11442cf915cdaa25f93540a6456cbf4dd10adbb91b2c6700d46eed14",
+      "bytes": 765
+    },
+    {
+      "file": "symbols/web/create_new_folder/materialsymbolsrounded/create_new_folder_20px.svg",
+      "sha256": "b4cf12b9f8acd902d8ceb83ae138a793565c5314cf039aede203429f1ba61565",
+      "bytes": 690
+    },
+    {
+      "file": "symbols/web/photo_camera/materialsymbolsrounded/photo_camera_20px.svg",
+      "sha256": "da10b24ece0ec0690f9df5a1108c68e67c1d8bf251adc3bafa12fe6fb1bb41e9",
+      "bytes": 594
+    },
+    {
+      "file": "symbols/web/photo_library/materialsymbolsrounded/photo_library_20px.svg",
+      "sha256": "c13ac50cf88394af87f0cd3eb2b0f0251c9db76d9f35a94db6ca70817a30ed37",
+      "bytes": 666
+    },
+    {
+      "file": "symbols/web/upload_file/materialsymbolsrounded/upload_file_20px.svg",
+      "sha256": "248dd15b643527ebfc45977f78580e89a30caa37a0f83b8f70af4d0b37c56bf6",
+      "bytes": 762
+    },
+    {
+      "file": "symbols/web/filter_list/materialsymbolsrounded/filter_list_20px.svg",
+      "sha256": "a085d86d671d9a4e067ff9b45abaeb7fec95782e399b3e87372357f18e1517c4",
+      "bytes": 589
+    },
+    {
+      "file": "symbols/web/unfold_less/materialsymbolsrounded/unfold_less_20px.svg",
+      "sha256": "e9e4a2ee1aa5873c7edb5f637a48a13ae842c101948ddf55c9dab7c414deedfc",
+      "bytes": 444
+    },
+    {
+      "file": "symbols/web/refresh/materialsymbolsrounded/refresh_20px.svg",
+      "sha256": "8e2f8b57b645f9d0a4fd2cd41fc4611a237cf5f86953f7003f17b6ba74233fc9",
+      "bytes": 534
+    },
+    {
+      "file": "symbols/web/visibility/materialsymbolsrounded/visibility_20px.svg",
+      "sha256": "963f5f4a6af717e59256fe9fd54a6f174c463e567d09b2ecf04668b84bfd90b2",
+      "bytes": 554
+    },
+    {
+      "file": "symbols/web/drive_file_move/materialsymbolsrounded/drive_file_move_20px.svg",
+      "sha256": "f4e4924ba75beea05ba238768292ca7e1cc0dddc3115465ad3073a2587f66940",
+      "bytes": 581
+    },
+    {
+      "file": "symbols/web/fork_right/materialsymbolsrounded/fork_right_20px.svg",
+      "sha256": "8f1129340d9c053e5affc05cb3581846dd0dfb15535c18503c165a61bc7aa227",
+      "bytes": 521
+    },
+    {
+      "file": "symbols/web/markdown/materialsymbolsrounded/markdown_20px.svg",
+      "sha256": "f4dfe892750da373ccc26c2ec83927bcf51d182af36d797502a512413443bc51",
+      "bytes": 864
+    },
+    {
+      "file": "symbols/web/archive/materialsymbolsrounded/archive_20px.svg",
+      "sha256": "519801b2cd648110c95f7e8b38ed87379696271e4a0e95898914ccf5d2ee3c7d",
+      "bytes": 631
+    },
+    {
+      "file": "symbols/web/unarchive/materialsymbolsrounded/unarchive_20px.svg",
+      "sha256": "84b77b2b1e366fe88d91c79e4434abaa5ddc86847e11bf148488866a6da6a313",
+      "bytes": 629
+    },
+    {
+      "file": "symbols/web/arrow_upward/materialsymbolsrounded/arrow_upward_20px.svg",
+      "sha256": "bbd4708b7ae244454681fbbb4f00e4fb33af22575e4041f620d0fe037dce4299",
+      "bytes": 434
+    },
+    {
+      "file": "symbols/web/arrow_downward/materialsymbolsrounded/arrow_downward_20px.svg",
+      "sha256": "633bb656f7996f749add6b7b1c604926333d1bf14e9fc15574c37f9d2a62cea6",
+      "bytes": 440
+    },
+    {
+      "file": "symbols/web/stop/materialsymbolsrounded/stop_20px.svg",
+      "sha256": "6be29cb807363bf0829a8a8406da1ed2985feda4139e367065af03df716e62cd",
+      "bytes": 331
+    },
+    {
+      "file": "symbols/web/edit_square/materialsymbolsrounded/edit_square_20px.svg",
+      "sha256": "debd8ec7a16dd06246ff79bc9218cb0015e301c015521350c414a138d2c04f50",
+      "bytes": 745
+    },
+    {
+      "file": "symbols/web/lightbulb/materialsymbolsrounded/lightbulb_20px.svg",
+      "sha256": "2e85dca7d7db653456fa590e0c53618e16d6c6bd455e38927d7bba4825a4679a",
+      "bytes": 583
+    },
+    {
+      "file": "symbols/web/lightbulb/materialsymbolsrounded/lightbulb_fill1_20px.svg",
+      "sha256": "79626c09320782b09fd7d782786c72845b6859143bd89bfb7b765b74a8970057",
+      "bytes": 449
+    },
+    {
+      "file": "symbols/web/attach_file/materialsymbolsrounded/attach_file_20px.svg",
+      "sha256": "9ea8dfdfc935cbc322d642246d77c22f352cc7f98aba881b5c43daf7c656d53a",
+      "bytes": 630
+    },
+    {
+      "file": "symbols/web/checklist/materialsymbolsrounded/checklist_20px.svg",
+      "sha256": "dd6bae74d85c275b9d21326edac22f9bb6feacd67ec9eae05ea0b3b6d8cd4678",
+      "bytes": 770
+    },
+    {
+      "file": "symbols/web/hexagon/materialsymbolsrounded/hexagon_20px.svg",
+      "sha256": "d6e6a7f1aa62a0bbb0504534ee8fd1bf80e1689a2d6bfe4d8c854511e662fee7",
+      "bytes": 431
+    },
+    {
+      "file": "symbols/web/asterisk/materialsymbolsrounded/asterisk_20px.svg",
+      "sha256": "a28a91513993f47de7d3d0585f50be3d8809338e7857cad21c9a9665ae173995",
+      "bytes": 769
+    },
+    {
+      "file": "symbols/web/key/materialsymbolsrounded/key_20px.svg",
+      "sha256": "168cffa246abc9b6f9c11708d185174902e33dbfa9aa9c484fae90b53d39534e",
+      "bytes": 713
+    },
+    {
+      "file": "symbols/web/warning/materialsymbolsrounded/warning_20px.svg",
+      "sha256": "6b8e8202afa6e33496397bfbcec3feb5c2a7812bbb891394bc764874ba2b4154",
+      "bytes": 622
+    },
+    {
+      "file": "symbols/web/warning/materialsymbolsrounded/warning_fill1_20px.svg",
+      "sha256": "930154d730cd9727bd33b2a19da119666e6e1ae1fafd9e6ed16ad2b30ad92d15",
+      "bytes": 586
+    },
+    {
+      "file": "symbols/web/error/materialsymbolsrounded/error_20px.svg",
+      "sha256": "5f92ce4160b81721395cc77acc8722f3fe9f15c0777c3ee28b33d64209bbffbe",
+      "bytes": 743
+    },
+    {
+      "file": "symbols/web/error/materialsymbolsrounded/error_fill1_20px.svg",
+      "sha256": "cac8dc0cf17304176425e603d3a520279c85e21957d30a59b74de93a27ae329f",
+      "bytes": 644
+    },
+    {
+      "file": "symbols/web/info/materialsymbolsrounded/info_20px.svg",
+      "sha256": "d6180a077533531596bc103b541a8d75ef9192b0c9d67b8c0c62bb0a0a233b28",
+      "bytes": 743
+    },
+    {
+      "file": "symbols/web/info/materialsymbolsrounded/info_fill1_20px.svg",
+      "sha256": "7f7018a4e94c6784537ccdca5d812a72fa766582d91f117ac8bc48e570494999",
+      "bytes": 644
+    },
+    {
+      "file": "symbols/web/block/materialsymbolsrounded/block_20px.svg",
+      "sha256": "765454163f1a51d6382aa209a12ecb184af0099ddf8f407137150509cec55784",
+      "bytes": 456
+    },
+    {
+      "file": "symbols/web/check_circle/materialsymbolsrounded/check_circle_20px.svg",
+      "sha256": "d073ad7fdcb267580a975eef26d1d3d42913171e4a7cb77c0cc83fcd291c3a23",
+      "bytes": 542
+    },
+    {
+      "file": "symbols/web/check_circle/materialsymbolsrounded/check_circle_fill1_20px.svg",
+      "sha256": "82bf03fc5f84710ccc5c4a437674e360bedcd0c3201f2152a6e4b112bbe15005",
+      "bytes": 446
+    },
+    {
+      "file": "symbols/web/cancel/materialsymbolsrounded/cancel_20px.svg",
+      "sha256": "01aa99e160c3d09ce979ad4d46ca24164a16de28603697df750d888e26ea9bc3",
+      "bytes": 721
+    },
+    {
+      "file": "symbols/web/lock/materialsymbolsrounded/lock_20px.svg",
+      "sha256": "57b3ce9b75ee3ae9a444851f5b24f5fc9050aa1fee2dda6d669d3dbe4149e52c",
+      "bytes": 580
+    },
+    {
+      "file": "symbols/web/lock/materialsymbolsrounded/lock_fill1_20px.svg",
+      "sha256": "491821b1ebc1db11296ca87e8094e7414149f04e749b7572a03a0e0e2b2de4e7",
+      "bytes": 537
+    },
+    {
+      "file": "symbols/web/contrast/materialsymbolsrounded/contrast_20px.svg",
+      "sha256": "6ba7b92ba8d699d3d4941e0d0ae23e1a965fb271dcfd52cd32c387a6a051280c",
+      "bytes": 424
+    },
+    {
+      "file": "symbols/web/contrast/materialsymbolsrounded/contrast_fill1_20px.svg",
+      "sha256": "6ba7b92ba8d699d3d4941e0d0ae23e1a965fb271dcfd52cd32c387a6a051280c",
+      "bytes": 424
+    },
+    {
+      "file": "symbols/web/light_mode/materialsymbolsrounded/light_mode_20px.svg",
+      "sha256": "91d212bfee94d32888d39b318f56d21bd1e607ba950a426d1ee31c6edd74c410",
+      "bytes": 1510
+    },
+    {
+      "file": "symbols/web/light_mode/materialsymbolsrounded/light_mode_fill1_20px.svg",
+      "sha256": "ccbf780f2b29b6dc3309635d4509d29cb4870d7277f59dc455be0c66dab0bf07",
+      "bytes": 1424
+    },
+    {
+      "file": "symbols/web/apps/materialsymbolsrounded/apps_20px.svg",
+      "sha256": "80c00081b2e4094f7d2f09390c0b54e7c1f722b95bd2fd077b72f5a82355d5cd",
+      "bytes": 1098
+    },
+    {
+      "file": "symbols/web/drag_indicator/materialsymbolsrounded/drag_indicator_20px.svg",
+      "sha256": "7e1d26005d6cf13a86503a8aa9888cb8bb7f2a2091f2ae6af17536e7d20dd970",
+      "bytes": 771
+    },
+    {
+      "file": "symbols/web/schedule/materialsymbolsrounded/schedule_20px.svg",
+      "sha256": "17ed4da23e2e26b53b4483d007a46ea9d28bb43a1d79a6a4ddc98762c2c6e071",
+      "bytes": 730
+    },
+    {
+      "file": "symbols/web/link/materialsymbolsrounded/link_20px.svg",
+      "sha256": "d5fe6549ceef9eb8597066573e92201b0699a74081cb3bb77dc25436cc3fc732",
+      "bytes": 852
+    },
+    {
+      "file": "symbols/web/space_dashboard/materialsymbolsrounded/space_dashboard_20px.svg",
+      "sha256": "6afafc3307fc37607088b1166170bad02cb696a4101546bfd0d9b8257371fca8",
+      "bytes": 322
+    },
+    {
+      "file": "symbols/web/chat/materialsymbolsrounded/chat_20px.svg",
+      "sha256": "12a4bff11090920493c02502a3b04f8abfa7a891d7d279b56f84cd9a87d5d6db",
+      "bytes": 816
+    },
+    {
+      "file": "symbols/web/do_not_disturb_on/materialsymbolsrounded/do_not_disturb_on_20px.svg",
+      "sha256": "9cc5cd3252951f7b5ebde22d29e723f5e7962441e12c4182983d4588c6724f38",
+      "bytes": 614
+    },
+    {
+      "file": "symbols/web/draft/materialsymbolsrounded/draft_20px.svg",
+      "sha256": "020fe0e8d927086c557b677dd063efe0a0b418e45927c036a9dfc2a984589d71",
+      "bytes": 400
+    },
+    {
+      "file": "symbols/web/draft/materialsymbolsrounded/draft_fill1_20px.svg",
+      "sha256": "fe4ced94eb570f5536f789ed6cac3df50fea4f7bcea6e377a7f39ade4548be30",
+      "bytes": 350
+    },
+    {
+      "file": "symbols/web/description/materialsymbolsrounded/description_20px.svg",
+      "sha256": "fc2377fe4c8363d2871a69ec7ce83c09243d4b44c770c1aead6a74b6f1e73dbf",
+      "bytes": 751
+    },
+    {
+      "file": "symbols/web/description/materialsymbolsrounded/description_fill1_20px.svg",
+      "sha256": "654a1a198ca446109da300a7c83db3791360eeee26dc14f30d570bf5c01fa511",
+      "bytes": 701
+    },
+    {
+      "file": "symbols/web/article/materialsymbolsrounded/article_20px.svg",
+      "sha256": "db84bb0ed5688f5ad63b1a34ec4671b78cb7bb96516627fc5768780a2cf264dc",
+      "bytes": 798
+    },
+    {
+      "file": "symbols/web/article/materialsymbolsrounded/article_fill1_20px.svg",
+      "sha256": "c643bb34bd3a07ba9ca8a3813046bdea21738b1c02760b4def0a2ff198923567",
+      "bytes": 760
+    },
+    {
+      "file": "symbols/web/code/materialsymbolsrounded/code_20px.svg",
+      "sha256": "30f4be57d2f18b6c296695a857b2bad95ef62d65085c764550588bef5cf6cce7",
+      "bytes": 529
+    },
+    {
+      "file": "symbols/web/javascript/materialsymbolsrounded/javascript_20px.svg",
+      "sha256": "3aad2c89433651f399c05ecc8f6aa9af6fa54cb790c128e59dce8764a4375e6d",
+      "bytes": 680
+    },
+    {
+      "file": "symbols/web/html/materialsymbolsrounded/html_20px.svg",
+      "sha256": "21857b7bf37facd3e184fdc26d6ef80e9aa03152d81786ceebabc3ccb712ecd8",
+      "bytes": 1129
+    },
+    {
+      "file": "symbols/web/css/materialsymbolsrounded/css_20px.svg",
+      "sha256": "58ec37c70e889cbc79f4036746dfc316090e3aa43acb5b316e472162cdf7ff59",
+      "bytes": 966
+    },
+    {
+      "file": "symbols/web/data_object/materialsymbolsrounded/data_object_20px.svg",
+      "sha256": "fd422b762ffe04cd54eab9880ab45ba1a586ee618d0717d947fb0b27e7914333",
+      "bytes": 1006
+    },
+    {
+      "file": "symbols/web/image/materialsymbolsrounded/image_20px.svg",
+      "sha256": "b165ab24790ba32165ddb8e9c209c1eb7aace3842972ca02773b8a714e68177d",
+      "bytes": 431
+    },
+    {
+      "file": "symbols/web/image/materialsymbolsrounded/image_fill1_20px.svg",
+      "sha256": "23c62fa4c678e08e1abd060afd84749bdb3f1a4d74959e61dec90c8a035c9ee5",
+      "bytes": 395
+    },
+    {
+      "file": "symbols/web/picture_as_pdf/materialsymbolsrounded/picture_as_pdf_20px.svg",
+      "sha256": "1e45851b81ffca67d0a15a844016e5b76bd756b73105cefae700f477208e158d",
+      "bytes": 1172
+    },
+    {
+      "file": "symbols/web/folder_zip/materialsymbolsrounded/folder_zip_20px.svg",
+      "sha256": "ee3c40c2d9aaecb3bb3c59652626b443ed4223581cc0939e0b91e62f05bc6135",
+      "bytes": 434
+    },
+    {
+      "file": "symbols/web/table/materialsymbolsrounded/table_20px.svg",
+      "sha256": "b47b2083a764861d6759d155e81a4de5d94a23465f910c50a9ed5cd8f81123d0",
+      "bytes": 456
+    },
+    {
+      "file": "symbols/web/audio_file/materialsymbolsrounded/audio_file_20px.svg",
+      "sha256": "06bd8abfa891c503fbd0f8735b874801cc78be32e53c3100d37d3a4e2268d6d9",
+      "bytes": 607
+    },
+    {
+      "file": "symbols/web/video_file/materialsymbolsrounded/video_file_20px.svg",
+      "sha256": "66549e0b8fb04ad724929c162520c30542bde2bf3f5ece8911e84e5e06e08959",
+      "bytes": 657
+    },
+    {
+      "file": "symbols/web/folder/materialsymbolsrounded/folder_20px.svg",
+      "sha256": "f8a6970f2ad5d1dce1b9761f8cd5a2d65b569fd4417d32d9c73b6ca3a6f53f06",
+      "bytes": 338
+    },
+    {
+      "file": "symbols/web/folder/materialsymbolsrounded/folder_fill1_20px.svg",
+      "sha256": "b96a0b3b497c577586a1abca1a5eacd9c643d7d80e4090d94fce6578f091e18f",
+      "bytes": 290
+    },
+    {
+      "file": "symbols/web/folder_open/materialsymbolsrounded/folder_open_20px.svg",
+      "sha256": "37b4dde8e10379b91c50b12eacd392c48f919df57f1b79074a8c8f9c75a21505",
+      "bytes": 454
+    },
+    {
+      "file": "symbols/web/folder_open/materialsymbolsrounded/folder_open_fill1_20px.svg",
+      "sha256": "24d8f6a10b196f525eef352a75d848e30b55371c9919bde6750bfaca7d83de79",
+      "bytes": 346
+    },
+    {
+      "file": "LICENSE",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "bytes": 11357
+    }
+  ]
+}

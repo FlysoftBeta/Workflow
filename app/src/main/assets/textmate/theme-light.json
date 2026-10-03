@@ -1,0 +1,140 @@
+{
+  "name": "Workflow Light",
+  "settings": [
+    {
+      "settings": {
+        "foreground": "#171D1B",
+        "background": "#F4FBF8"
+      }
+    },
+    {
+      "scope": "comment, punctuation.definition.comment",
+      "settings": {
+        "foreground": "#6B7A75",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "scope": "keyword, storage.type, storage.modifier, keyword.control, keyword.operator.new, keyword.operator.expression",
+      "settings": {
+        "foreground": "#8B3FB0"
+      }
+    },
+    {
+      "scope": "keyword.operator, punctuation",
+      "settings": {
+        "foreground": "#3C4A44"
+      }
+    },
+    {
+      "scope": "string, string.quoted",
+      "settings": {
+        "foreground": "#A3341E"
+      }
+    },
+    {
+      "scope": "constant.character.escape",
+      "settings": {
+        "foreground": "#8A4B00"
+      }
+    },
+    {
+      "scope": "constant.numeric",
+      "settings": {
+        "foreground": "#0F6E47"
+      }
+    },
+    {
+      "scope": "constant.language, support.constant",
+      "settings": {
+        "foreground": "#1F4FB5"
+      }
+    },
+    {
+      "scope": "support.type.property-name, meta.object-literal.key, variable.other.property, entity.name.tag.yaml, meta.mapping.key",
+      "settings": {
+        "foreground": "#0B5CAD"
+      }
+    },
+    {
+      "scope": "entity.name.function, support.function, meta.function-call entity.name.function",
+      "settings": {
+        "foreground": "#795E26"
+      }
+    },
+    {
+      "scope": "entity.name.type, entity.name.class, support.class, support.type, entity.other.inherited-class, storage.type.class",
+      "settings": {
+        "foreground": "#16707E"
+      }
+    },
+    {
+      "scope": "variable.parameter",
+      "settings": {
+        "foreground": "#3C4A44"
+      }
+    },
+    {
+      "scope": "entity.name.tag",
+      "settings": {
+        "foreground": "#8B3FB0"
+      }
+    },
+    {
+      "scope": "entity.other.attribute-name",
+      "settings": {
+        "foreground": "#0B5CAD"
+      }
+    },
+    {
+      "scope": "markup.heading, entity.name.section, markup.heading entity.name",
+      "settings": {
+        "foreground": "#1F4FB5",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "scope": "markup.bold",
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "scope": "markup.italic",
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "scope": "markup.inline.raw, markup.fenced_code, markup.raw",
+      "settings": {
+        "foreground": "#A3341E"
+      }
+    },
+    {
+      "scope": "markup.underline.link, string.other.link, markup.link",
+      "settings": {
+        "foreground": "#0B5CAD"
+      }
+    },
+    {
+      "scope": "punctuation.definition.list, markup.list punctuation.definition",
+      "settings": {
+        "foreground": "#8B3FB0"
+      }
+    },
+    {
+      "scope": "markup.quote",
+      "settings": {
+        "foreground": "#6B7A75",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "scope": "invalid",
+      "settings": {
+        "foreground": "#BA1A1A"
+      }
+    }
+  ]
+}

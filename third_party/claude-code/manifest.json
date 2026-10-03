@@ -1,0 +1,22 @@
+{
+  "name": "claude-code",
+  "version": "2.1.283",
+  "packagedAs": "claude",
+  "distribution": "download-on-demand-in-environment",
+  "upstream": "https://github.com/anthropics/claude-code",
+  "manifestUrl": "https://downloads.claude.ai/claude-code-releases/2.1.283/manifest.json",
+  "license": "Proprietary; Anthropic Commercial Terms of Service",
+  "licenseUrl": "https://github.com/anthropics/claude-code/blob/main/LICENSE.md",
+  "abis": {
+    "arm64-v8a": {
+      "url": "https://downloads.claude.ai/claude-code-releases/2.1.283/linux-arm64/claude",
+      "sha256": "346d294f0103d6fc0de11ac953579b5c62dfa90698a4cfc486b6f927c615e697",
+      "bytes": 240902136
+    },
+    "x86_64": {
+      "url": "https://downloads.claude.ai/claude-code-releases/2.1.283/linux-x64/claude",
+      "sha256": "1859583ce32920595c61ef868bee52e1b1594f7486db209935e01f1e5e804ae2",
+      "bytes": 241556664
+    }
+  }
+}

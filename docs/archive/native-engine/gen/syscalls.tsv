@@ -1,0 +1,411 @@
+# Engine syscall classification (hand-maintained; one row per syscall NAME, ABI-independent).
+# Columns (TAB-separated): name  class  note
+# Classes: EXEC ENOSYS EPERM PATH ID META SOCK PROC FD PASS.  A syscall that fits several rules takes
+# the first in that order.  Every non-PASS row needs a note.  gensysinv.py rejects missing, duplicate
+# and stale names, so a new kernel table forces a decision for every new syscall (default-deny).
+# Rows are grouped by class; order inside the file does not affect the generated output.
+
+# ---- EXEC: rewritten to the loader by the engine
+execve	EXEC	rewritten to execve(loader) with a load plan
+execveat	EXEC	dfd+path+AT_EMPTY_PATH; rewritten to execve(loader)
+
+# ---- ENOSYS: refused as "not implemented" (no safe emulation, or not implemented by the kernel either)
+_sysctl	ENOSYS	sys_ni_syscall in the kernel table
+afs_syscall	ENOSYS	never implemented (no kernel entry point)
+clone3	ENOSYS	clone_args (set_tid, cgroup) not audited; glibc falls back to clone
+create_module	ENOSYS	obsolete; no kernel entry point
+epoll_ctl_old	ENOSYS	obsolete; no kernel entry point
+epoll_wait_old	ENOSYS	obsolete; no kernel entry point
+get_kernel_syms	ENOSYS	obsolete; no kernel entry point
+get_thread_area	ENOSYS	x86_64 64-bit ABI has no entry point (i386 only)
+getpmsg	ENOSYS	never implemented (no kernel entry point)
+io_uring_enter	ENOSYS	io_uring ops bypass the tracer (paths inside SQEs)
+io_uring_register	ENOSYS	io_uring ops bypass the tracer (paths inside SQEs)
+io_uring_setup	ENOSYS	io_uring ops bypass the tracer (paths inside SQEs); liburing users fall back
+landlock_add_rule	ENOSYS	rules would bind host paths, not guest paths
+landlock_create_ruleset	ENOSYS	rules would bind host paths; callers treat ENOSYS as "no landlock"
+landlock_restrict_self	ENOSYS	rules would bind host paths, not guest paths
+listmount	ENOSYS	host mount ids; libmount falls back to /proc/self/mountinfo
+lookup_dcookie	ENOSYS	sys_ni_syscall in the kernel table
+nfsservctl	ENOSYS	removed (sys_ni_syscall / no entry point)
+openat2	ENOSYS	RESOLVE_* semantics cannot be honoured on translated host paths; glibc/systemd fall back to openat
+putpmsg	ENOSYS	never implemented (no kernel entry point)
+query_module	ENOSYS	obsolete; no kernel entry point
+security	ENOSYS	never implemented (no kernel entry point)
+set_thread_area	ENOSYS	x86_64 64-bit ABI has no entry point (i386 only)
+statmount	ENOSYS	returns untranslated host mount paths; libmount falls back to /proc/self/mountinfo
+sysfs	ENOSYS	obsolete (CONFIG_SYSFS_SYSCALL); no glibc wrapper
+tuxcall	ENOSYS	never implemented (no kernel entry point)
+uselib	ENOSYS	removed from the kernel (x86_64 row has no entry point); path arg never translated
+ustat	ENOSYS	obsolete; glibc >= 2.28 has no wrapper; dev_t arg would be a host device
+vserver	ENOSYS	never implemented (no kernel entry point)
+
+# ---- EPERM: would escape the guest or needs real (host) privilege; refused even when the tracee is privileged
+acct	EPERM	host-global process accounting (CAP_SYS_PACCT); path arg
+bpf	EPERM	eBPF programs/maps act on the host kernel
+chroot	EPERM	root change is not emulated yet (guest root is the engine's rootfs)
+clock_settime	EPERM	sets the host clock (CAP_SYS_TIME)
+delete_module	EPERM	host kernel modules (CAP_SYS_MODULE)
+fanotify_init	EPERM	fanotify marks see host paths (CAP_SYS_ADMIN)
+fanotify_mark	EPERM	path arg; host mount/fs marks
+finit_module	EPERM	host kernel modules (CAP_SYS_MODULE)
+fsconfig	EPERM	new mount API
+fsmount	EPERM	new mount API
+fsopen	EPERM	new mount API
+fspick	EPERM	new mount API; path arg
+init_module	EPERM	host kernel modules (CAP_SYS_MODULE)
+ioperm	EPERM	x86 I/O port access (CAP_SYS_RAWIO)
+iopl	EPERM	x86 I/O privilege level (CAP_SYS_RAWIO)
+kexec_file_load	EPERM	replaces the host kernel (CAP_SYS_BOOT)
+kexec_load	EPERM	replaces the host kernel (CAP_SYS_BOOT)
+mount	EPERM	mount family; would change the host mount table
+mount_setattr	EPERM	new mount API; path arg
+move_mount	EPERM	new mount API; path args
+name_to_handle_at	EPERM	file handles bypass path translation (sys.c answers EOPNOTSUPP, as many filesystems do)
+open_by_handle_at	EPERM	file handles bypass path translation (CAP_DAC_READ_SEARCH)
+open_tree	EPERM	new mount API; path arg
+open_tree_attr	EPERM	new mount API; path arg
+pivot_root	EPERM	mount family; path args
+ptrace	EPERM	nested ptrace is not emulated (the engine is the tracer)
+quotactl	EPERM	host quota control; special-file path arg
+quotactl_fd	EPERM	host quota control
+reboot	EPERM	host reboot (CAP_SYS_BOOT)
+setdomainname	EPERM	host UTS name (CAP_SYS_ADMIN); could be virtualised later
+sethostname	EPERM	host UTS name (CAP_SYS_ADMIN); could be virtualised later
+setns	EPERM	joining namespaces escapes the engine's view
+settimeofday	EPERM	sets the host clock (CAP_SYS_TIME)
+swapoff	EPERM	host swap (CAP_SYS_ADMIN); path arg
+swapon	EPERM	host swap (CAP_SYS_ADMIN); path arg
+syslog	EPERM	host kernel log (CAP_SYSLOG / dmesg_restrict)
+umount2	EPERM	mount family; path arg
+unshare	EPERM	new namespaces are not emulated
+vhangup	EPERM	hangs up the host tty (CAP_SYS_TTY_CONFIG)
+
+# ---- PATH: take a pathname; translated guest->host (or refused) by the engine
+access	PATH	path
+chdir	PATH	path; directory only; engine tracks guest cwd
+chmod	PATH	path; mode bits may live in the metadata store
+chown	PATH	path; ownership is virtual (metadata store)
+creat	PATH	path; may create
+faccessat	PATH	dfd+path; access check against virtual identity
+faccessat2	PATH	dfd+path+AT_* flags
+fchmodat	PATH	dfd+path
+fchmodat2	PATH	dfd+path+AT_* flags
+fchownat	PATH	dfd+path+AT_* flags; ownership is virtual
+file_getattr	PATH	dfd+path+AT_* flags (fsxattr)
+file_setattr	PATH	dfd+path+AT_* flags (fsxattr; immutable needs CAP_LINUX_IMMUTABLE)
+futimesat	PATH	dfd+path (NULL path = fd)
+getcwd	PATH	returns the guest cwd (reverse translation)
+getxattr	PATH	path; security.* / trusted.* may be virtual
+getxattrat	PATH	dfd+path+AT_* flags
+inotify_add_watch	PATH	path (fd arg is the inotify fd, not a dirfd)
+lchown	PATH	path, no follow; ownership is virtual
+lgetxattr	PATH	path, no follow
+link	PATH	two paths; hardlinks may be emulated
+linkat	PATH	two dfd+path pairs; AT_SYMLINK_FOLLOW
+listxattr	PATH	path
+listxattrat	PATH	dfd+path+AT_* flags
+llistxattr	PATH	path, no follow
+lremovexattr	PATH	path, no follow
+lsetxattr	PATH	path, no follow
+lstat	PATH	path, no follow; st_uid/st_mode may be virtual
+mkdir	PATH	path; may create
+mkdirat	PATH	dfd+path; may create
+mknod	PATH	path; device nodes need CAP_MKNOD (virtualise via metadata)
+mknodat	PATH	dfd+path; device nodes need CAP_MKNOD (virtualise via metadata)
+newfstatat	PATH	dfd+path+AT_* flags; same name on x86_64 and arm64 (nr 262 / 79)
+open	PATH	path + O_* flags
+openat	PATH	dfd+path + O_* flags
+readlink	PATH	path; /proc magic links emulated
+readlinkat	PATH	dfd+path; /proc magic links emulated
+removexattr	PATH	path
+removexattrat	PATH	dfd+path+AT_* flags
+rename	PATH	two paths
+renameat	PATH	two dfd+path pairs (arm64 via the "renameat" ABI tag)
+renameat2	PATH	two dfd+path pairs; RENAME_* flags
+rmdir	PATH	path
+setxattr	PATH	path
+setxattrat	PATH	dfd+path+AT_* flags
+stat	PATH	path; st_uid/st_mode may be virtual
+statfs	PATH	path
+statx	PATH	dfd+path+AT_* flags; seccomp-blocked on Android zygote apps (SIGSYS -> ENOSYS)
+symlink	PATH	link path translated; target is literal text
+symlinkat	PATH	dfd+link path translated; target is literal text
+truncate	PATH	path
+unlink	PATH	path
+unlinkat	PATH	dfd+path; AT_REMOVEDIR
+utime	PATH	path
+utimensat	PATH	dfd+path+AT_* flags (NULL path = fd)
+utimes	PATH	path
+
+# ---- ID: process identity or uid/gid-bearing arguments/results (fake identity)
+capget	ID	capabilities of the virtual identity
+capset	ID	capabilities of the virtual identity
+getegid	ID	virtual gid
+geteuid	ID	virtual uid
+getgid	ID	virtual gid
+getgroups	ID	virtual supplementary groups
+getpriority	ID	PRIO_USER "who" is a uid; PRIO_PROCESS/PRIO_PGRP are plain
+getresgid	ID	virtual gids
+getresuid	ID	virtual uids
+getsockopt	ID	SO_PEERCRED returns host pid/uid/gid; other options plain
+getuid	ID	virtual uid
+ioprio_get	ID	IOPRIO_WHO_USER "who" is a uid
+ioprio_set	ID	IOPRIO_WHO_USER "who" is a uid
+keyctl	ID	KEYCTL_CHOWN/DESCRIBE/GET_PERSISTENT carry uid/gid
+msgctl	ID	IPC_STAT/IPC_SET carry owner uid/gid (Android kernels usually lack SYSVIPC)
+semctl	ID	IPC_STAT/IPC_SET carry owner uid/gid (Android kernels usually lack SYSVIPC)
+setfsgid	ID	virtual fsgid
+setfsuid	ID	virtual fsuid
+setgid	ID	virtual gid
+setgroups	ID	virtual supplementary groups
+setpriority	ID	PRIO_USER "who" is a uid; PRIO_PROCESS/PRIO_PGRP are plain
+setregid	ID	virtual gids
+setresgid	ID	virtual gids
+setresuid	ID	virtual uids
+setreuid	ID	virtual uids
+setuid	ID	virtual uid
+shmctl	ID	IPC_STAT/IPC_SET carry owner uid/gid (Android kernels usually lack SYSVIPC)
+
+# ---- META: fd-based, result/effect depends on virtual file metadata
+fchmod	META	mode may live in the metadata store
+fchown	META	ownership is virtual
+fgetxattr	META	security.* / trusted.* may be virtual
+flistxattr	META	virtual xattr names
+fremovexattr	META	virtual xattrs
+fsetxattr	META	virtual xattrs
+fstat	META	st_uid/st_mode/st_nlink may be virtual (arm64 nr 80 is the "64" ABI row)
+getdents	META	hidden/bound entries; x86_64 only
+getdents64	META	hidden/bound entries
+umask	META	applied by the engine when files are created with virtual modes
+
+# ---- SOCK: may carry an AF_UNIX pathname (or SCM credentials)
+accept	SOCK	peer sockaddr may be an AF_UNIX path (reverse translation)
+accept4	SOCK	peer sockaddr may be an AF_UNIX path (reverse translation)
+bind	SOCK	AF_UNIX path creates a socket file
+connect	SOCK	AF_UNIX path
+getpeername	SOCK	AF_UNIX path (reverse translation)
+getsockname	SOCK	AF_UNIX path (reverse translation)
+recvfrom	SOCK	source sockaddr may be an AF_UNIX path
+recvmmsg	SOCK	msg_name AF_UNIX paths; SCM_CREDENTIALS carry host uid/gid
+recvmsg	SOCK	msg_name AF_UNIX path; SCM_CREDENTIALS carry host uid/gid
+sendmmsg	SOCK	msg_name AF_UNIX paths; SCM_CREDENTIALS
+sendmsg	SOCK	msg_name AF_UNIX path; SCM_CREDENTIALS
+sendto	SOCK	dest sockaddr may be an AF_UNIX path
+
+# ---- PROC: process lifecycle, signals to other tasks, cross-process access
+clone	PROC	new task: engine attaches (PTRACE_O_TRACECLONE/FORK/VFORK)
+exit	PROC	task exit
+exit_group	PROC	thread-group exit
+fork	PROC	new task; x86_64 only
+kcmp	PROC	compares resources of host pids
+kill	PROC	host pid numbers (no pid namespace)
+personality	PROC	exec personality (READ_IMPLIES_EXEC, ADDR_NO_RANDOMIZE) affects the loader
+pidfd_getfd	PROC	steals an fd from another task
+pidfd_open	PROC	host pid
+pidfd_send_signal	PROC	signal via pidfd
+prctl	PROC	PR_SET_MM/PR_SET_DUMPABLE/PR_SET_PTRACER/PR_SET_SECCOMP/PR_CAPBSET_*/PR_CAP_AMBIENT
+process_madvise	PROC	cross-process via pidfd
+process_mrelease	PROC	cross-process via pidfd
+process_vm_readv	PROC	cross-process memory access
+process_vm_writev	PROC	cross-process memory access
+rt_sigqueueinfo	PROC	signal to a host pid
+rt_tgsigqueueinfo	PROC	signal to a host tid
+seccomp	PROC	guest filters stack below the tracer (SECCOMP_RET_TRACE/USER_NOTIF interplay)
+tgkill	PROC	signal to a host tid
+tkill	PROC	signal to a host tid
+vfork	PROC	new task sharing mm; x86_64 only
+wait4	PROC	reaping must stay consistent with the tracer's own waits
+waitid	PROC	reaping must stay consistent with the tracer's own waits
+
+# ---- FD: need no translation but matter to fd/cwd tracking
+close	FD	fd tracking (dirfds, engine-held fds)
+close_range	FD	must not close engine-injected fds
+dup	FD	fd tracking
+dup2	FD	fd tracking; x86_64 only
+dup3	FD	fd tracking
+fchdir	FD	guest cwd tracking
+fcntl	FD	F_DUPFD*/F_SETFD (CLOEXEC) fd tracking
+ioctl	FD	opaque; TIOCGPTPEER/FS_IOC_*/FICLONE etc. need per-request audit
+
+# ---- PASS: checked: no path, no identity semantics
+add_key	PASS	kernel keyring (per real uid; no uid argument)
+adjtimex	PASS	modes=0 is the ntp_gettime query; setting needs CAP_SYS_TIME (host-enforced)
+alarm	PASS	timer; x86_64 only
+arch_prctl	PASS	x86_64 FS/GS base, CET, CPUID faulting
+brk	PASS	memory
+cachestat	PASS	fd-based page-cache stats
+clock_adjtime	PASS	modes=0 is a query; setting needs CAP_SYS_TIME (host-enforced)
+clock_getres	PASS	time
+clock_gettime	PASS	time (usually vDSO)
+clock_nanosleep	PASS	time
+copy_file_range	PASS	fd to fd
+epoll_create	PASS	epoll; x86_64 only
+epoll_create1	PASS	epoll
+epoll_ctl	PASS	epoll
+epoll_pwait	PASS	epoll
+epoll_pwait2	PASS	epoll
+epoll_wait	PASS	epoll; x86_64 only
+eventfd	PASS	eventfd; x86_64 only
+eventfd2	PASS	eventfd
+fadvise64	PASS	fd advice
+fallocate	PASS	fd
+fdatasync	PASS	fd
+flock	PASS	fd lock
+fstatfs	PASS	fd; host filesystem statistics
+fsync	PASS	fd
+ftruncate	PASS	fd
+futex	PASS	futex
+futex_requeue	PASS	futex
+futex_wait	PASS	futex
+futex_waitv	PASS	futex
+futex_wake	PASS	futex
+get_mempolicy	PASS	NUMA
+get_robust_list	PASS	futex robust list (ptrace-mode check on other tids)
+getcpu	PASS	cpu/node query
+getitimer	PASS	timer
+getpgid	PASS	process group
+getpgrp	PASS	process group; x86_64 only
+getpid	PASS	host pid (no pid namespace); also the engine's void target
+getppid	PASS	host pid
+getrandom	PASS	entropy
+getrlimit	PASS	rlimits (arm64 via the "rlimit" ABI tag)
+getrusage	PASS	resource usage
+getsid	PASS	session
+gettid	PASS	host tid
+gettimeofday	PASS	time (usually vDSO)
+inotify_init	PASS	inotify fd; x86_64 only
+inotify_init1	PASS	inotify fd
+inotify_rm_watch	PASS	inotify
+io_cancel	PASS	Linux AIO (fd-based iocbs)
+io_destroy	PASS	Linux AIO
+io_getevents	PASS	Linux AIO
+io_pgetevents	PASS	Linux AIO
+io_setup	PASS	Linux AIO
+io_submit	PASS	Linux AIO (IOCB_CMD_* carry fds, not paths)
+listen	PASS	socket
+listns	PASS	host namespace ids only (no path, no uid)
+lseek	PASS	fd offset
+lsm_get_self_attr	PASS	own LSM attributes
+lsm_list_modules	PASS	LSM list
+lsm_set_self_attr	PASS	own LSM attributes (kernel/LSM-enforced)
+madvise	PASS	memory
+map_shadow_stack	PASS	memory (shadow stack)
+mbind	PASS	NUMA
+membarrier	PASS	memory ordering
+memfd_create	PASS	name is a label (/memfd:NAME), not a path
+memfd_secret	PASS	memory (arm64 via the "memfd_secret" ABI tag)
+migrate_pages	PASS	NUMA (host pid)
+mincore	PASS	memory
+mlock	PASS	memory
+mlock2	PASS	memory
+mlockall	PASS	memory
+mmap	PASS	memory (fd-backed maps need no translation)
+modify_ldt	PASS	x86 LDT (own process)
+move_pages	PASS	NUMA (host pid)
+mprotect	PASS	memory
+mq_getsetattr	PASS	POSIX mqueue
+mq_notify	PASS	POSIX mqueue
+mq_open	PASS	name is IPC-namespace global, not a filesystem path
+mq_timedreceive	PASS	POSIX mqueue
+mq_timedsend	PASS	POSIX mqueue
+mq_unlink	PASS	name is IPC-namespace global, not a filesystem path
+mremap	PASS	memory
+mseal	PASS	memory
+msgget	PASS	SysV IPC (creation uid comes from real creds)
+msgrcv	PASS	SysV IPC
+msgsnd	PASS	SysV IPC
+msync	PASS	memory
+munlock	PASS	memory
+munlockall	PASS	memory
+munmap	PASS	memory
+nanosleep	PASS	time
+pause	PASS	signals; x86_64 only
+perf_event_open	PASS	pid arg is a host pid; gated by perf_event_paranoid
+pipe	PASS	pipe; x86_64 only
+pipe2	PASS	pipe
+pkey_alloc	PASS	memory protection keys
+pkey_free	PASS	memory protection keys
+pkey_mprotect	PASS	memory protection keys
+poll	PASS	poll; x86_64 only
+ppoll	PASS	poll
+pread64	PASS	fd I/O
+preadv	PASS	fd I/O
+preadv2	PASS	fd I/O
+prlimit64	PASS	rlimits (host pid)
+pselect6	PASS	select
+pwrite64	PASS	fd I/O
+pwritev	PASS	fd I/O
+pwritev2	PASS	fd I/O
+read	PASS	fd I/O
+readahead	PASS	fd
+readv	PASS	fd I/O
+remap_file_pages	PASS	memory (deprecated, emulated by the kernel)
+request_key	PASS	kernel keyring (per real uid)
+restart_syscall	PASS	kernel restart of an interrupted call
+rseq	PASS	restartable sequences
+rseq_slice_yield	PASS	rseq time-slice extension
+rt_sigaction	PASS	signals
+rt_sigpending	PASS	signals
+rt_sigprocmask	PASS	signals
+rt_sigreturn	PASS	signals
+rt_sigsuspend	PASS	signals
+rt_sigtimedwait	PASS	signals
+sched_get_priority_max	PASS	scheduler
+sched_get_priority_min	PASS	scheduler
+sched_getaffinity	PASS	scheduler (host pid)
+sched_getattr	PASS	scheduler (host pid)
+sched_getparam	PASS	scheduler (host pid)
+sched_getscheduler	PASS	scheduler (host pid)
+sched_rr_get_interval	PASS	scheduler (host pid)
+sched_setaffinity	PASS	scheduler (host pid)
+sched_setattr	PASS	scheduler (host pid)
+sched_setparam	PASS	scheduler (host pid)
+sched_setscheduler	PASS	scheduler (host pid)
+sched_yield	PASS	scheduler
+select	PASS	select; x86_64 only
+semget	PASS	SysV IPC (creation uid comes from real creds)
+semop	PASS	SysV IPC
+semtimedop	PASS	SysV IPC
+sendfile	PASS	fd to fd
+set_mempolicy	PASS	NUMA
+set_mempolicy_home_node	PASS	NUMA
+set_robust_list	PASS	futex robust list
+set_tid_address	PASS	thread
+setitimer	PASS	timer
+setpgid	PASS	process group
+setrlimit	PASS	rlimits (arm64 via the "rlimit" ABI tag)
+setsid	PASS	session
+setsockopt	PASS	socket options (privileged ones host-enforced)
+shmat	PASS	SysV IPC
+shmdt	PASS	SysV IPC
+shmget	PASS	SysV IPC (creation uid comes from real creds)
+shutdown	PASS	socket
+sigaltstack	PASS	signals
+signalfd	PASS	signals; x86_64 only
+signalfd4	PASS	signals
+socket	PASS	socket creation carries no address
+socketpair	PASS	anonymous sockets
+splice	PASS	fd to fd
+sync	PASS	host-wide flush (harmless)
+sync_file_range	PASS	fd
+syncfs	PASS	fd
+sysinfo	PASS	host system info
+tee	PASS	fd to fd
+time	PASS	time (vsyscall/vDSO); x86_64 only
+timer_create	PASS	timer
+timer_delete	PASS	timer
+timer_getoverrun	PASS	timer
+timer_gettime	PASS	timer
+timer_settime	PASS	timer
+timerfd_create	PASS	timer fd
+timerfd_gettime	PASS	timer fd
+timerfd_settime	PASS	timer fd
+times	PASS	process times
+uname	PASS	host utsname (release may be virtualised later)
+uprobe	PASS	only valid from a kernel uprobe trampoline; x86_64 only
+uretprobe	PASS	only valid from a kernel uretprobe trampoline; x86_64 only
+userfaultfd	PASS	memory (vm.unprivileged_userfaultfd gated)
+vmsplice	PASS	pipe
+write	PASS	fd I/O
+writev	PASS	fd I/O

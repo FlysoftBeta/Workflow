@@ -1,0 +1,42 @@
+{
+ "defaults": {
+  "exe": "${LIB}/libworkflow-engine.so",
+  "timeout": 60,
+  "cwd": "${FILES}"
+ },
+ "setup": [],
+ "cases": [
+  {
+   "id": "net-host",
+   "exe": "/system/bin/sh",
+   "argv": [
+    "-c",
+    "getprop net.dns1; ping -c 1 -W 3 8.8.8.8 2>&1 | tail -2; cat ${FILES}/resolv.conf"
+   ]
+  },
+  {
+   "id": "net-guest",
+   "argv": [
+    "run",
+    "--root",
+    "${FILES}/gen/1/rootfs",
+    "--bind",
+    "${FILES}/ws/home/work:/home/work",
+    "--bind",
+    "${FILES}/ws/toolchains:/opt/toolchains",
+    "--bind",
+    "${FILES}/resolv.conf:/etc/resolv.conf",
+    "--",
+    "/bin/sh",
+    "-c",
+    "python3 - <<'EOF'\n\nimport socket, struct, os\nprint(open(\"/etc/resolv.conf\").read().replace(\"\\n\",\" | \"))\nfor srv in (\"10.0.2.3\", \"8.8.8.8\"):\n    q = struct.pack(\">HHHHHH\", 0x1234, 0x0100, 1, 0, 0, 0) + b\"\".join(bytes([len(p)]) + p.encode() for p in \"deb.debian.org\".split(\".\")) + b\"\\0\\0\\1\\0\\1\"\n    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(3)\n    try:\n        s.sendto(q, (srv, 53)); d = s.recv(512); print(srv, \"answered\", len(d))\n    except Exception as e:\n        print(srv, \"error\", repr(e))\ntry:\n    print(\"getaddrinfo\", socket.getaddrinfo(\"deb.debian.org\", 80)[0][4])\nexcept Exception as e:\n    print(\"getaddrinfo error\", repr(e))\ntry:\n    c = socket.create_connection((\"151.101.2.132\", 80), 5); print(\"tcp ok\"); c.close()\nexcept Exception as e:\n    print(\"tcp error\", repr(e))\n\nEOF"
+   ],
+   "clearEnv": true,
+   "env": {
+    "PATH": "/opt/toolchains/active/python/bin:/usr/local/bin:/usr/bin:/bin",
+    "HOME": "/home/work",
+    "LANG": "C.UTF-8"
+   }
+  }
+ ]
+}

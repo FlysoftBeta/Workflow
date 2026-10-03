@@ -1,0 +1,10 @@
+{
+  "name": "qemu-user",
+  "version": "1:10.0.13+ds-0+deb13u1",
+  "source": "https://deb.debian.org/debian/pool/main/q/qemu/",
+  "purpose": "Build-only static AArch64 emulator; never shipped in Workflow images or APKs",
+  "architecture": "amd64",
+  "url": "https://deb.debian.org/debian/pool/main/q/qemu/qemu-user_10.0.13+ds-0+deb13u1_amd64.deb",
+  "sha256": "ca6ede739327a20ae5a3498230c8a3a9a072c586e131bc6bcc1201eb1725e336",
+  "license": "GPL-2.0-or-later and bundled component licenses; see LICENSE"
+}

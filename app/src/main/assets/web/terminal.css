@@ -1,0 +1,23 @@
+@font-face {
+  font-family: "JetBrains Mono NL";
+  src: url("../fonts/JetBrainsMonoNL-Regular.ttf") format("truetype");
+  font-weight: 400;
+}
+@font-face {
+  font-family: "JetBrains Mono NL";
+  src: url("../fonts/JetBrainsMonoNL-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+html, body, #terminal { height: 100%; margin: 0; overflow: hidden; }
+body { background: transparent; -webkit-tap-highlight-color: transparent; }
+#terminal { box-sizing: border-box; padding: 4px; }
+.xterm { height: 100%; }
+.xterm-screen { position: relative; }
+/* Touch has no hover: links are always marked with a dashed underline, solid while pressed. */
+.workflow-links { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; z-index: 5; }
+.workflow-link { position: absolute; height: 0; border-bottom: 1px dashed currentColor; opacity: 0.75; color: var(--link, #286B57); }
+.workflow-link.pressed { border-bottom-style: solid; border-bottom-width: 2px; opacity: 1; }
+/* Lines wrap in a terminal: never show a horizontal scrollbar strip. */
+.xterm .xterm-scrollable-element > .scrollbar.horizontal { display: none !important; }
+/* xterm.css paints the viewport black; the strip below the last full row must match the theme. */
+.xterm .xterm-viewport { background-color: transparent !important; }

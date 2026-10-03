@@ -1,0 +1,57 @@
+[
+  {
+    "file": "json.json",
+    "source": "https://raw.githubusercontent.com/microsoft/vscode/529ee19061e6723e0a640fe432e57c69d50a4f4f/extensions/json/syntaxes/JSON.tmLanguage.json",
+    "sha256": "d7238f1cc9033993b9816b0945cab4bb8ea108de0399663c551f28f913e94c70",
+    "scope": "source.json"
+  },
+  {
+    "file": "python.json",
+    "source": "https://raw.githubusercontent.com/microsoft/vscode/529ee19061e6723e0a640fe432e57c69d50a4f4f/extensions/python/syntaxes/MagicPython.tmLanguage.json",
+    "sha256": "ca981430eb3df004f4955bb7cba51ad06c4d8408d168c81eec7059d7d9aec5c8",
+    "scope": "source.python"
+  },
+  {
+    "file": "javascript.json",
+    "source": "https://raw.githubusercontent.com/microsoft/vscode/529ee19061e6723e0a640fe432e57c69d50a4f4f/extensions/javascript/syntaxes/JavaScript.tmLanguage.json",
+    "sha256": "db6f17f15bc4f5e860a3b8fa6055a69720a53df845c8d5121cdc4f128c16291f",
+    "scope": "source.js"
+  },
+  {
+    "file": "typescript.json",
+    "source": "https://raw.githubusercontent.com/microsoft/vscode/529ee19061e6723e0a640fe432e57c69d50a4f4f/extensions/typescript-basics/syntaxes/TypeScript.tmLanguage.json",
+    "sha256": "4e92e0d7de560217d6c8d3236d85e6e17a5d77825b15729a230c761743122661",
+    "scope": "source.ts"
+  },
+  {
+    "file": "markdown.json",
+    "source": "https://raw.githubusercontent.com/microsoft/vscode/529ee19061e6723e0a640fe432e57c69d50a4f4f/extensions/markdown-basics/syntaxes/markdown.tmLanguage.json",
+    "sha256": "f85244298d8ceece1e1012e772b2b2cbeaa46400aedabe5f5bdd1ff9c3be19f9",
+    "scope": "text.html.markdown",
+    "upstream_sha256": "ff4c245072aa0628b298481de17a1c8026b1587410bbb8ab74f3c29cc0f19b9e",
+    "patches": [
+      "joni-strikethrough-lookahead"
+    ]
+  },
+  {
+    "file": "kotlin.json",
+    "source": "https://raw.githubusercontent.com/fwcd/vscode-kotlin/4a7c1538754828c1d22a8bee8ff3400045b4352a/syntaxes/kotlin.tmLanguage.json",
+    "sha256": "459f3a3ea00b80c9af08f80def97933bd876ec6b3670748b15268b3b429256f5",
+    "scope": "source.kotlin"
+  },
+  {
+    "file": "LICENSE-vscode.txt",
+    "source": "https://raw.githubusercontent.com/microsoft/vscode/529ee19061e6723e0a640fe432e57c69d50a4f4f/LICENSE.txt",
+    "sha256": "9480271317925265e806a9a196aaa33410a962fa9d4d1e248a4a5187bc8c9df9"
+  },
+  {
+    "file": "NOTICE-vscode.txt",
+    "source": "https://raw.githubusercontent.com/microsoft/vscode/529ee19061e6723e0a640fe432e57c69d50a4f4f/ThirdPartyNotices.txt",
+    "sha256": "4cb210d0c8f8fa304b37a31d44436ebf86dff59466a4033fbcd0c401d63c6568"
+  },
+  {
+    "file": "LICENSE-kotlin.txt",
+    "source": "https://raw.githubusercontent.com/fwcd/vscode-kotlin/4a7c1538754828c1d22a8bee8ff3400045b4352a/LICENSE",
+    "sha256": "1690b72b5a2beb330c98c0715929bf789cb8d91670c29ff2e4abcdae84329136"
+  }
+]

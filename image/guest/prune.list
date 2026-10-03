@@ -1,0 +1,21 @@
+# Paths left out of the image, matched like find(1) -path against ./relative paths.
+# Shared by capture-manifest.sh (guest) and `wfimage pack --prune-file` (packer).
+# A line starting with '!' keeps a path that an earlier pattern would drop.
+./proc/*
+./sys/*
+./dev/*
+./tmp/*
+./var/tmp/*
+./run/*
+!./run/lock
+./workspace/*
+./opt/toolchains/.tmp
+# Android system paths the engine binds into guests on a device (docs/engine.md §3.1) and their mount
+# points; they are never part of the image (an image packed inside the engine on Android would capture them).
+./system
+./apex
+./vendor
+./product
+./system_ext
+./odm
+./linkerconfig

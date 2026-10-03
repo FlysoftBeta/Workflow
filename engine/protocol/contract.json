@@ -1,0 +1,9 @@
+{
+  "protocol": "workflow.workspace/1",
+  "engineVersion": "1.0.0",
+  "transport": "UTF-8 JSON-RPC 2.0, one object per line, no batches",
+  "maxFrameBytes": 33554432,
+  "maxBlobChunkBytes": 65536,
+  "methods": ["hello", "workspace.snapshot", "workspace.command", "workspace.watch", "files.read", "files.upload.begin", "files.upload.chunk", "files.upload.commit", "files.upload.cancel", "documents.read", "documents.write", "documents.quarantine", "environment.status", "environment.reconcile", "environment.restart", "process.spawn", "process.read", "process.write", "process.resize", "process.stop", "process.wait", "services.status", "services.report", "client.config"],
+  "compatibility": "Exact protocol match is mandatory. No legacy migration or protocol fallback."
+}

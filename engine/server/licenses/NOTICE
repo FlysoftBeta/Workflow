@@ -1,0 +1,4 @@
+The Workspace Engine APK archive reader uses zip 8.6.0 (MIT).
+Source: https://github.com/zip-rs/zip2
+Version and transitive dependency checksums: engine/Cargo.lock.
+The upstream license is retained in zip-8.6.0.txt.

@@ -1,0 +1,29 @@
+{
+  "renderer": "native Compose; CommonMark AST; Android Canvas math",
+  "artifacts": [
+    {
+      "coordinates": "org.commonmark:commonmark:0.30.0",
+      "sha256": "090f0a758ac2f4f51aa86dff9dff0fdf7403666d0efd29f59886dc8e8b1eac53",
+      "url": "https://repo.maven.apache.org/maven2/org/commonmark/commonmark/0.30.0/commonmark-0.30.0.jar",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "coordinates": "org.commonmark:commonmark-ext-gfm-tables:0.30.0",
+      "sha256": "5e28b48e66f7697bee4dfeb4c8f8f08a84a2827d91b53bbd9bd5445e82d14bda",
+      "url": "https://repo.maven.apache.org/maven2/org/commonmark/commonmark-ext-gfm-tables/0.30.0/commonmark-ext-gfm-tables-0.30.0.jar",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "coordinates": "org.commonmark:commonmark-ext-gfm-strikethrough:0.30.0",
+      "sha256": "2fed2064af3114c9fdfe233f9987682af6b1da073522879520fdb8593b65c995",
+      "url": "https://repo.maven.apache.org/maven2/org/commonmark/commonmark-ext-gfm-strikethrough/0.30.0/commonmark-ext-gfm-strikethrough-0.30.0.jar",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "coordinates": "ru.noties:jlatexmath-android:0.2.0",
+      "sha256": "b16824328d45ed86892f7f8aa74a542fc361b8a94004de8ca5ae86113b78a89f",
+      "url": "https://repo.maven.apache.org/maven2/ru/noties/jlatexmath-android/0.2.0/jlatexmath-android-0.2.0.aar",
+      "license": "GPL-2.0-or-later WITH Classpath-exception-2.0"
+    }
+  ]
+}

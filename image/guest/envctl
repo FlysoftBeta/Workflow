@@ -1,0 +1,299 @@
+#!/bin/bash
+# envctl — guest-side steps of env.json reconcile (debian-trixie typeVersion 1).
+# Contract: docs/environment.md §5.3. Every command is idempotent. Progress goes to stderr;
+# stdout carries only the JSON documents described below.
+#
+# Toolchains live side by side in the persistent store /opt/toolchains (not in the rootfs):
+#   uv/python/cpython-X.Y.Z-*   nvm/versions/node/vX.Y.Z   profiles/pyX.Y.Z-nodeA.B.C/{python,node}
+#   active -> profiles/<name>   (switched by the runtime when an environment instance starts)
+set -euo pipefail
+umask 022
+TOOLCHAINS=/opt/toolchains
+NVM_SH=/usr/local/lib/nvm/nvm.sh
+export PATH=$TOOLCHAINS/active/python/bin:$TOOLCHAINS/active/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export NVM_DIR=$TOOLCHAINS/nvm UV_PYTHON_INSTALL_DIR=$TOOLCHAINS/uv/python UV_PYTHON_PREFERENCE=system
+export UV_NO_CACHE=1 UV_COMPILE_BYTECODE=1 DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8
+BASE_PACKAGES=/usr/local/share/workflow/base-packages
+VERSION='[0-9]+\.[0-9]+\.[0-9]+'
+
+command=${1:-}
+[ $# -gt 0 ] && shift
+
+die() { echo "envctl: $*" >&2; exit 2; }
+log() { echo "envctl: $*" >&2; }
+need_user() { [ "$(id -un)" = "$1" ] || die "$command must run as $1"; }
+check_package() { [[ $1 =~ ^[a-z0-9][a-z0-9+.-]+$ ]] || die "invalid package name: $1"; }
+check_python() { [[ $1 =~ ^3(\.[0-9]+){0,2}$ ]] || die "invalid python version: $1"; }
+check_node() { [[ $1 =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || die "invalid node version: $1"; }
+# Dotted-prefix match: 3.14.7 satisfies 3, 3.14 and 3.14.7, but not 3.1.
+satisfies() { [ "$1" = "$2" ] || [[ $1 == "$2".* ]]; }
+json_string() { if [ -n "$1" ]; then printf '"%s"' "$1"; else printf null; fi; }
+installed_version() {
+    local status
+    status=$(dpkg-query -W -f '${db:Status-Status} ${Version}' "$1" 2>/dev/null) || return 0
+    [[ $status == installed\ * ]] && echo "${status#installed }"
+    return 0
+}
+packages_json() { # callers validate names first: die inside $(...) would only end the subshell
+    local separator="" package
+    printf '{'
+    for package; do
+        printf '%s"%s": %s' "$separator" "$package" "$(json_string "$(installed_version "$package")")"
+        separator=", "
+    done
+    printf '}'
+}
+newest() { sort -V | tail -n 1; }
+# Plain CPython builds only (no +freethreaded / +debug variants, no pre-releases).
+python_versions() {
+    local directory version
+    for directory in "$UV_PYTHON_INSTALL_DIR"/cpython-*; do
+        [ -d "$directory" ] && [ ! -L "$directory" ] || continue
+        version=${directory##*/cpython-}
+        version=${version%%-*}
+        if [[ $version =~ ^$VERSION$ ]]; then echo "$version"; fi
+    done
+}
+python_directory() {
+    local directory
+    for directory in "$UV_PYTHON_INSTALL_DIR"/cpython-"$1"-*; do
+        if [ -d "$directory" ] && [ ! -L "$directory" ]; then echo "${directory##*/}"; return; fi
+    done
+}
+node_versions() {
+    local directory version
+    for directory in "$NVM_DIR"/versions/node/v*; do
+        [ -d "$directory" ] || continue
+        version=${directory##*/v}
+        if [[ $version =~ ^$VERSION$ ]]; then echo "$version"; fi
+    done
+}
+best() { # best LISTER SPEC: newest installed version satisfying SPEC
+    local version
+    "$1" | while read -r version; do if satisfies "$version" "$2"; then echo "$version"; fi; done | newest
+}
+# Toolchain installs write only to the store: temporary files and HOME stay out of the rootfs.
+private_tmp() {
+    mkdir -p "$TOOLCHAINS/.tmp"
+    scratch=$(mktemp -d "$TOOLCHAINS/.tmp/envctl.XXXXXX")
+    trap 'rm -rf "$scratch"' EXIT
+    export TMPDIR=$scratch HOME=$scratch
+}
+# nvm.sh is neither `set -e` nor `set -u` safe; run it in a relaxed subshell.
+nvm_run() { ( set +eu; . "$NVM_SH" --no-use; nvm "$@" ); }
+
+apt_install() {
+    need_user root
+    [ $# -gt 0 ] || die "apt-install needs package names"
+    local missing=() package
+    for package; do
+        check_package "$package"
+        [ -n "$(installed_version "$package")" ] || missing+=("$package")
+    done
+    if [ ${#missing[@]} -eq 0 ]; then
+        log "already installed: $*"
+    else
+        apt-get update >&2
+        apt-get install -y --no-install-recommends "${missing[@]}" >&2
+    fi
+    apt-mark manual "$@" >/dev/null
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+}
+
+apt_remove() {
+    need_user root
+    local remove=() package
+    for package; do
+        check_package "$package"
+        if [ -f "$BASE_PACKAGES" ] && grep -qxF "$package" "$BASE_PACKAGES"; then
+            log "$package is part of the image; kept"
+        elif [ -n "$(installed_version "$package")" ]; then
+            remove+=("$package")
+        fi
+    done
+    if [ ${#remove[@]} -gt 0 ]; then
+        apt-get remove -y "${remove[@]}" >&2
+        apt-get autoremove -y >&2
+    fi
+    apt-get clean
+}
+
+# python SPEC: make sure a version satisfying SPEC is installed (side by side). Prints
+# {"python": "3.13.15", "installed": true|false}; "installed" means this call downloaded it.
+python_install() {
+    need_user work
+    local spec=${1:-} version installed=false
+    check_python "$spec"
+    version=$(best python_versions "$spec")
+    if [ -z "$version" ]; then
+        private_tmp
+        uv python install --no-bin "$spec" >&2
+        version=$(best python_versions "$spec")
+        [ -n "$version" ] || die "no Python matching $spec after installing it"
+        installed=true
+    fi
+    printf '{"python": "%s", "installed": %s}\n' "$version" "$installed"
+}
+
+node_install() {
+    need_user work
+    local spec=${1:-} version installed=false
+    check_node "$spec"
+    version=$(best node_versions "$spec")
+    if [ -z "$version" ]; then
+        private_tmp
+        nvm_run install --skip-default-packages "$spec" >&2
+        nvm_run cache clear >&2 || true
+        version=$(best node_versions "$spec")
+        [ -n "$version" ] || die "no Node.js matching $spec after installing it"
+        installed=true
+    fi
+    [ -e "$NVM_DIR/nvm-exec" ] || ln -sfn /usr/local/lib/nvm/nvm-exec "$NVM_DIR/nvm-exec"
+    printf '{"node": "%s", "installed": %s}\n' "$version" "$installed"
+}
+
+# Parse the language arrays before selecting toolchains. jq is an immutable image package,
+# so JSON parsing works even when both managed languages are disabled.
+parse_specs() {
+    local kind=$1 value=$2
+    jq -ce --arg kind "$kind" '
+      if type != "array" or length > 64 then error("expected an array of at most 64 specs")
+      elif any(.[]; type != "string") then error("expected version strings")
+      elif length != (unique | length) then error("duplicate version specs")
+      elif any(.[]; test(if $kind == "python" then "^3(\\.[0-9]+){0,2}$" else "^[0-9]+(\\.[0-9]+){0,2}$" end) | not)
+        then error("invalid version spec") else . end' <<< "$value" || die "invalid $kind array"
+}
+array_json() { if [ $# -eq 0 ]; then printf '[]'; else printf '%s\n' "$@" | jq -Rsc 'split("\n")[:-1]'; fi; }
+
+# Every requested version is verified, including secondary versions. Canonical resolved arrays
+# identify immutable profiles; editing any secondary version therefore changes the profile.
+verify_many() {
+    need_user work
+    [ $# -ge 2 ] || die "verify-many needs Python and Node JSON arrays"
+    local python_specs node_specs spec version name identity staging target package
+    local pythons=() nodes=()
+    python_specs=$(parse_specs python "$1")
+    node_specs=$(parse_specs node "$2")
+    shift 2
+    for package; do check_package "$package"; done
+    while IFS= read -r spec; do
+        version=$(best python_versions "$spec")
+        [ -n "$version" ] || die "no installed Python matches $spec"
+        pythons+=("$version")
+    done < <(jq -r '.[]' <<< "$python_specs")
+    while IFS= read -r spec; do
+        version=$(best node_versions "$spec")
+        [ -n "$version" ] || die "no installed Node.js matches $spec"
+        nodes+=("$version")
+    done < <(jq -r '.[]' <<< "$node_specs")
+    python_specs=$(array_json "${pythons[@]}")
+    node_specs=$(array_json "${nodes[@]}")
+    identity=$(printf '{"python":%s,"node":%s}' "$python_specs" "$node_specs")
+    name="set-$(printf %s "$identity" | sha256sum | cut -d' ' -f1)"
+    if [ ${#pythons[@]} -eq 1 ] && [ ${#nodes[@]} -eq 1 ]; then
+        name="py${pythons[0]}-node${nodes[0]}"
+    fi
+    target=$TOOLCHAINS/profiles/$name
+    if [ ! -d "$target" ]; then
+        mkdir -p "$TOOLCHAINS/profiles"
+        staging=$(mktemp -d "$TOOLCHAINS/profiles/.new.XXXXXX")
+        trap 'rm -rf "$staging"' EXIT
+        mkdir -p "$staging/pythons" "$staging/nodes"
+        for version in "${pythons[@]}"; do
+            ln -sfn "../../../uv/python/$(python_directory "$version")" "$staging/pythons/$version"
+        done
+        for version in "${nodes[@]}"; do
+            ln -sfn "../../../nvm/versions/node/v$version" "$staging/nodes/$version"
+        done
+        if [ ${#pythons[@]} -gt 0 ]; then
+            ln -s "pythons/${pythons[0]}" "$staging/python"
+        else
+            disabled_language "$staging/python" python python3 pip pip3
+        fi
+        if [ ${#nodes[@]} -gt 0 ]; then
+            ln -s "nodes/${nodes[0]}" "$staging/node"
+        else
+            disabled_language "$staging/node" node npm npx corepack
+        fi
+        printf '%s\n' "$identity" > "$staging/toolchains.json"
+        chmod 0755 "$staging"
+        mv -T "$staging" "$target" 2>/dev/null || rm -rf "$staging"
+        trap - EXIT
+    fi
+    [ ! -L "$target" ] && [ "$(cat "$target/toolchains.json")" = "$identity" ] || die "profile $name differs from its immutable identity"
+    for version in "${pythons[@]}"; do
+        [ "$("$target/pythons/$version/bin/python3" -c 'import platform; print(platform.python_version())')" = "$version" ] || die "profile $name has no working Python $version"
+    done
+    for version in "${nodes[@]}"; do
+        [ "$("$target/nodes/$version/bin/node" --version)" = "v$version" ] || die "profile $name has no working Node.js $version"
+    done
+    for package; do [ -n "$(installed_version "$package")" ] || die "package $package is not installed"; done
+    printf '{"profile":"%s","python":%s,"node":%s,"packages":%s}\n' "$name" "$python_specs" "$node_specs" "$(packages_json "$@")"
+}
+
+disabled_language() {
+    local directory=$1 executable
+    shift
+    mkdir -p "$directory/bin"
+    for executable; do
+        printf '#!/bin/sh\necho "%s is disabled by .workspace/env.json" >&2\nexit 127\n' "$executable" > "$directory/bin/$executable"
+        chmod 0755 "$directory/bin/$executable"
+    done
+}
+
+# Single-version convenience for the image builder; the server uses only verify-many.
+verify() {
+    [ $# -ge 2 ] || die "verify needs Python and Node specs"
+    check_python "$1"; check_node "$2"
+    local python_spec=$1 node_spec=$2 result
+    shift 2
+    result=$(verify_many "[\"$python_spec\"]" "[\"$node_spec\"]" "$@")
+    jq -c '.python = .python[0] | .node = .node[0]' <<< "$result"
+}
+
+# The server alone decides when activation is safe. Toolchain installation and verification
+# never switch this link. Unique staging links also avoid concurrent activations clobbering it.
+activate() {
+    need_user work
+    local name=${1:-} staging
+    [[ $name =~ ^py$VERSION-node$VERSION$ || $name =~ ^set-[0-9a-f]{64}$ ]] || die "invalid profile name: $name"
+    [ -d "$TOOLCHAINS/profiles/$name" ] && [ ! -L "$TOOLCHAINS/profiles/$name" ] || die "no profile $name"
+    [ -f "$TOOLCHAINS/profiles/$name/toolchains.json" ] || die "profile has no identity"
+    staging=$(mktemp -d "$TOOLCHAINS/.activate.XXXXXX")
+    ln -s "profiles/$name" "$staging/link"
+    mv -Tf "$staging/link" "$TOOLCHAINS/active"
+    rmdir "$staging"
+}
+
+# Scalar defaults remain convenient to image metadata consumers. Arrays describe all installed
+# versions, independent of the active profile. Disabled language defaults are JSON null.
+state() {
+    local profile="" python="" node="" package
+    for package; do check_package "$package"; done
+    if [ -L "$TOOLCHAINS/active" ]; then
+        profile=$(readlink "$TOOLCHAINS/active")
+        profile=${profile##*/}
+        if [ -f "$TOOLCHAINS/active/toolchains.json" ]; then
+            python=$(jq -r '.python[0] // empty' "$TOOLCHAINS/active/toolchains.json")
+            node=$(jq -r '.node[0] // empty' "$TOOLCHAINS/active/toolchains.json")
+        fi
+    fi
+    local installed_python installed_node
+    installed_python=$(python_versions | sort -Vu | jq -Rsc 'split("\n") | map(select(length > 0))')
+    installed_node=$(node_versions | sort -Vu | jq -Rsc 'split("\n") | map(select(length > 0))')
+    printf '{"profile":%s,"python":%s,"node":%s,"installedPython":%s,"installedNode":%s,"packages":%s}\n' \
+        "$(json_string "$profile")" "$(json_string "$python")" "$(json_string "$node")" "$installed_python" "$installed_node" "$(packages_json "$@")"
+}
+
+case $command in
+    apt-install) apt_install "$@" ;;
+    apt-remove) apt_remove "$@" ;;
+    python) python_install "$@" ;;
+    node) node_install "$@" ;;
+    verify) verify "$@" ;;
+    verify-many) verify_many "$@" ;;
+    activate) activate "$@" ;;
+    state) state "$@" ;;
+    *) die "usage: envctl apt-install|apt-remove|python|node|verify|verify-many|activate|state [ARGS]" ;;
+esac

@@ -1,0 +1,140 @@
+{
+  "name": "Workflow Dark",
+  "settings": [
+    {
+      "settings": {
+        "foreground": "#DDE4E1",
+        "background": "#0E1512"
+      }
+    },
+    {
+      "scope": "comment, punctuation.definition.comment",
+      "settings": {
+        "foreground": "#84948E",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "scope": "keyword, storage.type, storage.modifier, keyword.control, keyword.operator.new, keyword.operator.expression",
+      "settings": {
+        "foreground": "#D7A6F5"
+      }
+    },
+    {
+      "scope": "keyword.operator, punctuation",
+      "settings": {
+        "foreground": "#BACAC4"
+      }
+    },
+    {
+      "scope": "string, string.quoted",
+      "settings": {
+        "foreground": "#E6A98B"
+      }
+    },
+    {
+      "scope": "constant.character.escape",
+      "settings": {
+        "foreground": "#F7BD55"
+      }
+    },
+    {
+      "scope": "constant.numeric",
+      "settings": {
+        "foreground": "#B5CEA8"
+      }
+    },
+    {
+      "scope": "constant.language, support.constant",
+      "settings": {
+        "foreground": "#7FB2F0"
+      }
+    },
+    {
+      "scope": "support.type.property-name, meta.object-literal.key, variable.other.property, entity.name.tag.yaml, meta.mapping.key",
+      "settings": {
+        "foreground": "#9CDCFE"
+      }
+    },
+    {
+      "scope": "entity.name.function, support.function, meta.function-call entity.name.function",
+      "settings": {
+        "foreground": "#DCDCAA"
+      }
+    },
+    {
+      "scope": "entity.name.type, entity.name.class, support.class, support.type, entity.other.inherited-class, storage.type.class",
+      "settings": {
+        "foreground": "#4EC9B0"
+      }
+    },
+    {
+      "scope": "variable.parameter",
+      "settings": {
+        "foreground": "#BACAC4"
+      }
+    },
+    {
+      "scope": "entity.name.tag",
+      "settings": {
+        "foreground": "#D7A6F5"
+      }
+    },
+    {
+      "scope": "entity.other.attribute-name",
+      "settings": {
+        "foreground": "#9CDCFE"
+      }
+    },
+    {
+      "scope": "markup.heading, entity.name.section, markup.heading entity.name",
+      "settings": {
+        "foreground": "#7FB2F0",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "scope": "markup.bold",
+      "settings": {
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "scope": "markup.italic",
+      "settings": {
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "scope": "markup.inline.raw, markup.fenced_code, markup.raw",
+      "settings": {
+        "foreground": "#E6A98B"
+      }
+    },
+    {
+      "scope": "markup.underline.link, string.other.link, markup.link",
+      "settings": {
+        "foreground": "#9CDCFE"
+      }
+    },
+    {
+      "scope": "punctuation.definition.list, markup.list punctuation.definition",
+      "settings": {
+        "foreground": "#D7A6F5"
+      }
+    },
+    {
+      "scope": "markup.quote",
+      "settings": {
+        "foreground": "#84948E",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "scope": "invalid",
+      "settings": {
+        "foreground": "#FFB4AB"
+      }
+    }
+  ]
+}

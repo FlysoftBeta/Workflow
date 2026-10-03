@@ -1,0 +1,10 @@
+# Attributes of paths that build guests see through runtime mounts (procfs, sysfs, bind-mounted
+# files). The live view shows the mount, not the directory underneath, so the image records these
+# values instead. Format: <guest path> <type d|f> <uid> <gid> <octal mode>. Entries apply only to
+# paths that exist in the manifest.
+/dev d 0 0 0755
+/proc d 0 0 0555
+/sys d 0 0 0555
+/etc/hosts f 0 0 0644
+/etc/hostname f 0 0 0644
+/etc/resolv.conf f 0 0 0644

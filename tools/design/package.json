@@ -1,0 +1,12 @@
+{
+  "name": "workflow-design-tools",
+  "private": true,
+  "description": "Build-time generators for ui.design: the color scheme (material-color-utilities) and Material Symbols vectors.",
+  "type": "module",
+  "scripts": {
+    "colors": "node --import ./esm-extension-hook.mjs generate-colors.mjs"
+  },
+  "dependencies": {
+    "@material/material-color-utilities": "0.4.0"
+  }
+}

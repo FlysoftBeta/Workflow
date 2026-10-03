@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Frame (surfaceContainer) of the generated scheme, light; see ui/design/theme/GeneratedColors.kt. -->
+    <color name="workflow_frame">#FFE9EFEB</color>
+</resources>

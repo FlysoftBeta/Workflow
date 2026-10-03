@@ -1,0 +1,22 @@
+{
+  "name": "jetbrains-mono",
+  "version": "2.304",
+  "license": "OFL-1.1",
+  "source": "https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip",
+  "archiveSha256": "6f6376c6ed2960ea8a963cd7387ec9d76e3f629125bc33d1fdcd7eb7012f7bbf",
+  "note": "NL (no ligatures) cut; shared by Compose mono text style, sora-editor and xterm (docs/ui.md \u00a71.2). CJK falls back to the system font.",
+  "files": [
+    {
+      "file": "fonts/ttf/JetBrainsMonoNL-Regular.ttf",
+      "packagedAs": "app/src/main/assets/fonts/JetBrainsMonoNL-Regular.ttf",
+      "sha256": "fb3b2575d7b0657359707993288f12a7360344d39387bb26050e276d61f6bd2a",
+      "bytes": 208576
+    },
+    {
+      "file": "fonts/ttf/JetBrainsMonoNL-Bold.ttf",
+      "packagedAs": "app/src/main/assets/fonts/JetBrainsMonoNL-Bold.ttf",
+      "sha256": "0198e841824025f8876e5c297f0b9b497ee8d6eb9969710a3328e1303f996ec3",
+      "bytes": 210988
+    }
+  ]
+}

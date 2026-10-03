@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window and system bars use the frame color (ui.md §1.3 surfaceContainer) before and between Compose frames. -->
+    <style name="Theme.Workflow" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/workflow_frame</item>
+        <item name="android:statusBarColor">@color/workflow_frame</item>
+        <item name="android:navigationBarColor">@color/workflow_frame</item>
+    </style>
+</resources>

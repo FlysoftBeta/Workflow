@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only: the ui.design gallery, not reachable from the product UI.
+     Start: adb shell am start -n top.flysoftbeta.workflow/.ui.design.gallery.DesignGalleryActivity
+     Optional string extras (es): page = chrome|menus|content|layout|tokens, theme = light|dark,
+     density = compact|standard, dnd = zone|sort|area|scrim|rejected. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".ui.design.gallery.DesignGalleryActivity"
+            android:exported="true"
+            android:label="Design gallery"
+            android:theme="@style/Theme.Workflow"
+            android:windowSoftInputMode="adjustResize" />
+    </application>
+</manifest>

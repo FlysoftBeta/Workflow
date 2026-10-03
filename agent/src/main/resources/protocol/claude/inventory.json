@@ -1,0 +1,236 @@
+{
+  "generated": true,
+  "sdkVersion": "0.3.283",
+  "source": "@anthropic-ai/claude-agent-sdk sdk.d.ts (SDKControlRequestInner, StdoutMessage)",
+  "controlSubtypes": [
+    "apply_flag_settings",
+    "background_tasks",
+    "can_use_tool",
+    "cancel_async_message",
+    "elicitation",
+    "file_suggestions",
+    "get_binary_version",
+    "get_context_usage",
+    "get_hooks_listing",
+    "get_session_cost",
+    "get_settings",
+    "get_usage",
+    "hook_callback",
+    "initialize",
+    "interrupt",
+    "list_models",
+    "list_permission_rules",
+    "mcp_call",
+    "mcp_message",
+    "mcp_read_resource",
+    "mcp_reconnect",
+    "mcp_set_servers",
+    "mcp_status",
+    "mcp_toggle",
+    "read_file",
+    "register_repo_root",
+    "reload_output_styles",
+    "reload_plugins",
+    "reload_skills",
+    "rename_session",
+    "request_user_dialog",
+    "rewind_files",
+    "seed_read_state",
+    "set_color",
+    "set_max_thinking_tokens",
+    "set_model",
+    "set_permission_mode",
+    "stop_task",
+    "update_settings"
+  ],
+  "messages": [
+    {
+      "type": "active_goal",
+      "subtype": null
+    },
+    {
+      "type": "assistant",
+      "subtype": null
+    },
+    {
+      "type": "auth_status",
+      "subtype": null
+    },
+    {
+      "type": "control_cancel_request",
+      "subtype": null
+    },
+    {
+      "type": "control_request",
+      "subtype": null
+    },
+    {
+      "type": "control_response",
+      "subtype": null
+    },
+    {
+      "type": "conversation_reset",
+      "subtype": null
+    },
+    {
+      "type": "keep_alive",
+      "subtype": null
+    },
+    {
+      "type": "prompt_suggestion",
+      "subtype": null
+    },
+    {
+      "type": "rate_limit_event",
+      "subtype": null
+    },
+    {
+      "type": "result",
+      "subtype": "error_during_execution"
+    },
+    {
+      "type": "result",
+      "subtype": "error_max_budget_usd"
+    },
+    {
+      "type": "result",
+      "subtype": "error_max_structured_output_retries"
+    },
+    {
+      "type": "result",
+      "subtype": "error_max_turns"
+    },
+    {
+      "type": "result",
+      "subtype": "success"
+    },
+    {
+      "type": "stream_event",
+      "subtype": null
+    },
+    {
+      "type": "system",
+      "subtype": "api_retry"
+    },
+    {
+      "type": "system",
+      "subtype": "background_tasks_changed"
+    },
+    {
+      "type": "system",
+      "subtype": "commands_changed"
+    },
+    {
+      "type": "system",
+      "subtype": "compact_boundary"
+    },
+    {
+      "type": "system",
+      "subtype": "control_request_progress"
+    },
+    {
+      "type": "system",
+      "subtype": "elicitation_complete"
+    },
+    {
+      "type": "system",
+      "subtype": "files_persisted"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_progress"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_response"
+    },
+    {
+      "type": "system",
+      "subtype": "hook_started"
+    },
+    {
+      "type": "system",
+      "subtype": "informational"
+    },
+    {
+      "type": "system",
+      "subtype": "init"
+    },
+    {
+      "type": "system",
+      "subtype": "local_command_output"
+    },
+    {
+      "type": "system",
+      "subtype": "memory_recall"
+    },
+    {
+      "type": "system",
+      "subtype": "mirror_error"
+    },
+    {
+      "type": "system",
+      "subtype": "model_refusal_fallback"
+    },
+    {
+      "type": "system",
+      "subtype": "model_refusal_no_fallback"
+    },
+    {
+      "type": "system",
+      "subtype": "notification"
+    },
+    {
+      "type": "system",
+      "subtype": "permission_denied"
+    },
+    {
+      "type": "system",
+      "subtype": "plugin_install"
+    },
+    {
+      "type": "system",
+      "subtype": "session_state_changed"
+    },
+    {
+      "type": "system",
+      "subtype": "status"
+    },
+    {
+      "type": "system",
+      "subtype": "task_notification"
+    },
+    {
+      "type": "system",
+      "subtype": "task_progress"
+    },
+    {
+      "type": "system",
+      "subtype": "task_started"
+    },
+    {
+      "type": "system",
+      "subtype": "task_updated"
+    },
+    {
+      "type": "system",
+      "subtype": "thinking_tokens"
+    },
+    {
+      "type": "system",
+      "subtype": "worker_shutting_down"
+    },
+    {
+      "type": "tool_progress",
+      "subtype": null
+    },
+    {
+      "type": "tool_use_summary",
+      "subtype": null
+    },
+    {
+      "type": "user",
+      "subtype": null
+    }
+  ]
+}
