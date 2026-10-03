@@ -4,7 +4,7 @@ Environment invokes `workflow-runtime` through its typed runtime API to run gues
 
 ## Implementation
 
-`engine/environment/runtime` contains the Rust CLI, ptrace scheduler, path resolution, virtual identity and permission handling, xattr metadata, hard-link journal and fsck, exec planning, and streaming installer. Linux x86_64, Android x86_64 and Android aarch64 currently retain separate `host`, `android_x86_64` and `android_aarch64` source trees for their libc and register layouts. Low-level pointer operations still use unsafe Rust. Replacing the old implementation did not by itself establish complete memory safety.
+`engine/environment/runtime` contains the Rust CLI, ptrace scheduler, path resolution, virtual identity and permission handling, xattr metadata, hard-link journal and fsck, exec planning, and streaming installer. Linux x86_64, Android x86_64 and Android aarch64 share one source tree; libc and register-layout differences are confined to small `cfg(target_os)` and `cfg(target_arch)` items. Low-level pointer operations still use unsafe Rust. Replacing the old implementation did not by itself establish complete memory safety.
 
 `engine/environment/runtime/src/sysinv.rs` supplies shared read-only syscall classifications, backed by pinned Linux v7.2.8 source digests in `inventory/`. Unknown numbers, holes, and x32 syscall numbers are rejected. `engine/environment/runtime/tools/generate-syscalls.py --check` verifies the source digests, complete classification, and generated output.
 

@@ -18,7 +18,7 @@ Configuration and local-service domain ownership belongs to Environment, agent/b
 
 Rust Chat is incomplete. Its typed core, policy and port work does not replace the Kotlin production adapters/service or prove replay parity. The temporary `:agent` and `:engine-chat` modules, JRE/JAR payload and client event reducer remain until the full [cutover gate](engine/chat.md#rust-port-and-cutover-gate) passes against integrated source. No Rust production Chat device acceptance is claimed. Terminal repairs and Kotlin contract checks likewise need their exact source-bound and Android results; a documentation or module move does not extend prior acceptance.
 
-Runtime deduplication is separately assigned to `runtime-dedup` and excluded from this round. The three runtime trees remain intact here. That task must record `runtime-host`, both ABI Engine builds and isolated API 28 exec/PTY/stop results, while leaving physical ARM64 proof as remaining. No result for the separately owned extraction is asserted by this status update.
+The three runtime target trees are merged into one shared tree (about 70k to 26k lines). `runtime-host`, both ABI Engine builds and isolated API 28 x86_64 exec/PTY/stop acceptance passed; physical ARM64 device proof remains open, and the hand-rolled JSON and SHA-256 code is still to be replaced with the pinned libraries.
 
 ## Implemented boundaries
 
