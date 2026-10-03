@@ -414,19 +414,29 @@ impl Store {
         fs::create_dir(self.path(key)?)?;
         Ok(())
     }
-    /// Explorer listings skip symbolic-link children, matching ordinary user files.
+    /// Explorer listings skip symbolic-link children, matching ordinary user files. An empty
+    /// prefix lists `.workspace` itself; callers filter the result through [`crate::access`].
     pub fn list_entries(&self, prefix: &str) -> Result<Vec<(String, StoredMetadata)>> {
         let mut entries = Vec::new();
-        for entry in fs::read_dir(self.path(prefix)?)? {
+        let directory = if prefix.is_empty() {
+            self.directory.clone()
+        } else {
+            self.path(prefix)?
+        };
+        for entry in fs::read_dir(directory)? {
             let entry = entry?;
             if entry.file_type()?.is_symlink() {
                 continue;
             }
-            let name = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| Error::business("invalid_text", "state filename is not UTF-8"))?;
-            let key = format!("{prefix}/{name}");
+            let Ok(name) = entry.file_name().into_string() else {
+                // Non-UTF-8 names cannot be classified and are never visible configuration.
+                continue;
+            };
+            let key = if prefix.is_empty() {
+                name
+            } else {
+                format!("{prefix}/{name}")
+            };
             if let Some(metadata) = self.metadata(&key)? {
                 entries.push((key, metadata));
             }

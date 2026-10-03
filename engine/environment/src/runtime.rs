@@ -1,5 +1,5 @@
 //! Sole API for guest commands, supervision, PTYs and process output.
-use crate::{Environment, Error, Options, Result, persist};
+use crate::{Environment, Error, Options, Result, access, persist};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -8,7 +8,7 @@ use std::{
     io::{Read, Write},
     os::{
         fd::{AsRawFd, FromRawFd},
-        unix::process::CommandExt,
+        unix::{fs::PermissionsExt, process::CommandExt},
     },
     path::Path,
     process::{ChildStderr, ChildStdin, ChildStdout, Command, Stdio},
@@ -741,22 +741,22 @@ pub(crate) fn guest_command(
         fs::create_dir_all(&home)?;
         c.arg("--bind")
             .arg(format!("{}:/home/work", home.display()));
+        // Agent homes are visible workspace configuration, shared by chat and terminals. The
+        // runtime resolves nested binds by the longest guest prefix.
+        for agent in access::AGENT_HOMES {
+            let host = opts.root.join(access::DIRECTORY).join(agent.key());
+            fs::create_dir_all(&host)?;
+            fs::set_permissions(&host, fs::Permissions::from_mode(0o700))?;
+            c.arg("--bind")
+                .arg(format!("{}:{}", host.display(), agent.guest));
+        }
         c.arg("--bind")
-            .arg(format!("{}:/workspace", opts.root.display()))
-            .arg("--hide")
-            .arg("/workspace/.workspace/state")
-            .arg("--hide")
-            .arg("/workspace/.workspace/environment")
-            .arg("--hide")
-            .arg("/workspace/.workspace/documents")
-            .arg("--hide")
-            .arg("/workspace/.workspace/uploads")
-            .arg("--hide")
-            .arg("/workspace/.workspace/corrupt")
-            .arg("--hide")
-            .arg("/workspace/.workspace/trash")
-            .arg("--hide")
-            .arg("/workspace/.workspace/engine.lock");
+            .arg(format!("{}:{}", opts.root.display(), access::GUEST_WORKSPACE));
+        // Hides apply to resolved guest paths. The agents tree is masked below /workspace and
+        // exists only at its home and tool mounts, so workspace walks never reach credentials.
+        for mask in access::guest_masks() {
+            c.arg("--hide").arg(mask);
+        }
     }
     let resolver = opts.root.join(".workspace/environment/network/resolv.conf");
     if resolver.is_file() {
@@ -765,6 +765,11 @@ pub(crate) fn guest_command(
     }
     crate::tools::bind(opts, &mut c)?;
     c.env_clear();
+    if interactive {
+        for agent in access::AGENT_HOMES {
+            c.env(agent.variable, agent.guest);
+        }
+    }
     c.env("PATH","/opt/toolchains/active/python/bin:/opt/toolchains/active/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").env("HOME",if user=="root"{"/root"}else{"/home/work"}).env("USER",user).env("LANG","C.UTF-8").env("TERM","xterm-256color").env("NVM_DIR","/opt/toolchains/nvm").env("UV_PYTHON_INSTALL_DIR","/opt/toolchains/uv/python").env("UV_CACHE_DIR","/opt/toolchains/uv/cache").env("TMPDIR","/tmp");
     // Apply caller variables with the guest env executable. Loader variables must
     // never affect the host runtime before it has entered the environment.
@@ -914,7 +919,7 @@ mod tests {
             true,
         )
         .unwrap();
-        let launcher = temp.path().join(".workspace/environment/launchers/codex");
+        let launcher = temp.path().join(".workspace/agents/tools/launchers/codex");
         let binding = format!("{}:/usr/local/bin/codex", launcher.display());
         assert!(command.get_args().any(|arg| arg == binding.as_str()));
         assert!(
@@ -932,6 +937,112 @@ mod tests {
             0o755
         );
         assert!(!generation.exists());
+    }
+    fn arguments(command: &Command) -> Vec<String> {
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect()
+    }
+    fn values(args: &[String], flag: &str) -> Vec<String> {
+        args.windows(2)
+            .filter(|pair| pair[0] == flag)
+            .map(|pair| pair[1].clone())
+            .collect()
+    }
+    #[test]
+    fn interactive_guests_share_visible_agent_homes_and_mask_private_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let opts = Options {
+            root: temp.path().into(),
+            runtime: Some("/bin/true".into()),
+            tools: Some(temp.path().join("payload")),
+            ..Options::default()
+        };
+        crate::tools::fixture(&temp.path().join("payload"));
+        let generation = temp.path().join("generation");
+        let command =
+            guest_command(&opts, &generation, "work", "/workspace", &BTreeMap::new(), true)
+                .unwrap();
+        let args = arguments(&command);
+        let binds = values(&args, "--bind");
+        let root = temp.path().display().to_string();
+        for (id, guest) in [("codex", "/home/work/.codex"), ("claude", "/home/work/.claude")] {
+            let host = temp.path().join(".workspace/agents").join(id);
+            assert!(binds.contains(&format!("{}:{guest}", host.display())), "{binds:?}");
+            assert_eq!(
+                fs::metadata(&host).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
+        }
+        let payload = binds
+            .iter()
+            .find(|bind| bind.ends_with(":/opt/workflow/tools"))
+            .unwrap();
+        assert!(payload.starts_with(&format!("{root}/.workspace/agents/tools/payload/")));
+        assert!(binds.contains(&format!(
+            "{root}/.workspace/agents/tools/claude/2.1.283:/opt/workflow/tools/claude"
+        )));
+        assert!(binds.contains(&format!("{root}:/workspace")));
+        assert!(!binds.iter().any(|bind| bind.contains("/.workspace/environment/tools")));
+        let hides = values(&args, "--hide");
+        assert_eq!(hides, crate::access::guest_masks());
+        for private in [
+            "state",
+            "environment",
+            "documents",
+            "uploads",
+            "corrupt",
+            "trash",
+            "engine.lock",
+            "agents",
+        ] {
+            assert!(hides.contains(&format!("/workspace/.workspace/{private}")), "{private}");
+        }
+        for visible in ["config.json", "env.json", "proxy", "services"] {
+            assert!(
+                !hides.iter().any(|hide| hide == &format!("/workspace/.workspace/{visible}")),
+                "{visible}"
+            );
+        }
+        let envs: BTreeMap<String, String> = command
+            .get_envs()
+            .filter_map(|(k, v)| {
+                Some((k.to_string_lossy().into_owned(), v?.to_string_lossy().into_owned()))
+            })
+            .collect();
+        assert_eq!(envs["CODEX_HOME"], "/home/work/.codex");
+        assert_eq!(envs["CLAUDE_CONFIG_DIR"], "/home/work/.claude");
+        assert_eq!(envs["HOME"], "/home/work");
+        assert!(!temp.path().join(".workspace/environment/tools/payloads").exists());
+        assert!(!temp.path().join(".workspace/environment/launchers").exists());
+    }
+    #[test]
+    fn provisioning_guests_see_neither_the_workspace_nor_agent_homes() {
+        let temp = tempfile::tempdir().unwrap();
+        let opts = Options {
+            root: temp.path().into(),
+            runtime: Some("/bin/true".into()),
+            ..Options::default()
+        };
+        let command = guest_command(
+            &opts,
+            &temp.path().join("generation"),
+            "work",
+            "/home/work",
+            &BTreeMap::new(),
+            false,
+        )
+        .unwrap();
+        let args = arguments(&command);
+        assert!(values(&args, "--hide").is_empty());
+        assert!(
+            !values(&args, "--bind")
+                .iter()
+                .any(|bind| bind.ends_with(":/workspace") || bind.contains("/home/work/."))
+        );
+        assert!(!command.get_envs().any(|(key, _)| key == "CODEX_HOME"));
+        assert!(!temp.path().join(".workspace/agents/codex").exists());
     }
     #[test]
     fn command_validation_rejects_parent_traversal_nuls_and_bad_env_keys() {

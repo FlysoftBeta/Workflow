@@ -120,6 +120,29 @@ suite_m2() {
   check "bind .. goes to guest parent" "$(GUEST --bind "$build/bindsrc:/mnt/b" --cwd /mnt/b -- /bin/sh -c 'cd .. && pwd -P' 2>/dev/null)" "/mnt"
   check "hidden path absent from lookups" \
     "$(GUEST --bind "$build/bindsrc:/mnt/b" --hide /mnt/b/.hidden -- /bin/sh -c 'test -e /mnt/b/.hidden && echo seen || echo absent' 2>/dev/null)" "absent"
+  # Environment's visible .workspace layout: agent homes and tools are masked below /workspace and
+  # mounted at their own guest paths. Hides match resolved guest paths, and a directory reached
+  # through two binds maps back through its longest host prefix, so the whole alias is masked.
+  local ws="$build/visible-workspace"
+  rm -rf -- "$ws"
+  mkdir -p "$ws/.workspace/agents/codex" "$ws/.workspace/agents/tools/payload/x" "$ws/.workspace/state"
+  echo secret > "$ws/.workspace/agents/codex/auth.json"
+  echo cfg > "$ws/.workspace/agents/codex/config.toml"
+  echo tool > "$ws/.workspace/agents/tools/payload/x/t"
+  echo '{}' > "$ws/.workspace/env.json"
+  local WS=(--bind "$ws/.workspace/agents/codex:/home/work/.codex" --bind "$ws:/workspace"
+            --bind "$ws/.workspace/agents/tools/payload/x:/opt/workflow/tools"
+            --hide /workspace/.workspace/state --hide /workspace/.workspace/agents)
+  check "agent credential readable at its guest home" "$(GUEST "${WS[@]}" -- /bin/cat /home/work/.codex/auth.json 2>/dev/null)" "secret"
+  check "agent configuration editable at its guest home" \
+    "$(GUEST "${WS[@]}" -- /bin/sh -c 'echo edited >> /home/work/.codex/config.toml && tail -n1 /home/work/.codex/config.toml' 2>/dev/null)" "edited"
+  check "agent home alias masked below /workspace" \
+    "$(GUEST "${WS[@]}" -- /bin/sh -c 'cd /workspace/.workspace/agents/codex 2>/dev/null && echo seen || echo absent' 2>/dev/null)" "absent"
+  check "workspace walks never reach agent credentials" \
+    "$(GUEST "${WS[@]}" -- /bin/sh -c 'grep -rl secret /workspace; cd /workspace && tar -cf - . 2>/dev/null | tar -tf - | grep -c auth' 2>/dev/null)" "0"
+  check "only configuration remains in the guest .workspace listing" \
+    "$(GUEST "${WS[@]}" -- /bin/ls -A /workspace/.workspace 2>/dev/null | tr '\n' ' ')" "env.json "
+  check "masked tools remain mounted at their guest path" "$(GUEST "${WS[@]}" -- /bin/cat /opt/workflow/tools/t 2>/dev/null)" "tool"
 }
 
 suite_legacy() {

@@ -6,21 +6,20 @@ use std::{
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
-use workflow_environment::error::{Error, Result};
+use workflow_environment::{
+    access,
+    error::{Error, Result},
+};
 
+/// A syntactically safe workspace-relative path that is a user path or a visible `.workspace`
+/// entry under Environment's allowlist. Writes additionally require editable access.
 pub fn valid_path(p: &str) -> bool {
     !p.is_empty()
         && !p.starts_with('/')
         && !p.contains('\0')
         && !p.contains('\\')
         && p.split('/').all(|s| !s.is_empty() && s != "." && s != "..")
-        && p != ".workspace"
-        && (!p.starts_with(".workspace/")
-            || matches!(p, ".workspace/config.json" | ".workspace/env.json")
-            || p.strip_prefix(".workspace/proxy/")
-                .is_some_and(|s| s.split('/').all(identifier_valid))
-            || p.strip_prefix(".workspace/services/")
-                .is_some_and(|s| s.split('/').count() >= 2 && s.split('/').all(identifier_valid)))
+        && access::key(p).is_none_or(|key| access::classify(key).is_some())
 }
 pub fn identifier_valid(id: &str) -> bool {
     !id.is_empty()
@@ -42,7 +41,7 @@ pub fn user_path(root: &Path, raw: &str, allow_root: bool) -> Result<PathBuf> {
     if raw.is_empty() && allow_root {
         return Ok(root.to_owned());
     }
-    if !valid_path(raw) || raw.starts_with(".workspace/") {
+    if !valid_path(raw) || access::is_internal(raw) {
         return Err(Error::invalid("not an editable user-file path"));
     }
     let mut p = root.to_owned();

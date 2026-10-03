@@ -368,3 +368,223 @@ fn terminal_link_classification_checks_existence_private_paths_and_symlinks() {
         Some(crate::ExistingPathKind::File)
     );
 }
+
+fn names(entries: &[DirectoryEntry]) -> Vec<&str> {
+    entries.iter().map(|e| e.path.as_str()).collect()
+}
+fn protected_fixture() -> (tempfile::TempDir, FileWork, FileWorkState) {
+    let (d, files, state) = fixture();
+    for (key, text) in [
+        ("config.json", "{}"),
+        ("env.json", "{}"),
+        ("config.json.bak", "{}"),
+        ("proxy/config.yaml", "mode: rule\n"),
+        ("services/example/providers/list.yaml", "[]\n"),
+        ("state/workspace.json", "{}"),
+        ("environment/environment.json", "{}"),
+        ("documents/chat/conversations.json", "{}"),
+        ("trash/x/entry.json", "{}"),
+        ("agents/codex/config.toml", "model = \"x\"\n"),
+        ("agents/codex/auth.json", "{\"token\":\"secret\"}"),
+        ("agents/codex/history.jsonl", "{}\n"),
+        ("agents/codex/sessions/a.jsonl", "{}\n"),
+        ("agents/codex/prompts/review.md", "Review\n"),
+        ("agents/claude/settings.json", "{}"),
+        ("agents/claude/.credentials.json", "{\"secret\":1}"),
+        ("agents/claude/.claude.json", "{\"oauthAccount\":{}}"),
+        ("agents/claude/projects/-workspace/s.jsonl", "{}\n"),
+        ("agents/tools/payload/abc/codex/bin/codex", "binary"),
+        ("agents/tools/payload/abc/notices/codex-LICENSE", "license"),
+    ] {
+        files.store.write_text(key, text).unwrap();
+    }
+    files.store.write_text("engine.lock", "").unwrap();
+    (d, files, state)
+}
+
+#[test]
+fn root_listing_shows_the_protected_workspace_folder_with_only_allowlisted_children() {
+    let (d, files, _) = protected_fixture();
+    stdfs::write(d.path().join(".env"), "A=1").unwrap();
+    stdfs::create_dir_all(d.path().join("nested/.workspace")).unwrap();
+    stdfs::write(d.path().join("main.rs"), "").unwrap();
+    // The protected folder is shown even when ordinary hidden files are not.
+    assert_eq!(names(&files.list_directory("", false).unwrap()), [".workspace", "nested", "main.rs"]);
+    assert_eq!(
+        names(&files.list_directory("", true).unwrap()),
+        [".workspace", "nested", ".env", "main.rs"]
+    );
+    // A nested directory of the same name is not this workspace's configuration.
+    assert!(files.list_directory("nested", true).unwrap().is_empty());
+    for hidden in [false, true] {
+        assert_eq!(
+            names(&files.list_directory(".workspace", hidden).unwrap()),
+            [
+                ".workspace/agents",
+                ".workspace/proxy",
+                ".workspace/services",
+                ".workspace/config.json",
+                ".workspace/env.json",
+            ]
+        );
+        assert_eq!(
+            names(&files.list_directory(".workspace/agents", hidden).unwrap()),
+            [".workspace/agents/claude", ".workspace/agents/codex", ".workspace/agents/tools"]
+        );
+        assert_eq!(
+            names(&files.list_directory(".workspace/agents/codex", hidden).unwrap()),
+            [".workspace/agents/codex/prompts", ".workspace/agents/codex/config.toml"]
+        );
+        assert_eq!(
+            names(&files.list_directory(".workspace/agents/claude", hidden).unwrap()),
+            [".workspace/agents/claude/settings.json"]
+        );
+    }
+    assert_eq!(
+        names(&files.list_directory(".workspace/agents/tools/payload/abc", false).unwrap()),
+        [
+            ".workspace/agents/tools/payload/abc/codex",
+            ".workspace/agents/tools/payload/abc/notices",
+        ]
+    );
+    for private in [
+        ".workspace/state",
+        ".workspace/environment",
+        ".workspace/agents/codex/sessions",
+        ".workspace/agents/claude/projects",
+    ] {
+        assert!(files.list_directory(private, true).is_err(), "{private}");
+    }
+}
+
+#[test]
+fn credentials_and_private_state_are_refused_by_every_file_api() {
+    let (_d, files, mut state) = protected_fixture();
+    for path in [
+        ".workspace/agents/codex/auth.json",
+        ".workspace/agents/claude/.credentials.json",
+        ".workspace/agents/claude/.claude.json",
+        ".workspace/agents/codex/history.jsonl",
+        ".workspace/state/workspace.json",
+        ".workspace/engine.lock",
+        ".workspace/config.json.bak",
+    ] {
+        assert!(files.open(&mut state, path).is_err(), "{path}");
+        assert!(files.read_chunk(path, 0, 16).is_err(), "{path}");
+        assert!(files.existing_path_kind(path).is_err(), "{path}");
+        assert!(
+            files
+                .edit(&mut state, path, "x", &FileVersion::default())
+                .is_err(),
+            "{path}"
+        );
+        assert!(
+            matches!(
+                files.save(&mut state, path, Some("x"), valid),
+                Err(_) | Ok(SaveOutcome::Failed { .. })
+            ),
+            "{path}"
+        );
+        let mut composer = state.composer("c");
+        composer.revision = 1;
+        composer.attachments = vec![Attachment {
+            path: path.into(),
+            mime_type: None,
+            extra: Default::default(),
+        }];
+        assert!(files.edit_composer(&mut state, composer, 0).is_err(), "{path}");
+    }
+    assert_eq!(
+        files.store.read_text("agents/codex/auth.json").unwrap().as_deref(),
+        Some("{\"token\":\"secret\"}")
+    );
+    assert!(state.drafts.is_empty());
+}
+
+#[test]
+fn editable_configuration_is_writable_while_tools_and_folders_are_protected() {
+    let (_d, files, mut state) = protected_fixture();
+    let config = ".workspace/agents/codex/config.toml";
+    let open = files.open(&mut state, config).unwrap();
+    files.edit(&mut state, config, "model = \"y\"\n", &open.disk).unwrap();
+    assert!(matches!(
+        files.save(&mut state, config, None, valid).unwrap(),
+        SaveOutcome::Saved { .. }
+    ));
+    assert_eq!(
+        files.store.read_text("agents/codex/config.toml").unwrap().as_deref(),
+        Some("model = \"y\"\n")
+    );
+    let create = |path: &str| FileOperation::CreateFile {
+        path: path.into(),
+        data: b"new".to_vec(),
+    };
+    for path in [
+        ".workspace/agents/claude/commands/fix.md",
+        ".workspace/agents/claude/CLAUDE.md",
+        ".workspace/agents/codex/prompts/plan.md",
+    ] {
+        if path.ends_with("fix.md") {
+            assert_eq!(
+                files.file_operation(
+                    &mut state,
+                    &FileOperation::CreateDirectory {
+                        path: ".workspace/agents/claude/commands".into()
+                    }
+                ),
+                FileOutcome::Done
+            );
+        }
+        assert_eq!(files.file_operation(&mut state, &create(path)), FileOutcome::Done, "{path}");
+    }
+    let tool = ".workspace/agents/tools/payload/abc/notices/codex-LICENSE";
+    let shown = files.open(&mut state, tool).unwrap();
+    assert_eq!(shown.disk_text.as_deref(), Some("license"));
+    assert_eq!(files.read_chunk(tool, 0, 3).unwrap().data, b"lic");
+    let refused = files.edit(&mut state, tool, "changed", &shown.disk).unwrap_err();
+    assert_eq!(refused.kind, "read_only");
+    assert!(files.write_text(tool, "changed").is_err());
+    assert!(state.drafts.is_empty());
+    for path in [
+        ".workspace/agents/tools/payload/abc/new",
+        ".workspace/agents/codex/other.txt",
+        ".workspace/agents/codex/auth.json",
+        ".workspace/agents/new/config.toml",
+        ".workspace/new.json",
+    ] {
+        assert!(
+            matches!(files.file_operation(&mut state, &create(path)), FileOutcome::Failed { .. }),
+            "{path}"
+        );
+    }
+    for path in [".workspace", ".workspace/agents", ".workspace/agents/codex/sessions2", ".workspace/services/new"] {
+        assert!(
+            matches!(
+                files.file_operation(&mut state, &FileOperation::CreateDirectory { path: path.into() }),
+                FileOutcome::Failed { .. }
+            ),
+            "{path}"
+        );
+    }
+    for operation in [
+        FileOperation::Trash { path: ".workspace".into() },
+        FileOperation::Delete { path: ".workspace/agents/codex/config.toml".into() },
+        FileOperation::Move { from: ".workspace/agents".into(), to: "agents".into() },
+        FileOperation::Copy { from: ".workspace/agents/codex/auth.json".into(), to: "stolen.json".into() },
+        FileOperation::Move { from: "main.rs".into(), to: ".workspace/main.rs".into() },
+    ] {
+        assert!(
+            matches!(files.file_operation(&mut state, &operation), FileOutcome::Failed { .. }),
+            "{operation:?}"
+        );
+    }
+    assert!(files.store.exists("agents/codex/auth.json").unwrap());
+    assert!(!files.root().join("stolen.json").exists());
+    assert_eq!(
+        files.existing_path_kind(".workspace").unwrap(),
+        Some(crate::ExistingPathKind::Directory)
+    );
+    assert!(!files.version(".workspace").unwrap().exists);
+    assert!(files.open(&mut state, ".workspace").is_ok_and(|f| !f.disk.exists));
+    assert!(files.user_directory(".workspace").is_err());
+}

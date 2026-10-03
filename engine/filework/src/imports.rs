@@ -14,8 +14,7 @@ pub fn validate(root: &Path, directory: &str, name: &str) -> Result<()> {
         || name
             .chars()
             .any(|c| c == '/' || c == '\\' || c.is_control())
-        || directory == ".workspace"
-        || directory.starts_with(".workspace/")
+        || workflow_environment::access::is_internal(directory)
     {
         return Err(Error::invalid("invalid import destination"));
     }
