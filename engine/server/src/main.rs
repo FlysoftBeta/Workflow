@@ -3,6 +3,7 @@ mod environment;
 mod home_stage;
 mod imports;
 mod layout;
+mod local_services;
 mod process;
 mod protocol;
 mod storage;
@@ -433,6 +434,19 @@ impl Server {
                 self.changed.notify_all();
                 Ok(json!({"revision":revision}))
             }
+            "services.executor.register" | "services.executor.retire" | "services.command" | "services.complete" => {
+                let mut w = self.workspace.lock().unwrap();
+                if !w.writable { return Err(Error::business("read_only", "workspace is read only")); }
+                let result = local_services::call(&mut w, method, a, &mut |w, m, key, args| self.service_document(w, m, "proxy", key, args));
+                self.changed.notify_all();
+                result
+            }
+            "services.report" if a["serviceId"] == "proxy" => {
+                let mut w = self.workspace.lock().unwrap();
+                let result = local_services::call(&mut w, method, a, &mut |w, m, key, args| self.service_document(w, m, "proxy", key, args));
+                self.changed.notify_all();
+                result
+            }
             "services.report" => {
                 let id = storage::identifier(workspace::required(a, "serviceId")?)?;
                 if !a["state"].is_object() {
@@ -482,7 +496,7 @@ impl Server {
                         states.insert(id.into(), storage::read_json(&e.path())?);
                     }
                 }
-                Ok(json!({"services":states,"desired":w.state["config"]["services"]}))
+                Ok(json!({"services":states,"desired":w.state["config"]["services"],"control":{"proxy":local_services::projection(&w)?}}))
             }
             "client.config" => {
                 let _ = storage::identifier(workspace::required(a, "clientId")?)?;
