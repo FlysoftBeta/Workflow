@@ -1,0 +1,7074 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KnownRequest",
+  "type": "object",
+  "properties": {
+    "id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RpcId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "jsonrpc": {
+      "$ref": "#/$defs/Version"
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "hello"
+        },
+        "params": {
+          "$ref": "#/$defs/HelloParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "workspace.snapshot"
+        },
+        "params": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "workspace.watch"
+        },
+        "params": {
+          "$ref": "#/$defs/WatchParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "workspace.command"
+        },
+        "params": {
+          "$ref": "#/$defs/Command"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "files.read"
+        },
+        "params": {
+          "$ref": "#/$defs/ReadFileParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "files.upload.begin"
+        },
+        "params": {
+          "$ref": "#/$defs/UploadBeginParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "files.upload.chunk"
+        },
+        "params": {
+          "$ref": "#/$defs/UploadChunkParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "files.upload.commit"
+        },
+        "params": {
+          "$ref": "#/$defs/UploadIdParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "files.upload.cancel"
+        },
+        "params": {
+          "$ref": "#/$defs/UploadIdParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "documents.read"
+        },
+        "params": {
+          "$ref": "#/$defs/DocumentParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "documents.write"
+        },
+        "params": {
+          "$ref": "#/$defs/DocumentParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "documents.quarantine"
+        },
+        "params": {
+          "$ref": "#/$defs/DocumentParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "environment.status"
+        },
+        "params": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "environment.reconcile"
+        },
+        "params": {
+          "$ref": "#/$defs/RetryParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "environment.restart"
+        },
+        "params": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "process.spawn"
+        },
+        "params": {
+          "$ref": "#/$defs/SpawnOptions"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "process.read"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessReadParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "process.write"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessWriteParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "process.resize"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessResizeParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "process.stop"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessStopParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "process.wait"
+        },
+        "params": {
+          "$ref": "#/$defs/ProcessWaitParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "services.status"
+        },
+        "params": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "services.report"
+        },
+        "params": {
+          "$ref": "#/$defs/ServiceReportParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "client.config"
+        },
+        "params": {
+          "$ref": "#/$defs/ClientConfigParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "environment.tools.status"
+        },
+        "params": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "environment.tools.install"
+        },
+        "params": {
+          "$ref": "#/$defs/ToolInstallParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "chat.snapshot"
+        },
+        "params": {
+          "$ref": "#/$defs/ChatSnapshotParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "chat.watch"
+        },
+        "params": {
+          "$ref": "#/$defs/ChatWatchParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "chat.command"
+        },
+        "params": {
+          "$ref": "#/$defs/ChatCommandParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.create"
+        },
+        "params": {
+          "$ref": "#/$defs/StartOptions"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.attach"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalStartParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.restart"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalStartParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.status"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalIdParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.read"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalReadParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.write"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalWriteParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.resize"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalResizeParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.stop"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalStopParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.wait"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalWaitParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.rename"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalRenameParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "terminal.clear"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalIdParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "services.executor.register"
+        },
+        "params": {
+          "$ref": "#/$defs/RegisterRequest"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "services.executor.retire"
+        },
+        "params": {
+          "$ref": "#/$defs/LeaseRequest"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "services.command"
+        },
+        "params": {
+          "$ref": "#/$defs/CommandRequest"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "services.complete"
+        },
+        "params": {
+          "$ref": "#/$defs/CompleteRequest"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    }
+  ],
+  "required": [
+    "jsonrpc"
+  ],
+  "$defs": {
+    "Activation": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/EnvironmentSpec",
+          "default": {
+            "version": 1
+          }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "fingerprint": {
+          "type": "string",
+          "default": ""
+        },
+        "generation": {
+          "type": "string"
+        },
+        "imageSha256": {
+          "type": "string",
+          "default": ""
+        },
+        "profile": {
+          "type": "string",
+          "default": ""
+        },
+        "verified": {
+          "$ref": "#/$defs/Verification",
+          "default": {
+            "node": [],
+            "packages": {},
+            "profile": "",
+            "python": []
+          }
+        },
+        "verifiedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "generation"
+      ]
+    },
+    "AgentConfig": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "default": "codex"
+        },
+        "backends": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BackendDefaults"
+          },
+          "default": {}
+        },
+        "permissions": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "AgentPatch": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/string"
+        },
+        "backends": {
+          "$ref": "#/$defs/Map_of_BackendPatch"
+        },
+        "permissions": {
+          "$ref": "#/$defs/Nullable_string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Appearance": {
+      "type": "object",
+      "properties": {
+        "density": {
+          "type": "string",
+          "default": "compact"
+        },
+        "fontScale": {
+          "type": "number",
+          "format": "double",
+          "default": 1.0
+        },
+        "monoFontSize": {
+          "type": "number",
+          "format": "double",
+          "default": 13.0
+        },
+        "theme": {
+          "type": "string",
+          "default": "system"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "AppearancePatch": {
+      "type": "object",
+      "properties": {
+        "density": {
+          "$ref": "#/$defs/string"
+        },
+        "fontScale": {
+          "$ref": "#/$defs/double"
+        },
+        "monoFontSize": {
+          "$ref": "#/$defs/double"
+        },
+        "theme": {
+          "$ref": "#/$defs/string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ArchiveDecision": {
+      "type": "string",
+      "enum": [
+        "save_all",
+        "keep_drafts",
+        "discard"
+      ]
+    },
+    "ArchiveOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "archived"
+            },
+            "savedPaths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "savedPaths"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "needsDecision"
+            },
+            "resources": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ResourceRef"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "resources"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "saveConflict"
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "paths"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "invalid"
+            },
+            "message": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "failed"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "notFound"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "Array_of_string": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "Attachment": {
+      "type": "object",
+      "properties": {
+        "mimeType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "BackendDefaults": {
+      "type": "object",
+      "properties": {
+        "effort": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "BackendPatch": {
+      "type": "object",
+      "properties": {
+        "effort": {
+          "$ref": "#/$defs/Nullable_string"
+        },
+        "model": {
+          "$ref": "#/$defs/Nullable_string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "BlobResult": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "eof": {
+          "type": "boolean"
+        },
+        "nextOffset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "size": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "data",
+        "nextOffset",
+        "eof",
+        "size"
+      ]
+    },
+    "CancelResult": {
+      "type": "object",
+      "properties": {
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cancelled"
+      ]
+    },
+    "Capabilities": {
+      "type": "object",
+      "properties": {
+        "chat": {
+          "type": "boolean"
+        },
+        "documents": {
+          "type": "boolean"
+        },
+        "environment": {
+          "type": "boolean"
+        },
+        "files": {
+          "type": "boolean"
+        },
+        "maxBlobChunkBytes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "maxFrameBytes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "processes": {
+          "type": "boolean"
+        },
+        "pty": {
+          "type": "boolean"
+        },
+        "services": {
+          "type": "boolean"
+        },
+        "workspace": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "workspace",
+        "files",
+        "documents",
+        "environment",
+        "processes",
+        "pty",
+        "services",
+        "chat",
+        "maxFrameBytes",
+        "maxBlobChunkBytes"
+      ]
+    },
+    "Capabilities2": {
+      "type": "object",
+      "properties": {
+        "guardian": {
+          "$ref": "#/$defs/ReportField_boolean"
+        },
+        "kernel": {
+          "$ref": "#/$defs/ReportField_boolean"
+        },
+        "root": {
+          "$ref": "#/$defs/ReportField_string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ChatArrangement": {
+      "type": "object",
+      "properties": {
+        "focus": {
+          "type": "string",
+          "default": "aux"
+        },
+        "promotedFrom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PanelOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rail": {
+          "$ref": "#/$defs/RegionState",
+          "default": {
+            "collapsed": false,
+            "size": 264.0
+          }
+        },
+        "side": {
+          "$ref": "#/$defs/RegionState",
+          "default": {
+            "collapsed": false,
+            "size": 400.0
+          }
+        },
+        "sideStack": {
+          "type": "string",
+          "default": "s0"
+        },
+        "tree": {
+          "$ref": "#/$defs/RegionState",
+          "default": {
+            "collapsed": false,
+            "size": 200.0
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ChatCommandParams": {
+      "description": "The guest Kotlin service owns its command/body schema until the round-2 Rust port.",
+      "type": "object",
+      "properties": {
+        "args": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/OpaqueJson"
+          },
+          "default": {}
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "ChatSnapshotParams": {
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "transferId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ChatWatchParams": {
+      "type": "object",
+      "properties": {
+        "afterRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "epoch": {
+          "type": "string"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 30000,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "epoch",
+        "afterRevision"
+      ]
+    },
+    "ClientConfig": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentConfig",
+          "default": {
+            "backend": "codex",
+            "backends": {}
+          }
+        },
+        "appearance": {
+          "$ref": "#/$defs/Appearance",
+          "default": {
+            "density": "compact",
+            "fontScale": 1.0,
+            "monoFontSize": 13.0,
+            "theme": "system"
+          }
+        },
+        "launcher": {
+          "type": "array",
+          "default": [
+            "workbench",
+            "proxy",
+            "settings"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "overlay": {
+          "$ref": "#/$defs/OverlayConfig",
+          "default": {
+            "enabled": false,
+            "extraApps": []
+          }
+        },
+        "terminal": {
+          "$ref": "#/$defs/TerminalConfig",
+          "default": {
+            "extraKeysPinned": false
+          }
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "version"
+      ]
+    },
+    "ClientConfigParams": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "clientId"
+      ]
+    },
+    "ClientConfigReply": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/ClientConfiguration"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "config"
+      ]
+    },
+    "ClientConfiguration": {
+      "type": "object",
+      "properties": {
+        "appearance": {
+          "$ref": "#/$defs/Appearance"
+        },
+        "launcher": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "overlay": {
+          "$ref": "#/$defs/OverlayConfig"
+        },
+        "terminal": {
+          "$ref": "#/$defs/TerminalConfig"
+        }
+      },
+      "required": [
+        "appearance",
+        "overlay",
+        "launcher",
+        "terminal"
+      ]
+    },
+    "Command": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object"
+            },
+            "name": {
+              "type": "string",
+              "const": "enterWorkbench"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "default": null
+                }
+              }
+            },
+            "name": {
+              "type": "string",
+              "const": "createSession"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "$ref": "#/$defs/Target"
+                }
+              },
+              "required": [
+                "target"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "openInSeparateSession"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "activateSession"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "restoreSession"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "renameSession"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "decision": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/ArchiveDecision"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "archiveSession"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "index": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "default": null
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "pinSession"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "unpinSession"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object"
+            },
+            "name": {
+              "type": "string",
+              "const": "runMaintenance"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object"
+            },
+            "name": {
+              "type": "string",
+              "const": "flush"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "dismissNotice"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "op": {
+                  "$ref": "#/$defs/LayoutAction"
+                },
+                "sessionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "default": null
+                }
+              },
+              "required": [
+                "op"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "applyLayout"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "openFile"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "shown": {
+                  "$ref": "#/$defs/FileVersion"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "text",
+                "shown"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "editFile"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "default": null
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "saveFile"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "resolution": {
+                  "$ref": "#/$defs/ConflictResolution"
+                }
+              },
+              "required": [
+                "path",
+                "resolution"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "resolveConflict"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "discardDraft"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "deletePath"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "trashPath"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "createDirectory"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "movePath"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "copyPath"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "restoreFromTrash"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object"
+            },
+            "name": {
+              "type": "string",
+              "const": "purgeTrash"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "type": "string",
+                  "default": ""
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "createFile"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "showHidden": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "listDirectory"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "draft": {
+                  "$ref": "#/$defs/ComposerDraft"
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "draft",
+                "expectedRevision"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "editComposer"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "submitted": {
+                  "$ref": "#/$defs/ComposerDraft"
+                }
+              },
+              "required": [
+                "submitted"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "acknowledgeComposer"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "conversationId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "conversationId"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "discardComposer"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "conversationId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "conversationId"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "removeConversation"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {
+                "config": {
+                  "$ref": "#/$defs/ConfigPatch"
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "config",
+                "expectedRevision"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "const": "updateConfig"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        }
+      ]
+    },
+    "CommandName": {
+      "type": "string",
+      "enum": [
+        "start",
+        "stop",
+        "checkConfig",
+        "refreshProviders",
+        "setMode",
+        "select",
+        "testNode",
+        "testGroup"
+      ]
+    },
+    "CommandReply": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/State"
+        },
+        "value": {
+          "$ref": "#/$defs/CommandValue"
+        }
+      },
+      "required": [
+        "revision",
+        "state",
+        "value"
+      ]
+    },
+    "CommandReply2": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "control": {
+          "$ref": "#/$defs/Control"
+        },
+        "operation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Ticket"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "control"
+      ]
+    },
+    "CommandRequest": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "type": "string"
+        },
+        "serviceId": {
+          "type": "string"
+        }
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "start"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "checkConfig"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "refreshProviders"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/ModeArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "setMode"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/SelectArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "select"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/TestNodeArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "testNode"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/TestGroupArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "testGroup"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "ensureConfig"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/TextArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "importConfig"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/TextArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "publishLog"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        }
+      ],
+      "required": [
+        "serviceId",
+        "epoch"
+      ],
+      "unevaluatedProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "CommandValue": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        {
+          "$ref": "#/$defs/Workbench"
+        },
+        {
+          "$ref": "#/$defs/OpenFile"
+        },
+        {
+          "$ref": "#/$defs/SaveOutcome"
+        },
+        {
+          "$ref": "#/$defs/ArchiveOutcome"
+        },
+        {
+          "$ref": "#/$defs/FileOutcome"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DirectoryEntry"
+          }
+        },
+        {
+          "$ref": "#/$defs/ComposerDraft"
+        },
+        {
+          "$ref": "#/$defs/ConfigOutcome"
+        }
+      ]
+    },
+    "CompleteRequest": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "serviceId": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ProxyState"
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "serviceId",
+        "epoch",
+        "operationId",
+        "success",
+        "state"
+      ]
+    },
+    "ComposerDraft": {
+      "type": "object",
+      "properties": {
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Attachment"
+          }
+        },
+        "conversationId": {
+          "type": "string"
+        },
+        "format": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 1,
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "conversationId",
+        "revision",
+        "text",
+        "attachments"
+      ]
+    },
+    "Config": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "revision"
+      ]
+    },
+    "ConfigOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "config": {
+              "$ref": "#/$defs/ClientConfig"
+            },
+            "kind": {
+              "type": "string",
+              "const": "updated"
+            }
+          },
+          "required": [
+            "kind",
+            "config"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "conflict"
+            },
+            "revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "revision"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "blocked"
+            },
+            "problem": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "problem"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "failed"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ]
+        }
+      ]
+    },
+    "ConfigPatch": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentPatch"
+        },
+        "appearance": {
+          "$ref": "#/$defs/AppearancePatch"
+        },
+        "launcher": {
+          "$ref": "#/$defs/Array_of_string"
+        },
+        "overlay": {
+          "$ref": "#/$defs/OverlayPatch"
+        },
+        "terminal": {
+          "$ref": "#/$defs/TerminalPatch"
+        },
+        "version": {
+          "$ref": "#/$defs/uint64"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ConfigState": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "exists": {
+          "$ref": "#/$defs/ReportField_boolean"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Conflict": {
+      "type": "object",
+      "properties": {
+        "deviceTaken": {
+          "$ref": "#/$defs/ReportField_boolean"
+        },
+        "foreignInterfaces": {
+          "$ref": "#/$defs/ReportField_Array_of_string"
+        },
+        "ruleCollisions": {
+          "$ref": "#/$defs/ReportField_Array_of_string"
+        },
+        "vpnActive": {
+          "$ref": "#/$defs/ReportField_boolean"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ConflictResolution": {
+      "type": "string",
+      "enum": [
+        "use_disk",
+        "keep_mine"
+      ]
+    },
+    "Control": {
+      "type": "object",
+      "properties": {
+        "desired": {
+          "$ref": "#/$defs/Desired"
+        },
+        "executor": {
+          "$ref": "#/$defs/ExecutorView"
+        },
+        "measuredConfirmed": {
+          "type": "boolean"
+        },
+        "operation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Operation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "desired",
+        "executor",
+        "measuredConfirmed"
+      ]
+    },
+    "Delay": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "message": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "ms": {
+          "$ref": "#/$defs/ReportField_int64"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Desired": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProxyMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "running": {
+          "type": "boolean",
+          "default": false
+        },
+        "selections": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Dimensions": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "rows",
+        "columns"
+      ]
+    },
+    "DirectoryEntry": {
+      "type": "object",
+      "properties": {
+        "isDirectory": {
+          "type": "boolean"
+        },
+        "modifiedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "path": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "path",
+        "isDirectory",
+        "size",
+        "modifiedAt"
+      ]
+    },
+    "DocumentParams": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "expectedRevision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "key": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "namespace",
+        "key"
+      ]
+    },
+    "DocumentResult": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision"
+      ]
+    },
+    "Draft": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/FileVersion"
+        },
+        "editedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "format": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "path": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "format",
+        "path",
+        "text",
+        "base",
+        "editedAt",
+        "revision"
+      ]
+    },
+    "DropTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "stackId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "center"
+            }
+          },
+          "required": [
+            "type",
+            "stackId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "stackId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "tab"
+            }
+          },
+          "required": [
+            "type",
+            "stackId",
+            "index"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "edge": {
+              "type": "string"
+            },
+            "stackId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "edge"
+            }
+          },
+          "required": [
+            "type",
+            "stackId",
+            "edge"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "edge": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "editorEdge"
+            }
+          },
+          "required": [
+            "type",
+            "edge"
+          ]
+        }
+      ]
+    },
+    "Empty": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "EmptyArgs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "EnvironmentPhase": {
+      "type": "string",
+      "enum": [
+        "not_installed",
+        "installing",
+        "building",
+        "ready",
+        "needs_restart",
+        "failed"
+      ]
+    },
+    "EnvironmentSpec": {
+      "type": "object",
+      "properties": {
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "post_scripts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PostScript"
+          }
+        },
+        "python": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "version"
+      ]
+    },
+    "EnvironmentStatus": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Activation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "environmentAvailable": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Failure"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "format": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "jobId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pending": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Activation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/EnvironmentPhase"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Activation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "progress": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "requestedSpecHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runningProcesses": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "stage": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/LifecycleStatus"
+        },
+        "step": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "steps": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "usable": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "format",
+        "status",
+        "stage",
+        "step",
+        "steps",
+        "runningProcesses",
+        "environmentAvailable",
+        "usable",
+        "phase",
+        "architecture"
+      ]
+    },
+    "ErrorData": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "ExecutorView": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "epoch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "active"
+      ]
+    },
+    "ExplorerView": {
+      "type": "object",
+      "properties": {
+        "expanded": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "selected": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "showHidden": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ExtensionReportParams": {
+      "type": "object",
+      "properties": {
+        "serviceId": {
+          "$ref": "#/$defs/ExtensionServiceId"
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/OpaqueJson"
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "serviceId",
+        "state"
+      ]
+    },
+    "ExtensionServiceId": {
+      "type": "string",
+      "pattern": "^(?!proxy$|network$)[A-Za-z0-9_.-]{1,160}$"
+    },
+    "Failure": {
+      "type": "object",
+      "properties": {
+        "fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "stage",
+        "message"
+      ]
+    },
+    "FileOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "done"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "$ref": "#/$defs/TrashEntry"
+            },
+            "kind": {
+              "type": "string",
+              "const": "trashed"
+            }
+          },
+          "required": [
+            "kind",
+            "entry"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "restored"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "failed"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ]
+        }
+      ]
+    },
+    "FileVersion": {
+      "type": "object",
+      "properties": {
+        "exists": {
+          "type": "boolean"
+        },
+        "modifiedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "size": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "exists",
+        "size",
+        "modifiedAt"
+      ]
+    },
+    "FilesArrangement": {
+      "type": "object",
+      "properties": {
+        "aux": {
+          "$ref": "#/$defs/RegionState",
+          "default": {
+            "collapsed": false,
+            "size": 360.0
+          }
+        },
+        "bottom": {
+          "$ref": "#/$defs/RegionState",
+          "default": {
+            "collapsed": true,
+            "size": 0.35
+          }
+        },
+        "explorer": {
+          "$ref": "#/$defs/RegionState",
+          "default": {
+            "collapsed": false,
+            "size": 264.0
+          }
+        },
+        "focus": {
+          "type": "string",
+          "default": "s0"
+        },
+        "maximized": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Group": {
+      "type": "object",
+      "properties": {
+        "fixed": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "hidden": {
+          "$ref": "#/$defs/ReportField_boolean"
+        },
+        "members": {
+          "$ref": "#/$defs/ReportField_Array_of_Node"
+        },
+        "name": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "now": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "type": {
+          "$ref": "#/$defs/ReportField_string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Groups": {
+      "type": "object",
+      "properties": {
+        "global": {
+          "$ref": "#/$defs/ReportField_Group"
+        },
+        "groups": {
+          "$ref": "#/$defs/ReportField_Array_of_Group"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "GuestUser": {
+      "type": "string",
+      "enum": [
+        "work",
+        "root"
+      ]
+    },
+    "HelloParams": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "protocol",
+        "clientId"
+      ]
+    },
+    "HelloResult": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/Capabilities"
+        },
+        "engineVersion": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "workspaceRoot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "protocol",
+        "engineVersion",
+        "workspaceRoot",
+        "capabilities"
+      ]
+    },
+    "IdSchema": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "LayoutAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "focus": {
+              "type": "boolean",
+              "default": true
+            },
+            "placement": {
+              "$ref": "#/$defs/Placement",
+              "default": {
+                "type": "auto"
+              }
+            },
+            "target": {
+              "$ref": "#/$defs/Target"
+            },
+            "type": {
+              "type": "string",
+              "const": "open"
+            }
+          },
+          "required": [
+            "type",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "panelId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "focus"
+            }
+          },
+          "required": [
+            "type",
+            "panelId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stackId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "focusStack"
+            }
+          },
+          "required": [
+            "type",
+            "stackId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "panelIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "close"
+            }
+          },
+          "required": [
+            "type",
+            "panelIds"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "panelId": {
+              "type": "string"
+            },
+            "to": {
+              "$ref": "#/$defs/DropTarget"
+            },
+            "type": {
+              "type": "string",
+              "const": "move"
+            }
+          },
+          "required": [
+            "type",
+            "panelId",
+            "to"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "edge": {
+              "type": "string"
+            },
+            "stackId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "splitStack"
+            }
+          },
+          "required": [
+            "type",
+            "stackId",
+            "edge"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "splitId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "resizeSplit"
+            },
+            "weights": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "splitId",
+            "weights"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "splitId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "resetSplit"
+            }
+          },
+          "required": [
+            "type",
+            "splitId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "region": {
+              "type": "string"
+            },
+            "size": {
+              "type": "number",
+              "format": "double"
+            },
+            "type": {
+              "type": "string",
+              "const": "resizeRegion"
+            }
+          },
+          "required": [
+            "type",
+            "region",
+            "size"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "collapsed": {
+              "type": "boolean"
+            },
+            "region": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "setRegionCollapsed"
+            }
+          },
+          "required": [
+            "type",
+            "region",
+            "collapsed"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "region": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "toggleRegion"
+            }
+          },
+          "required": [
+            "type",
+            "region"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stackId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "setMaximized"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "paradigm": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "switchParadigm"
+            }
+          },
+          "required": [
+            "type",
+            "paradigm"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "panelId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "promoteConversation"
+            }
+          },
+          "required": [
+            "type",
+            "panelId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "returnToFiles"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/Target"
+            },
+            "type": {
+              "type": "string",
+              "const": "enterSolo"
+            }
+          },
+          "required": [
+            "type",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stackId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "setChatSideStack"
+            }
+          },
+          "required": [
+            "type",
+            "stackId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "panelId": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/Target"
+            },
+            "type": {
+              "type": "string",
+              "const": "retarget"
+            }
+          },
+          "required": [
+            "type",
+            "panelId",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "panelId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "updateView"
+            },
+            "view": {
+              "$ref": "#/$defs/PanelView"
+            }
+          },
+          "required": [
+            "type",
+            "panelId",
+            "view"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "explorer": {
+              "$ref": "#/$defs/ExplorerView"
+            },
+            "type": {
+              "type": "string",
+              "const": "updateExplorer"
+            }
+          },
+          "required": [
+            "type",
+            "explorer"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "renamePath"
+            }
+          },
+          "required": [
+            "type",
+            "from",
+            "to"
+          ]
+        }
+      ]
+    },
+    "Leaf": {
+      "type": "object",
+      "properties": {
+        "stack": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "stack"
+      ]
+    },
+    "LeaseRequest": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "type": "string"
+        },
+        "serviceId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "serviceId",
+        "epoch"
+      ]
+    },
+    "LifecycleStatus": {
+      "type": "string",
+      "enum": [
+        "unavailable",
+        "ready",
+        "pending_restart",
+        "failed",
+        "applying"
+      ]
+    },
+    "Map_of_BackendPatch": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/BackendPatch"
+      }
+    },
+    "Measurement": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "type": "string"
+        },
+        "format": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "reportedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/ProxyState"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "format",
+        "state",
+        "reportedAt",
+        "epoch"
+      ]
+    },
+    "Metadata": {
+      "description": "Persisted terminal identity and the current Engine-owned projection.",
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "integer",
+          "format": "uint16",
+          "default": 80,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "customTitle": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "cwd": {
+          "type": "string",
+          "default": "/workspace"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32",
+          "default": null
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint16",
+          "default": 24,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/Status",
+          "default": "ended"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "ModeArgs": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ProxyMode"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "NetworkReportParams": {
+      "type": "object",
+      "properties": {
+        "serviceId": {
+          "$ref": "#/$defs/NetworkTag"
+        },
+        "state": {
+          "$ref": "#/$defs/NetworkState"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "serviceId",
+        "state"
+      ]
+    },
+    "NetworkState": {
+      "type": "object",
+      "properties": {
+        "connected": {
+          "type": "boolean"
+        },
+        "dnsServers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "connected",
+        "dnsServers"
+      ]
+    },
+    "NetworkTag": {
+      "type": "string",
+      "enum": [
+        "network"
+      ]
+    },
+    "Node": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Leaf"
+        },
+        {
+          "$ref": "#/$defs/Split"
+        }
+      ]
+    },
+    "Node2": {
+      "type": "object",
+      "properties": {
+        "alive": {
+          "$ref": "#/$defs/ReportField_boolean"
+        },
+        "delayMs": {
+          "$ref": "#/$defs/ReportField_int64"
+        },
+        "name": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "now": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "type": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "udp": {
+          "$ref": "#/$defs/ReportField_boolean"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Notice": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id",
+        "kind",
+        "message"
+      ]
+    },
+    "Notification": {
+      "type": "object",
+      "properties": {
+        "jsonrpc": {
+          "$ref": "#/$defs/Version"
+        },
+        "method": {
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ]
+    },
+    "Nullable_string": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "OpaqueJson": true,
+    "OpenFile": {
+      "type": "object",
+      "properties": {
+        "binary": {
+          "type": "boolean"
+        },
+        "disk": {
+          "$ref": "#/$defs/FileVersion"
+        },
+        "diskText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Draft"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "tooLarge": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "disk",
+        "binary",
+        "tooLarge"
+      ]
+    },
+    "Operation": {
+      "type": "object",
+      "properties": {
+        "completedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "epoch": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "$ref": "#/$defs/CommandName"
+        },
+        "requestedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/OperationStatus"
+        },
+        "targetGroup": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "epoch",
+        "requestedAt"
+      ]
+    },
+    "OperationStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "failed",
+        "interrupted"
+      ]
+    },
+    "OutputStream": {
+      "type": "string",
+      "enum": [
+        "stdout",
+        "stderr"
+      ]
+    },
+    "OverlayConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "extraApps": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "OverlayPatch": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "$ref": "#/$defs/boolean"
+        },
+        "extraApps": {
+          "$ref": "#/$defs/Array_of_string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Panel": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "view": {
+          "$ref": "#/$defs/PanelView",
+          "default": {}
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id",
+        "target"
+      ]
+    },
+    "PanelOrigin": {
+      "type": "object",
+      "properties": {
+        "auxActiveBefore": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "index": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "panelId": {
+          "type": "string"
+        },
+        "stackId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "panelId",
+        "stackId",
+        "index"
+      ]
+    },
+    "PanelView": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "maxItems": 4,
+          "minItems": 4
+        },
+        "extras": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "scrollAnchor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scrollOffset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Placement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "auto"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint",
+              "default": null,
+              "minimum": 0
+            },
+            "moveExisting": {
+              "type": "boolean",
+              "default": false
+            },
+            "replaceActive": {
+              "type": "boolean",
+              "default": false
+            },
+            "stackId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "inStack"
+            }
+          },
+          "required": [
+            "type",
+            "stackId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "edge": {
+              "type": "string"
+            },
+            "stackId": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "splitEdge"
+            }
+          },
+          "required": [
+            "type",
+            "stackId",
+            "edge"
+          ]
+        }
+      ]
+    },
+    "PostScript": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "user": {
+          "$ref": "#/$defs/GuestUser"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id",
+        "run",
+        "user"
+      ]
+    },
+    "ProcessReadParams": {
+      "type": "object",
+      "properties": {
+        "maxBytes": {
+          "type": "integer",
+          "format": "uint",
+          "default": 65536,
+          "minimum": 0
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        },
+        "processId": {
+          "type": "string"
+        },
+        "stream": {
+          "$ref": "#/$defs/OutputStream",
+          "default": "stdout"
+        },
+        "waitMs": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "processId"
+      ]
+    },
+    "ProcessReadResult": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "eof": {
+          "type": "boolean"
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "nextOffset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "startOffset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "data",
+        "startOffset",
+        "nextOffset",
+        "eof"
+      ]
+    },
+    "ProcessResizeParams": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "processId": {
+          "type": "string"
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "processId",
+        "rows",
+        "columns"
+      ]
+    },
+    "ProcessStopParams": {
+      "type": "object",
+      "properties": {
+        "force": {
+          "type": "boolean",
+          "default": false
+        },
+        "processId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "processId"
+      ]
+    },
+    "ProcessWaitParams": {
+      "type": "object",
+      "properties": {
+        "processId": {
+          "type": "string"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "processId"
+      ]
+    },
+    "ProcessWriteParams": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "processId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "processId",
+        "data"
+      ]
+    },
+    "Provider": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "name": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "size": {
+          "$ref": "#/$defs/ReportField_int64"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "vehicleType": {
+          "$ref": "#/$defs/ReportField_string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ProxyMode": {
+      "type": "string",
+      "enum": [
+        "rule",
+        "global",
+        "direct"
+      ]
+    },
+    "ProxyReportParams": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "type": "string"
+        },
+        "serviceId": {
+          "$ref": "#/$defs/ProxyTag"
+        },
+        "state": {
+          "$ref": "#/$defs/ProxyState"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "serviceId",
+        "epoch",
+        "state"
+      ]
+    },
+    "ProxyState": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/ReportField_Capabilities"
+        },
+        "config": {
+          "$ref": "#/$defs/ReportField_ConfigState"
+        },
+        "conflict": {
+          "$ref": "#/$defs/ReportField_Conflict"
+        },
+        "controllerReachable": {
+          "$ref": "#/$defs/ReportField_boolean"
+        },
+        "delays": {
+          "$ref": "#/$defs/ReportField_Map_of_Delay"
+        },
+        "error": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "groups": {
+          "$ref": "#/$defs/ReportField_Groups"
+        },
+        "mode": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "phase": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "pid": {
+          "$ref": "#/$defs/ReportField_uint64"
+        },
+        "progress": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "providers": {
+          "$ref": "#/$defs/ReportField_Array_of_Provider"
+        },
+        "stopUnconfirmed": {
+          "$ref": "#/$defs/ReportField_boolean"
+        },
+        "testing": {
+          "$ref": "#/$defs/ReportField_Array_of_string"
+        },
+        "traffic": {
+          "$ref": "#/$defs/ReportField_Traffic"
+        },
+        "tun": {
+          "$ref": "#/$defs/ReportField_Tun"
+        },
+        "version": {
+          "$ref": "#/$defs/ReportField_string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "ProxyTag": {
+      "type": "string",
+      "enum": [
+        "proxy"
+      ]
+    },
+    "ReadFileParams": {
+      "type": "object",
+      "properties": {
+        "length": {
+          "type": "integer",
+          "format": "uint",
+          "default": 65536,
+          "minimum": 0
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "RegionState": {
+      "type": "object",
+      "properties": {
+        "collapsed": {
+          "type": "boolean",
+          "default": false
+        },
+        "size": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "size"
+      ]
+    },
+    "RegisterRequest": {
+      "type": "object",
+      "properties": {
+        "executorId": {
+          "type": "string"
+        },
+        "serviceId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "serviceId",
+        "executorId"
+      ]
+    },
+    "Reply": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "control": {
+              "$ref": "#/$defs/Control"
+            },
+            "epoch": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "epoch",
+            "control"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "control": {
+              "$ref": "#/$defs/Control"
+            }
+          },
+          "required": [
+            "control"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "control": {
+              "$ref": "#/$defs/Control"
+            },
+            "revision": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "serviceId": {
+              "type": "string"
+            },
+            "state": {
+              "$ref": "#/$defs/ProxyState"
+            }
+          },
+          "required": [
+            "serviceId",
+            "state",
+            "revision",
+            "control"
+          ]
+        },
+        {
+          "$ref": "#/$defs/CommandReply2"
+        }
+      ]
+    },
+    "ReportField_Array_of_Group": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/Group"
+      }
+    },
+    "ReportField_Array_of_Node": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/Node2"
+      }
+    },
+    "ReportField_Array_of_Provider": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/Provider"
+      }
+    },
+    "ReportField_Array_of_string": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "ReportField_Capabilities": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Capabilities2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReportField_ConfigState": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConfigState"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReportField_Conflict": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Conflict"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReportField_Group": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Group"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReportField_Groups": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Groups"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReportField_Map_of_Delay": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/Delay"
+      }
+    },
+    "ReportField_Traffic": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Traffic"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReportField_Tun": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Tun"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ReportField_boolean": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "ReportField_int64": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int64"
+    },
+    "ReportField_string": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ReportField_uint64": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
+    },
+    "ReportedState": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NetworkState"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/OpaqueJson"
+          }
+        }
+      ]
+    },
+    "ResourceRef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "file"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "conversation"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        }
+      ]
+    },
+    "Response": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/RpcId"
+            },
+            "jsonrpc": {
+              "$ref": "#/$defs/Version"
+            },
+            "result": {
+              "$ref": "#/$defs/OpaqueJson"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/RpcError"
+            },
+            "id": {
+              "$ref": "#/$defs/RpcId"
+            },
+            "jsonrpc": {
+              "$ref": "#/$defs/Version"
+            }
+          },
+          "required": [
+            "jsonrpc",
+            "id",
+            "error"
+          ]
+        }
+      ]
+    },
+    "RetryParams": {
+      "type": "object",
+      "properties": {
+        "retry": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Revision": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision"
+      ]
+    },
+    "RpcError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "data": {
+          "$ref": "#/$defs/ErrorData"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "data"
+      ]
+    },
+    "RpcId": {
+      "description": "Retains the numeric token itself, including arbitrary precision and exponent spelling.",
+      "$ref": "#/$defs/IdSchema"
+    },
+    "SaveOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "saved"
+            },
+            "text": {
+              "type": "string"
+            },
+            "version": {
+              "$ref": "#/$defs/FileVersion"
+            }
+          },
+          "required": [
+            "kind",
+            "version",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "unchanged"
+            },
+            "version": {
+              "$ref": "#/$defs/FileVersion"
+            }
+          },
+          "required": [
+            "kind",
+            "version"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "disk": {
+              "$ref": "#/$defs/FileVersion"
+            },
+            "kind": {
+              "type": "string",
+              "const": "conflict"
+            }
+          },
+          "required": [
+            "kind",
+            "disk"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "invalid"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "failed"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ]
+        }
+      ]
+    },
+    "SelectArgs": {
+      "type": "object",
+      "properties": {
+        "group": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "group",
+        "node"
+      ]
+    },
+    "ServiceControl": {
+      "type": "object",
+      "properties": {
+        "proxy": {
+          "$ref": "#/$defs/Control"
+        }
+      },
+      "required": [
+        "proxy"
+      ]
+    },
+    "ServiceReport": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "format": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "reportedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/NetworkState"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "format",
+        "state",
+        "reportedAt"
+      ]
+    },
+    "ServiceReport2": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "format": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "reportedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/OpaqueJson"
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "format",
+        "state",
+        "reportedAt"
+      ]
+    },
+    "ServiceReportParams": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NetworkReportParams"
+        },
+        {
+          "$ref": "#/$defs/ProxyReportParams"
+        },
+        {
+          "$ref": "#/$defs/ExtensionReportParams"
+        }
+      ]
+    },
+    "ServiceReportReply": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Reply"
+        },
+        {
+          "$ref": "#/$defs/ServiceReportResult"
+        }
+      ]
+    },
+    "ServiceReportResult": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "serviceId": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ReportedState"
+        }
+      },
+      "required": [
+        "revision",
+        "serviceId",
+        "state"
+      ]
+    },
+    "ServicesResult": {
+      "type": "object",
+      "properties": {
+        "control": {
+          "$ref": "#/$defs/ServiceControl"
+        },
+        "desired": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpaqueJson"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "services": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/StoredReport"
+          }
+        }
+      },
+      "required": [
+        "services",
+        "control"
+      ]
+    },
+    "Session": {
+      "type": "object",
+      "properties": {
+        "archivedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "createdAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "lastUsedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "usage": {
+          "$ref": "#/$defs/UsageStats",
+          "default": {
+            "frecency": 1.0,
+            "frecencyAt": 0,
+            "uses": 1
+          }
+        },
+        "workbench": {
+          "$ref": "#/$defs/Workbench",
+          "default": {
+            "chat": {
+              "focus": "aux",
+              "promotedFrom": null,
+              "rail": {
+                "collapsed": false,
+                "size": 264.0
+              },
+              "side": {
+                "collapsed": false,
+                "size": 400.0
+              },
+              "sideStack": "s0",
+              "tree": {
+                "collapsed": false,
+                "size": 200.0
+              }
+            },
+            "editor": {
+              "stack": "s0"
+            },
+            "explorer": {
+              "expanded": [],
+              "selected": null,
+              "showHidden": false
+            },
+            "files": {
+              "aux": {
+                "collapsed": false,
+                "size": 360.0
+              },
+              "bottom": {
+                "collapsed": true,
+                "size": 0.35
+              },
+              "explorer": {
+                "collapsed": false,
+                "size": 264.0
+              },
+              "focus": "s0",
+              "maximized": null
+            },
+            "lastEditorStack": "s0",
+            "mru": [],
+            "nextSeq": 1,
+            "panels": [],
+            "paradigm": "files",
+            "solo": null,
+            "stacks": [
+              {
+                "active": null,
+                "id": "s0",
+                "panels": []
+              },
+              {
+                "active": null,
+                "id": "bottom",
+                "panels": []
+              },
+              {
+                "active": null,
+                "id": "aux",
+                "panels": []
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id",
+        "createdAt",
+        "lastUsedAt"
+      ]
+    },
+    "Snapshot": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/State"
+        }
+      },
+      "required": [
+        "revision",
+        "state"
+      ]
+    },
+    "SoloArrangement": {
+      "type": "object",
+      "properties": {
+        "panelId": {
+          "type": "string"
+        },
+        "returnTo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "panelId",
+        "returnTo"
+      ]
+    },
+    "SpawnOptions": {
+      "type": "object",
+      "properties": {
+        "argv": {
+          "type": "array",
+          "default": [
+            "/bin/bash",
+            "--login"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "columns": {
+          "type": "integer",
+          "format": "uint16",
+          "default": 80,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "cwd": {
+          "type": "string",
+          "default": "/workspace"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint16",
+          "default": 24,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "terminal": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "Spawned": {
+      "type": "object",
+      "properties": {
+        "processId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "processId"
+      ]
+    },
+    "Split": {
+      "type": "object",
+      "properties": {
+        "axis": {
+          "type": "string",
+          "default": ""
+        },
+        "children": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Node"
+          }
+        },
+        "split": {
+          "type": "string",
+          "default": ""
+        },
+        "weights": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "Stack": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "id": {
+          "type": "string"
+        },
+        "panels": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "StartOptions": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "directory": {
+          "description": "Workspace-relative directory. None retains an existing terminal's cwd.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "rows": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "State": {
+      "description": "Embedded into the Server's combined document. The Server owns unknown top-level fields.",
+      "type": "object",
+      "properties": {
+        "activeSessionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "composers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ComposerDraft"
+          }
+        },
+        "config": {
+          "$ref": "#/$defs/ClientConfig"
+        },
+        "configProblem": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disk": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/FileVersion"
+          }
+        },
+        "drafts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Draft"
+          }
+        },
+        "failure": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Notice"
+          }
+        },
+        "pinned": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Session"
+          }
+        },
+        "status": {
+          "type": "string"
+        },
+        "writeError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "status",
+        "sessions",
+        "pinned",
+        "drafts",
+        "composers",
+        "disk",
+        "config",
+        "notices"
+      ]
+    },
+    "Status": {
+      "type": "string",
+      "enum": [
+        "starting",
+        "running",
+        "ended",
+        "failed"
+      ]
+    },
+    "StoppingResult": {
+      "type": "object",
+      "properties": {
+        "stopping": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "stopping"
+      ]
+    },
+    "StoredReport": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ServiceReport"
+        },
+        {
+          "$ref": "#/$defs/Measurement"
+        },
+        {
+          "$ref": "#/$defs/ServiceReport2"
+        }
+      ]
+    },
+    "Target": {
+      "description": "A panel addresses an Engine resource. Unknown fields are retained on every persisted object.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "page": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "TerminalConfig": {
+      "type": "object",
+      "properties": {
+        "extraKeysPinned": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "TerminalIdParams": {
+      "type": "object",
+      "properties": {
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId"
+      ]
+    },
+    "TerminalPatch": {
+      "type": "object",
+      "properties": {
+        "extraKeysPinned": {
+          "$ref": "#/$defs/boolean"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "TerminalReadParams": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "maxBytes": {
+          "type": "integer",
+          "format": "uint",
+          "default": 65536,
+          "minimum": 0
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        },
+        "terminalId": {
+          "type": "string"
+        },
+        "waitMs": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 1000,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId"
+      ]
+    },
+    "TerminalReadResult": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "eof": {
+          "type": "boolean"
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "nextOffset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "reset": {
+          "type": "boolean"
+        },
+        "startOffset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "terminal": {
+          "$ref": "#/$defs/Metadata"
+        }
+      },
+      "required": [
+        "data",
+        "startOffset",
+        "nextOffset",
+        "eof",
+        "reset",
+        "terminal"
+      ]
+    },
+    "TerminalRenameParams": {
+      "type": "object",
+      "properties": {
+        "terminalId": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId"
+      ]
+    },
+    "TerminalResizeParams": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId",
+        "rows",
+        "columns"
+      ]
+    },
+    "TerminalStartParams": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "directory": {
+          "description": "Workspace-relative directory. None retains an existing terminal's cwd.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "rows": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "default": null,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId"
+      ]
+    },
+    "TerminalStopParams": {
+      "type": "object",
+      "properties": {
+        "force": {
+          "type": "boolean",
+          "default": false
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId"
+      ]
+    },
+    "TerminalWaitParams": {
+      "type": "object",
+      "properties": {
+        "terminalId": {
+          "type": "string"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 1000,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId"
+      ]
+    },
+    "TerminalWriteParams": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId",
+        "data"
+      ]
+    },
+    "TestGroupArgs": {
+      "type": "object",
+      "properties": {
+        "group": {
+          "type": "string"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 5000,
+          "minimum": 0
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "group"
+      ]
+    },
+    "TestNodeArgs": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 5000,
+          "minimum": 0
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "TextArgs": {
+      "type": "object",
+      "properties": {
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "text",
+        "expectedRevision"
+      ]
+    },
+    "Ticket": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "start"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "checkConfig"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "refreshProviders"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/ModeArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "setMode"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/SelectArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "select"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/TestNodeArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "testNode"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/TestGroupArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "testGroup"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/EmptyArgs",
+              "default": {}
+            },
+            "name": {
+              "type": "string",
+              "const": "ensureConfig"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/TextArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "importConfig"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "$ref": "#/$defs/TextArgs"
+            },
+            "name": {
+              "type": "string",
+              "const": "publishLog"
+            }
+          },
+          "required": [
+            "name",
+            "args"
+          ]
+        }
+      ],
+      "required": [
+        "id"
+      ]
+    },
+    "ToolInstallParams": {
+      "type": "object",
+      "properties": {
+        "retry": {
+          "type": "boolean",
+          "default": false
+        },
+        "toolId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "toolId"
+      ]
+    },
+    "ToolPhase": {
+      "type": "string",
+      "enum": [
+        "not_installed",
+        "installing",
+        "verifying",
+        "ready",
+        "failed"
+      ]
+    },
+    "ToolStatus": {
+      "type": "object",
+      "properties": {
+        "architecture": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "binary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "id": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "phase": {
+          "$ref": "#/$defs/ToolPhase"
+        },
+        "progress": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id",
+        "phase"
+      ]
+    },
+    "ToolsStatus": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolStatus"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "tools"
+      ]
+    },
+    "Traffic": {
+      "type": "object",
+      "properties": {
+        "down": {
+          "$ref": "#/$defs/ReportField_int64"
+        },
+        "downTotal": {
+          "$ref": "#/$defs/ReportField_int64"
+        },
+        "up": {
+          "$ref": "#/$defs/ReportField_int64"
+        },
+        "upTotal": {
+          "$ref": "#/$defs/ReportField_int64"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "TrashEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "isDirectory": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "trashedAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "id",
+        "path",
+        "trashedAt",
+        "isDirectory"
+      ]
+    },
+    "Tun": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "$ref": "#/$defs/ReportField_string"
+        },
+        "routed": {
+          "$ref": "#/$defs/ReportField_boolean"
+        },
+        "up": {
+          "$ref": "#/$defs/ReportField_boolean"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "UploadBeginParams": {
+      "type": "object",
+      "properties": {
+        "size": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "directory": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "directory",
+            "name"
+          ]
+        }
+      ],
+      "required": [
+        "size"
+      ],
+      "unevaluatedProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "UploadChunkParams": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "uploadId",
+        "offset",
+        "data"
+      ]
+    },
+    "UploadIdParams": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "uploadId"
+      ]
+    },
+    "UploadOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "done"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "failed"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "message"
+          ]
+        }
+      ]
+    },
+    "UploadProgress": {
+      "type": "object",
+      "properties": {
+        "nextOffset": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "nextOffset"
+      ]
+    },
+    "UploadStarted": {
+      "type": "object",
+      "properties": {
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId"
+      ]
+    },
+    "UsageStats": {
+      "type": "object",
+      "properties": {
+        "frecency": {
+          "type": "number",
+          "format": "double"
+        },
+        "frecencyAt": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "uses": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "uses",
+        "frecency",
+        "frecencyAt"
+      ]
+    },
+    "Verification": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "packages": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "profile": {
+          "type": "string"
+        },
+        "python": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "profile",
+        "python",
+        "node",
+        "packages"
+      ]
+    },
+    "Version": {
+      "type": "string",
+      "enum": [
+        "2.0"
+      ]
+    },
+    "WaitStatus": {
+      "type": "object",
+      "properties": {
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "running": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "running"
+      ]
+    },
+    "WatchParams": {
+      "type": "object",
+      "properties": {
+        "afterRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 30000,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "afterRevision"
+      ]
+    },
+    "Workbench": {
+      "type": "object",
+      "properties": {
+        "chat": {
+          "$ref": "#/$defs/ChatArrangement",
+          "default": {
+            "focus": "aux",
+            "promotedFrom": null,
+            "rail": {
+              "collapsed": false,
+              "size": 264.0
+            },
+            "side": {
+              "collapsed": false,
+              "size": 400.0
+            },
+            "sideStack": "s0",
+            "tree": {
+              "collapsed": false,
+              "size": 200.0
+            }
+          }
+        },
+        "editor": {
+          "$ref": "#/$defs/Node",
+          "default": {
+            "stack": "s0"
+          }
+        },
+        "explorer": {
+          "$ref": "#/$defs/ExplorerView",
+          "default": {
+            "expanded": [],
+            "selected": null,
+            "showHidden": false
+          }
+        },
+        "files": {
+          "$ref": "#/$defs/FilesArrangement",
+          "default": {
+            "aux": {
+              "collapsed": false,
+              "size": 360.0
+            },
+            "bottom": {
+              "collapsed": true,
+              "size": 0.35
+            },
+            "explorer": {
+              "collapsed": false,
+              "size": 264.0
+            },
+            "focus": "s0",
+            "maximized": null
+          }
+        },
+        "lastEditorStack": {
+          "type": "string",
+          "default": "s0"
+        },
+        "mru": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "nextSeq": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 1,
+          "minimum": 0
+        },
+        "panels": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Panel"
+          }
+        },
+        "paradigm": {
+          "type": "string",
+          "default": "files"
+        },
+        "solo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoloArrangement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stacks": {
+          "type": "array",
+          "default": [
+            {
+              "active": null,
+              "id": "s0",
+              "panels": []
+            },
+            {
+              "active": null,
+              "id": "bottom",
+              "panels": []
+            },
+            {
+              "active": null,
+              "id": "aux",
+              "panels": []
+            }
+          ],
+          "items": {
+            "$ref": "#/$defs/Stack"
+          }
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "WrittenResult": {
+      "type": "object",
+      "properties": {
+        "written": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "written"
+      ]
+    },
+    "boolean": {
+      "type": "boolean"
+    },
+    "double": {
+      "type": "number",
+      "format": "double"
+    },
+    "string": {
+      "type": "string"
+    },
+    "uint64": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    }
+  }
+}

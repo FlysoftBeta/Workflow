@@ -1,0 +1,260 @@
+[
+  {
+    "name": "hello-request",
+    "message": {
+      "id": "client-1",
+      "jsonrpc": "2.0",
+      "method": "hello",
+      "params": {
+        "clientId": "fixture",
+        "protocol": "workflow.workspace/1"
+      }
+    }
+  },
+  {
+    "name": "hello-response",
+    "message": {
+      "id": "client-1",
+      "jsonrpc": "2.0",
+      "result": {
+        "capabilities": {
+          "chat": true,
+          "documents": true,
+          "environment": true,
+          "files": true,
+          "maxBlobChunkBytes": 65536,
+          "maxFrameBytes": 33554432,
+          "processes": true,
+          "pty": true,
+          "services": true,
+          "workspace": true
+        },
+        "engineVersion": "1.0.0",
+        "protocol": "workflow.workspace/1",
+        "workspaceRoot": "/workspace"
+      }
+    }
+  },
+  {
+    "name": "unknown-method-error",
+    "message": {
+      "error": {
+        "code": -32601,
+        "data": {
+          "kind": "unknown_method"
+        },
+        "message": "Method not found"
+      },
+      "id": "missing",
+      "jsonrpc": "2.0"
+    }
+  },
+  {
+    "name": "null-id-response",
+    "message": {
+      "id": null,
+      "jsonrpc": "2.0",
+      "result": {
+        "revision": 7
+      }
+    }
+  },
+  {
+    "name": "precise-id-response",
+    "message": {
+      "id": 123456789012345678901234567890,
+      "jsonrpc": "2.0",
+      "result": {
+        "revision": 8
+      }
+    }
+  },
+  {
+    "name": "workspace-watch",
+    "message": {
+      "id": "watch-1",
+      "jsonrpc": "2.0",
+      "method": "workspace.watch",
+      "params": {
+        "afterRevision": 4,
+        "timeoutMs": 30000
+      }
+    }
+  },
+  {
+    "name": "notification",
+    "message": {
+      "jsonrpc": "2.0",
+      "method": "future.notification",
+      "params": {}
+    }
+  },
+  {
+    "name": "empty-workspace",
+    "message": {
+      "id": "snapshot",
+      "jsonrpc": "2.0",
+      "result": {
+        "revision": 0,
+        "state": {
+          "activeSessionId": null,
+          "composers": {},
+          "config": {
+            "agent": {
+              "backend": "codex",
+              "backends": {}
+            },
+            "appearance": {
+              "density": "compact",
+              "fontScale": 1.0,
+              "monoFontSize": 13.0,
+              "theme": "system"
+            },
+            "launcher": [
+              "workbench",
+              "proxy",
+              "settings"
+            ],
+            "overlay": {
+              "enabled": false,
+              "extraApps": []
+            },
+            "terminal": {
+              "extraKeysPinned": false
+            },
+            "version": 2
+          },
+          "configProblem": null,
+          "disk": {},
+          "drafts": {},
+          "failure": null,
+          "notices": [],
+          "pinned": [],
+          "sessions": [],
+          "status": "ready",
+          "writeError": null
+        }
+      }
+    }
+  },
+  {
+    "name": "create-session",
+    "message": {
+      "id": "create",
+      "jsonrpc": "2.0",
+      "method": "workspace.command",
+      "params": {
+        "args": {
+          "name": "Example"
+        },
+        "name": "createSession"
+      }
+    }
+  },
+  {
+    "name": "session-created",
+    "message": {
+      "id": "create",
+      "jsonrpc": "2.0",
+      "result": {
+        "revision": 1,
+        "state": {
+          "activeSessionId": null,
+          "composers": {},
+          "config": {
+            "agent": {
+              "backend": "codex",
+              "backends": {}
+            },
+            "appearance": {
+              "density": "compact",
+              "fontScale": 1.0,
+              "monoFontSize": 13.0,
+              "theme": "system"
+            },
+            "launcher": [
+              "workbench",
+              "proxy",
+              "settings"
+            ],
+            "overlay": {
+              "enabled": false,
+              "extraApps": []
+            },
+            "terminal": {
+              "extraKeysPinned": false
+            },
+            "version": 2
+          },
+          "configProblem": null,
+          "disk": {},
+          "drafts": {},
+          "failure": null,
+          "notices": [],
+          "pinned": [],
+          "sessions": [],
+          "status": "ready",
+          "writeError": null
+        },
+        "value": "session-fixture"
+      }
+    }
+  },
+  {
+    "name": "file-chunk",
+    "message": {
+      "id": "read",
+      "jsonrpc": "2.0",
+      "result": {
+        "data": "AP8D",
+        "eof": true,
+        "nextOffset": 3,
+        "size": 3
+      }
+    }
+  },
+  {
+    "name": "network-report",
+    "message": {
+      "id": "network",
+      "jsonrpc": "2.0",
+      "method": "services.report",
+      "params": {
+        "serviceId": "network",
+        "state": {
+          "connected": true,
+          "dnsServers": [
+            "127.0.0.1"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "terminal-output",
+    "message": {
+      "id": "terminal",
+      "jsonrpc": "2.0",
+      "result": {
+        "data": "aGVsbG8NCg==",
+        "eof": false,
+        "nextOffset": 7,
+        "reset": false,
+        "startOffset": 0,
+        "terminal": {
+          "columns": 80,
+          "customTitle": null,
+          "cwd": "/workspace",
+          "error": null,
+          "exitCode": null,
+          "generation": 1,
+          "id": "terminal-fixture",
+          "ordinal": 1,
+          "rows": 24,
+          "status": "running",
+          "title": null
+        }
+      }
+    }
+  }
+]

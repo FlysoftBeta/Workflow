@@ -1,33 +1,21 @@
 # Rust Workspace Engine
 
-The Engine is the sole owner of workspace sessions, layouts, files, drafts, configuration,
-environment generations and managed processes. Android connects through the exact
-`workflow.workspace/1` JSONL protocol. [`protocol/contract.json`](protocol/contract.json) inventories
-that contract; the [protocol guide](../docs/implementation/protocol.md) describes its semantics.
+The Engine owns sessions, layouts, files, drafts, configuration, environments and managed processes. Android connects through `workflow.workspace/1`. The [generated contract](protocol/contract.json), schema and golden fixtures are exported from Rust types; the [protocol guide](../docs/implementation/protocol.md) describes their semantics.
 
-[`server/`](server/README.md) builds `workflow-engine`, packaged as `libworkflow-engine.so`, and
-dispatches workspace RPC. [`runtime/`](runtime/README.md) builds the container compatibility
-runtime `workflow-runtime`, packaged as `libworkflow-runtime.so`. [`loader/`](loader/README.md)
-contains the freestanding Rust ELF loader, packaged as `libworkflow-loader.so`. Those filenames
-allow Android to extract executable programs into `nativeLibraryDir`; they are not JNI libraries.
+The Cargo workspace contains these packages:
 
-`Cargo.toml` includes server and runtime. The loader is built separately with `rustc` because it has
-no standard library or dynamic interpreter. Top-level `build-android.sh` stages all three
-executables; `runtime/build-host.sh` stages the host runtime and loader, while Cargo builds the
-host Server. Build products go into ignored `target/` and `artifacts/` directories.
-The maintained Rust runtime is platform-specialized; the frozen C implementation in
-`docs/archive/native-engine/` is historical reference and is never a production build input.
+| Package | Path | Ownership |
+| --- | --- | --- |
+| `workflow-environment` | [environment](environment/README.md) | Typed `.workspace/` store, image/tool provisioning, lifecycle and runtime process API |
+| `workflow-runtime` | [environment/runtime](environment/runtime/README.md) | Concrete ptrace isolation executable |
+| `workflow-loader` | [environment/loader](environment/loader/README.md) | Freestanding guest ELF loader |
+| `workflow-workspace` | [workspace](workspace/README.md) | Sessions, panels and layout |
+| `workflow-filework` | [filework](filework/README.md) | Files, versions, drafts, diff, imports and archive policy |
+| `workflow-terminal` | [terminal](terminal/README.md) | Terminal identity/lifecycle over runtime PTYs |
+| `workflow-server` | [server](server/README.md) | Protocol, transport and domain composition |
 
-Run workspace unit tests from the repository root:
+The Server binary remains `workflow-engine`. Android packages the executables as `libworkflow-engine.so`, `libworkflow-runtime.so` and `libworkflow-loader.so`; these are executable programs, not JNI libraries. `build-android.sh` builds the complete distribution. The loader's specialized build retains its freestanding static-PIE flags; its Cargo target is feature-gated to avoid linking it with the ordinary host test harness.
 
-```sh
-flock artifacts/.gradle.lock cargo test --manifest-path engine/Cargo.toml -j 2
-```
+The unchanged Kotlin service under `chat/` is the round-1 exception to the Rust-only target. Server supervises it through the Environment runtime until the round-2 Chat port passes adapter/reducer/service parity and guest-device acceptance. No host execution fallback is added. The runtime's three platform trees remain separate; the archived C implementation never becomes a production input.
 
-All heavy Cargo and Gradle builds share `artifacts/.gradle.lock`, with Cargo jobs limited to two.
-The top-level and runtime build scripts acquire it; callers already holding it set
-`WORKFLOW_BUILD_LOCK_HELD=1`. The loader's low-level build script assumes its caller holds the lock.
-See the [architecture](../docs/implementation/architecture.md),
-[workspace ownership](../docs/implementation/workspace-engine.md) and
-[testing guide](../docs/development/testing.md). Runtime probes and workload oracles live under
-`runtime/tests/`; host unit tests alone do not establish Android acceptance.
+Run `tools/workflow check rust-server --task engine-reorg-r1` for all domain tests, Server protocol tests and generated-contract drift. Run `runtime-host`, `native`, `image`, `infrastructure`, `documentation` and `android-apk` as described in the [testing guide](../docs/development/testing.md). Heavy commands share the primary build lease and use at most two Cargo jobs. Build products remain in ignored `target/` and `artifacts/` directories. Compilation and host checks do not establish Android device acceptance.

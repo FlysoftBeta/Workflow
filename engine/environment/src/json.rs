@@ -17,6 +17,26 @@ impl schemars::JsonSchema for OpaqueJson {
         true.into()
     }
 }
+impl OpaqueJson {
+    /// Deep merge extension members without exposing their representation to owners.
+    pub fn merge(&mut self, from: Self) {
+        fn values(to: &mut V, from: V) {
+            match (to, from) {
+                (V::Object(a), V::Object(b)) => {
+                    for (k, v) in b {
+                        if let Some(old) = a.get_mut(&k) {
+                            values(old, v)
+                        } else {
+                            a.insert(k, v);
+                        }
+                    }
+                }
+                (a, b) => *a = b,
+            }
+        }
+        values(&mut self.0, from.0);
+    }
+}
 impl Default for OpaqueJson {
     fn default() -> Self {
         Self(V::Null)

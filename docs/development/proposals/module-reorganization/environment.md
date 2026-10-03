@@ -410,7 +410,7 @@ The coordinator should freeze `engine/server/src/{environment,process,tools,home
 
 **ENV-2.**
 - Owns `engine/environment/src/runtime/**`.
-- Checks: `rust-environment`. Also run an `#[ignore]` host test against a real runtime built by `engine/runtime/build-host.sh` under the lock, using `WORKFLOW_RUNTIME` and the pristine `artifacts/engine/rootfs-amd64`.
+- Checks: `rust-environment`. Also run an `#[ignore]` host test against a real runtime built by `engine/environment/runtime/build-host.sh` under the lock, using `WORKFLOW_RUNTIME` and the pristine `artifacts/engine/rootfs-amd64`.
 - Acceptance:
   - The generated argv equals today's `guest_command` output, byte for byte, for interactive and build modes, including the seven hides and the environment ordering.
   - Ring offset, eof and exit semantics match `process.rs`. A PTY child gets a controlling terminal and `TIOCSWINSZ` takes effect.
@@ -450,7 +450,7 @@ The coordinator should freeze `engine/server/src/{environment,process,tools,home
 - Acceptance:
   - `git diff -M --stat` shows renames plus path edits only, and runtime-host passes 68/68.
   - Each ABI produces three libraries.
-  - No `engine/runtime` or `engine/loader` reference remains outside `docs/archive`.
+  - No active code/build link uses the old runtime or loader path. Baseline inventory and relocation prose may retain the old names explicitly.
 
 **ENV-6.**
 - Owns `engine/environment/runtime/src/**`, `engine/environment/runtime/tools/check-platform-merge.py`, the runtime README and `docs/implementation/container-runtime.md`.

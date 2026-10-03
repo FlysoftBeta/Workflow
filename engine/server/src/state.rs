@@ -221,26 +221,10 @@ fn app_ref(id: &str) -> bool {
 fn merge_extra(to: &mut OpaqueObject, from: OpaqueObject) {
     for (k, v) in from {
         if let Some(old) = to.get_mut(&k) {
-            merge_opaque(old, v)
+            old.merge(v)
         } else {
             to.insert(k, v);
         }
-    }
-}
-fn merge_opaque(to: &mut OpaqueJson, from: OpaqueJson) {
-    match (&mut to.0, from.0) {
-        (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
-            for (k, v) in b {
-                if let Some(old) = a.get_mut(&k) {
-                    let mut wrapped = OpaqueJson(std::mem::take(old));
-                    merge_opaque(&mut wrapped, OpaqueJson(v));
-                    *old = wrapped.0
-                } else {
-                    a.insert(k, v);
-                }
-            }
-        }
-        (a, b) => *a = b,
     }
 }
 #[derive(Clone, Debug, PartialEq)]
@@ -584,6 +568,7 @@ impl<'de> Deserialize<'de> for Command {
         #[derive(Deserialize)]
         struct Header {
             name: String,
+            #[serde(default)]
             args: OpaqueObject,
         }
         let header = Header::deserialize(d)?;
@@ -669,6 +654,7 @@ impl<'de> Deserialize<'de> for Command {
     }
 }
 impl Command {
+    #[cfg(test)]
     pub fn decode<A: Serialize>(name: &str, args: &A) -> Result<Self> {
         #[derive(Serialize)]
         struct Input<'a, A> {
@@ -867,6 +853,7 @@ impl Workspace {
         *self = candidate;
         Ok(())
     }
+    #[cfg(test)]
     pub fn command<A: Serialize>(&mut self, name: &str, args: &A) -> Result<CommandReply> {
         self.command_typed(Command::decode(name, args)?)
     }

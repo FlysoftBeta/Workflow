@@ -85,3 +85,7 @@ On x86_64 hosts, `image/with-cross.sh arm64 COMMAND…` uses the digest-pinned s
 Format tests run with `PYTHONPATH=image python3 -m unittest discover -s image/tests -v`. `image/tests/podman-roundtrip.sh` exercises the actual user, sudo, shell, interpreters, compiler, and repacking. `image/tests/toolchain-profiles.sh CONTAINER` covers multi-version and empty selections on a disposable instance. `python3 image/tests/inspect-artifacts.py IMAGE` checks ELF architecture, envctl source identity, the Codex symlink, and absence of build-time QEMU.
 
 APK packaging checks the workspace profile, architecture, archive size, and SHA256 for its ABI. It does not accept vanilla Debian as a fallback. The [custom-image report](../archive/implementation-1.0.0/reports/rewrite/custom-images.md) and [status](../status.md) distinguish successful image construction from actual Android acceptance.
+
+## Rust module ownership
+
+`engine/environment` owns this lifecycle, provisioning, tools and the typed atomic `.workspace/` store. Its `runtime` API owns guest commands, pipes, PTYs, process groups and stop/wait; the isolation executable is built from `engine/environment/runtime` and the guest loader from `engine/environment/loader`. Workspace, FileWork and Terminal consume typed APIs and do not invoke the concrete guest directly. Public configuration remains `.workspace/env.json`; the similarly named `.workspace/environment/environment.json` is the private lifecycle record. Their paths and existing fingerprints remain unchanged during reorganization.

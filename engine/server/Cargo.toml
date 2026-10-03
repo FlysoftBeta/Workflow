@@ -1,17 +1,24 @@
 [package]
-name = "workflow-engine"
+name = "workflow-server"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "workflow-engine"
+path = "src/main.rs"
+
 [dependencies]
+workflow-environment = { path = "../environment" }
+workflow-workspace = { path = "../workspace" }
+workflow-filework = { path = "../filework" }
+workflow-terminal = { path = "../terminal" }
+schemars.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["raw_value", "arbitrary_precision"] }
-libc.workspace = true
-sha2.workspace = true
 base64.workspace = true
 uuid.workspace = true
-zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
+workflow-environment = { path = "../environment", features = ["test-support"] }
 tempfile.workspace = true

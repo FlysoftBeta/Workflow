@@ -1,23 +1,15 @@
-//! JSON-RPC framing, strict JSON decoding, binary chunks and error envelopes.
-//! No workspace state or filesystem policy belongs in this module.
+//! JSON-RPC envelopes and transport framing. Domain types never depend on this module.
 use base64::Engine;
-use serde::{
-    Deserialize,
-    de::{self, MapAccess, Visitor},
-};
-use serde_json::{Value as V, json};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::{
-    fmt,
+    collections::BTreeMap,
     io::{self, BufRead, Write},
     sync::{Arc, Mutex},
 };
-
-pub(crate) const PROTOCOL: &str = "workflow.workspace/1";
-pub(crate) const MAX_FRAME: usize = 32 * 1024 * 1024;
-pub(crate) const MAX_BLOB: usize = 65536;
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Error {
-    pub(crate) code: i32,
+    pub code: i32,
     pub kind: String,
     pub message: String,
 }
@@ -37,83 +29,172 @@ impl Error {
             message: message.into(),
         }
     }
-    pub(crate) fn method() -> Self {
+}
+impl From<workflow_environment::Error> for Error {
+    fn from(error: workflow_environment::Error) -> Self {
         Self {
-            code: -32601,
-            kind: "unknown_method".into(),
-            message: "Method not found".into(),
+            code: if error.kind == "invalid_params" {
+                -32602
+            } else {
+                -32000
+            },
+            kind: error.kind,
+            message: error.message,
         }
     }
 }
 impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self {
-        Self::business("io", &e.to_string())
+    fn from(error: io::Error) -> Self {
+        Self::business("io", &error.to_string())
     }
 }
-/// Reject duplicate keys; serde_json's default Value visitor silently accepts them.
-pub fn strict_json(bytes: &[u8]) -> std::result::Result<V, serde_json::Error> {
-    use serde_json::value::RawValue;
-    // Borrow child slices: validation never rounds numbers or interprets a user's object
-    // as serde_json's private arbitrary-precision-number representation.
-    struct Object<'a>(Vec<(String, &'a RawValue)>);
-    impl<'de> Deserialize<'de> for Object<'de> {
-        fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
-            struct ObjectVisitor;
-            impl<'de> Visitor<'de> for ObjectVisitor {
-                type Value = Object<'de>;
-                fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    f.write_str("an object")
-                }
-                fn visit_map<A: MapAccess<'de>>(
-                    self,
-                    mut a: A,
-                ) -> std::result::Result<Self::Value, A::Error> {
-                    let mut fields = Vec::new();
-                    let mut keys = std::collections::HashSet::new();
-                    while let Some((key, value)) = a.next_entry::<String, &'de RawValue>()? {
-                        if !keys.insert(key.clone()) {
-                            return Err(de::Error::custom("duplicate object key"));
-                        }
-                        fields.push((key, value));
-                    }
-                    Ok(Object(fields))
-                }
-            }
-            d.deserialize_map(ObjectVisitor)
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.kind, self.message)
+    }
+}
+impl std::error::Error for Error {}
+pub use workflow_environment::json::{OpaqueJson, OpaqueObject, strict_json};
+pub const PROTOCOL: &str = "workflow.workspace/1";
+pub const MAX_FRAME: usize = 32 * 1024 * 1024;
+pub const MAX_BLOB: usize = 65_536;
+
+/// Retains the numeric token itself, including arbitrary precision and exponent spelling.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
+pub struct RpcId(#[schemars(with = "IdSchema")] pub Box<serde_json::value::RawValue>);
+#[derive(JsonSchema)]
+#[serde(untagged)]
+#[allow(dead_code)]
+enum IdSchema {
+    String(String),
+    Number(serde_json::Number),
+    Null(()),
+}
+impl RpcId {
+    pub fn null() -> Self {
+        Self(serde_json::value::RawValue::from_string("null".into()).unwrap())
+    }
+    pub fn string(id: &str) -> Self {
+        Self(serde_json::value::to_raw_value(id).unwrap())
+    }
+    pub fn valid(&self) -> bool {
+        matches!(
+            self.0.get().as_bytes().first(),
+            Some(b'"' | b'n' | b'-' | b'0'..=b'9')
+        )
+    }
+}
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema)]
+pub enum Version {
+    #[serde(rename = "2.0")]
+    V2,
+}
+impl Default for Version {
+    fn default() -> Self {
+        Self::V2
+    }
+}
+fn present_id<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<RpcId>, D::Error> {
+    RpcId::deserialize(d).map(Some)
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Request {
+    pub jsonrpc: Version,
+    #[serde(
+        default,
+        deserialize_with = "present_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub id: Option<RpcId>,
+    pub method: String,
+    #[serde(default)]
+    pub params: OpaqueObject,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ErrorData {
+    pub kind: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct RpcError {
+    pub code: i32,
+    pub message: String,
+    pub data: ErrorData,
+}
+impl From<Error> for RpcError {
+    fn from(error: Error) -> Self {
+        Self {
+            code: error.code,
+            message: error.message,
+            data: ErrorData { kind: error.kind },
         }
     }
-    fn value(raw: &RawValue, depth: usize) -> std::result::Result<V, serde_json::Error> {
-        if depth > 128 {
-            return Err(de::Error::custom("JSON nesting exceeds limit"));
+}
+impl From<RpcError> for Error {
+    fn from(error: RpcError) -> Self {
+        Self {
+            code: error.code,
+            kind: error.data.kind,
+            message: error.message,
         }
-        let text = raw.get();
-        Ok(match text.as_bytes().first() {
-            Some(b'{') => {
-                let object: Object<'_> = serde_json::from_str(text)?;
-                let mut fields = serde_json::Map::new();
-                for (key, raw) in object.0 {
-                    fields.insert(key, value(raw, depth + 1)?);
-                }
-                V::Object(fields)
-            }
-            Some(b'[') => {
-                let items: Vec<&RawValue> = serde_json::from_str(text)?;
-                V::Array(
-                    items
-                        .into_iter()
-                        .map(|v| value(v, depth + 1))
-                        .collect::<std::result::Result<_, _>>()?,
-                )
-            }
-            Some(b'"') => V::String(serde_json::from_str(text)?),
-            Some(b't') => V::Bool(true),
-            Some(b'f') => V::Bool(false),
-            Some(b'n') => V::Null,
-            _ => V::Number(text.parse()?),
-        })
     }
-    let raw: &RawValue = serde_json::from_slice(bytes)?;
-    value(raw, 0)
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum Response<T> {
+    Success {
+        jsonrpc: Version,
+        id: RpcId,
+        result: T,
+    },
+    Failure {
+        jsonrpc: Version,
+        id: RpcId,
+        error: RpcError,
+    },
+}
+impl<T> Response<T> {
+    pub fn new(id: RpcId, result: Result<T>) -> Self {
+        match result {
+            Ok(result) => Self::Success {
+                jsonrpc: Version::V2,
+                id,
+                result,
+            },
+            Err(error) => Self::Failure {
+                jsonrpc: Version::V2,
+                id,
+                error: error.into(),
+            },
+        }
+    }
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Notification<T> {
+    pub jsonrpc: Version,
+    pub method: String,
+    pub params: T,
+}
+
+pub fn parse<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T> {
+    strict_json(bytes).map_err(|e| Error::invalid(&e.to_string()))
+}
+pub fn params<T: serde::de::DeserializeOwned>(value: &OpaqueObject) -> Result<T> {
+    strict_json(&serde_json::to_vec(value).map_err(|e| Error::invalid(&e.to_string()))?)
+        .map_err(|e| Error::invalid(&e.to_string()))
+}
+#[cfg(test)]
+pub fn object<T: Serialize>(value: &T) -> Result<OpaqueObject> {
+    strict_json(&serde_json::to_vec(value).map_err(|e| Error::invalid(&e.to_string()))?)
+        .map_err(|e| Error::invalid(&e.to_string()))
+}
+pub fn opaque<T: Serialize>(value: &T) -> Result<OpaqueJson> {
+    strict_json(&serde_json::to_vec(value).map_err(|e| Error::invalid(&e.to_string()))?)
+        .map_err(|e| Error::invalid(&e.to_string()))
 }
 pub fn decode_blob(s: &str, max: usize) -> Result<Vec<u8>> {
     if s.len() > max.div_ceil(3) * 4 {
@@ -130,38 +211,21 @@ pub fn decode_blob(s: &str, max: usize) -> Result<Vec<u8>> {
 pub fn encode_blob(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
-pub(crate) struct RpcId(pub(crate) String);
-impl RpcId {
-    pub(crate) fn null() -> Self {
-        Self("null".into())
-    }
-}
-impl From<V> for RpcId {
-    fn from(value: V) -> Self {
-        Self(value.to_string())
-    }
-}
-pub(crate) fn response(writer: &Arc<Mutex<io::Stdout>>, id: impl Into<RpcId>, result: Result<V>) {
-    let id = id.into();
-    let (field, value) = match result {
-        Ok(value) => ("result", value),
-        Err(error) => (
-            "error",
-            json!({"code":error.code,"message":error.message,"data":{"kind":error.kind}}),
-        ),
-    };
-    let mut bytes = format!("{{\"jsonrpc\":\"2.0\",\"id\":{},\"{field}\":", id.0).into_bytes();
-    serde_json::to_writer(&mut bytes, &value).unwrap();
-    bytes.push(b'}');
+pub fn response<T: Serialize>(writer: &Arc<Mutex<io::Stdout>>, id: RpcId, result: Result<T>) {
+    let mut bytes = serde_json::to_vec(&Response::new(id.clone(), result)).unwrap();
     if bytes.len() > MAX_FRAME {
-        bytes=format!("{{\"jsonrpc\":\"2.0\",\"id\":{},\"error\":{{\"code\":-32000,\"message\":\"response exceeds frame limit\",\"data\":{{\"kind\":\"too_large\"}}}}}}",id.0).into_bytes();
+        bytes = serde_json::to_vec(&Response::<()>::new(
+            id,
+            Err(Error::business("too_large", "response exceeds frame limit")),
+        ))
+        .unwrap();
     }
     let mut stdout = writer.lock().unwrap();
     let _ = stdout.write_all(&bytes);
     let _ = stdout.write_all(b"\n");
     let _ = stdout.flush();
 }
-pub(crate) fn line(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
+pub fn line(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
     let mut out = Vec::new();
     let mut oversized = false;
     loop {
@@ -207,40 +271,569 @@ pub(crate) fn line(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
     }
 }
 
+#[derive(Default, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Empty {
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HelloParams {
+    pub protocol: String,
+    pub client_id: String,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Capabilities {
+    pub workspace: bool,
+    pub files: bool,
+    pub documents: bool,
+    pub environment: bool,
+    pub processes: bool,
+    pub pty: bool,
+    pub services: bool,
+    pub chat: bool,
+    pub max_frame_bytes: usize,
+    pub max_blob_chunk_bytes: usize,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct HelloResult {
+    pub protocol: String,
+    pub engine_version: String,
+    pub workspace_root: String,
+    pub capabilities: Capabilities,
+}
+impl HelloResult {
+    pub fn new(root: &std::path::Path) -> Self {
+        Self {
+            protocol: PROTOCOL.into(),
+            engine_version: "1.0.0".into(),
+            workspace_root: root.to_string_lossy().into_owned(),
+            capabilities: Capabilities {
+                workspace: true,
+                files: true,
+                documents: true,
+                environment: true,
+                processes: true,
+                pty: true,
+                services: true,
+                chat: true,
+                max_frame_bytes: MAX_FRAME,
+                max_blob_chunk_bytes: MAX_BLOB,
+            },
+        }
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WatchParams {
+    pub after_revision: u64,
+    #[serde(default = "watch_timeout")]
+    pub timeout_ms: u64,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+fn watch_timeout() -> u64 {
+    30_000
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentParams {
+    pub namespace: String,
+    pub key: String,
+    #[serde(default)]
+    pub document: Option<String>,
+    #[serde(default)]
+    pub expected_revision: Option<u64>,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DocumentResult {
+    pub document: Option<String>,
+    pub revision: u64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Revision {
+    pub revision: u64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientConfigParams {
+    pub client_id: String,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+pub struct RetryParams {
+    #[serde(default)]
+    pub retry: bool,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolInstallParams {
+    pub tool_id: String,
+    #[serde(default)]
+    pub retry: bool,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadFileParams {
+    pub path: String,
+    #[serde(default)]
+    pub offset: u64,
+    #[serde(default = "blob_limit")]
+    pub length: usize,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+fn blob_limit() -> usize {
+    MAX_BLOB
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BlobResult {
+    pub data: String,
+    pub next_offset: u64,
+    pub eof: bool,
+    pub size: u64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadChunkParams {
+    pub upload_id: String,
+    pub offset: u64,
+    pub data: String,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadIdParams {
+    pub upload_id: String,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct CancelResult {
+    pub cancelled: bool,
+}
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatSnapshotParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transfer_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset: Option<u64>,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatWatchParams {
+    pub epoch: String,
+    pub after_revision: u64,
+    #[serde(default = "watch_timeout")]
+    pub timeout_ms: u64,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+/// The guest Kotlin service owns its command/body schema until the round-2 Rust port.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ChatCommandParams {
+    pub name: String,
+    #[serde(default)]
+    pub args: OpaqueObject,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalIdParams {
+    pub terminal_id: String,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalReadParams {
+    pub terminal_id: String,
+    #[serde(default)]
+    pub generation: Option<u64>,
+    #[serde(default)]
+    pub offset: u64,
+    #[serde(default = "blob_limit")]
+    pub max_bytes: usize,
+    #[serde(default = "read_wait")]
+    pub wait_ms: u64,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalWriteParams {
+    pub terminal_id: String,
+    pub data: String,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalResizeParams {
+    pub terminal_id: String,
+    pub rows: u16,
+    pub columns: u16,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalStopParams {
+    pub terminal_id: String,
+    #[serde(default)]
+    pub force: bool,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalWaitParams {
+    pub terminal_id: String,
+    #[serde(default = "read_wait")]
+    pub timeout_ms: u64,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalRenameParams {
+    pub terminal_id: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct WrittenResult {
+    pub written: usize,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct StoppingResult {
+    pub stopping: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
-    fn opaque_numbers_and_reserved_looking_fields_are_lossless() {
-        let raw=br#"{"id":123456789012345678901234567890,"precise":0.12345678901234567890123456789,"$serde_json::private::Number":"not-a-number"}"#;
-        let value = strict_json(raw).unwrap();
-        assert_eq!(value["id"].to_string(), "123456789012345678901234567890");
-        assert_eq!(
-            value["precise"].to_string(),
-            "0.12345678901234567890123456789"
+    fn raw_id_and_notification_distinction() {
+        for id in [
+            "null",
+            "\"client\"",
+            "123456789012345678901234567890",
+            "1.2300e+20",
+        ] {
+            let source = format!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"hello\"}}");
+            let r: Request = serde_json::from_str(&source).unwrap();
+            let response =
+                serde_json::to_string(&Response::new(r.id.unwrap(), Ok(Empty::default()))).unwrap();
+            assert!(response.contains(&format!("\"id\":{id},")), "{response}");
+        }
+        let r: Request = serde_json::from_str(r#"{"jsonrpc":"2.0","method":"x"}"#).unwrap();
+        assert!(r.id.is_none());
+        assert!(
+            serde_json::from_str::<Request>(r#"{"jsonrpc":"2.0","method":"x","params":[]}"#)
+                .is_err()
         );
-        assert_eq!(value["$serde_json::private::Number"], "not-a-number");
-        assert!(strict_json(br#"{"outer":{"same":1,"same":2}}"#).is_err());
     }
     #[test]
-    fn strict_json_rejects_duplicate_keys_and_trailing_documents() {
-        assert!(strict_json(br#"{"a":1,"a":2}"#).is_err());
-        assert!(strict_json(b"{} {}").is_err());
-        assert!(strict_json(br#"{"id":{"unknown":[1,true,null]}}"#).is_ok());
+    fn unknown_fields_roundtrip_and_duplicate_rejection() {
+        let bytes=br#"{"jsonrpc":"2.0","method":"extension","vendor":{"precise":123456789012345678901234567890},"params":{"future":{"x":true}}}"#;
+        let req: Request = parse(bytes).unwrap();
+        let again: Request = parse(&serde_json::to_vec(&req).unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_string(&req.extra).unwrap(),
+            serde_json::to_string(&again.extra).unwrap()
+        );
+        assert!(parse::<Request>(br#"{"jsonrpc":"2.0","method":"a","method":"b"}"#).is_err());
     }
     #[test]
     fn bounded_frames_and_blobs() {
-        let mut reader = io::Cursor::new(b"{\"x\":1}\r\n{}\n".to_vec());
-        assert_eq!(line(&mut reader).unwrap().unwrap(), b"{\"x\":1}");
-        assert_eq!(line(&mut reader).unwrap().unwrap(), b"{}");
-        assert!(line(&mut reader).unwrap().is_none());
+        let mut r = io::Cursor::new(b"{}\r\n{}\n".to_vec());
+        assert_eq!(line(&mut r).unwrap().unwrap(), b"{}");
+        assert_eq!(line(&mut r).unwrap().unwrap(), b"{}");
+        assert!(line(&mut r).unwrap().is_none());
         assert!(decode_blob(&encode_blob(&vec![0; 65537]), 65536).is_err());
         assert_eq!(
             decode_blob(&encode_blob(&[0, 255, 3]), 65536).unwrap(),
             vec![0, 255, 3]
         );
-        let mut over = io::Cursor::new(vec![b'a'; MAX_FRAME + 2]);
-        assert!(line(&mut over).is_err());
+        assert!(line(&mut io::Cursor::new(vec![b'a'; MAX_FRAME + 2])).is_err());
+    }
+}
+
+pub fn unknown_method() -> Error {
+    Error {
+        code: -32601,
+        kind: "unknown_method".into(),
+        message: "Method not found".into(),
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessReadParams {
+    pub process_id: String,
+    #[serde(default)]
+    pub stream: workflow_environment::runtime::OutputStream,
+    #[serde(default)]
+    pub offset: u64,
+    #[serde(default = "blob_limit")]
+    pub max_bytes: usize,
+    #[serde(default)]
+    pub wait_ms: u64,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+fn read_wait() -> u64 {
+    1000
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessWriteParams {
+    pub process_id: String,
+    pub data: String,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessResizeParams {
+    pub process_id: String,
+    pub rows: u16,
+    pub columns: u16,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessStopParams {
+    pub process_id: String,
+    #[serde(default)]
+    pub force: bool,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessWaitParams {
+    pub process_id: String,
+    #[serde(default)]
+    pub timeout_ms: u64,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessReadResult {
+    pub data: String,
+    pub start_offset: u64,
+    pub next_offset: u64,
+    pub eof: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+}
+impl From<workflow_environment::runtime::ReadOutput> for ProcessReadResult {
+    fn from(v: workflow_environment::runtime::ReadOutput) -> Self {
+        Self {
+            data: encode_blob(&v.data),
+            start_offset: v.start_offset,
+            next_offset: v.next_offset,
+            eof: v.eof,
+            exit_code: v.exit_code,
+        }
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalStartParams {
+    pub terminal_id: String,
+    #[serde(flatten)]
+    pub options: workflow_terminal::StartOptions,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalReadResult {
+    pub data: String,
+    pub start_offset: u64,
+    pub next_offset: u64,
+    pub eof: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    pub reset: bool,
+    pub terminal: workflow_terminal::Metadata,
+}
+impl From<workflow_terminal::ReadResult> for TerminalReadResult {
+    fn from(v: workflow_terminal::ReadResult) -> Self {
+        Self {
+            data: encode_blob(&v.data),
+            start_offset: v.start_offset,
+            next_offset: v.next_offset,
+            eof: v.eof,
+            exit_code: v.exit_code,
+            reset: v.reset,
+            terminal: v.terminal,
+        }
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkState {
+    pub connected: bool,
+    pub dns_servers: Vec<String>,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum ServiceReportParams {
+    Network(NetworkReportParams),
+    Proxy(ProxyReportParams),
+    Extension(ExtensionReportParams),
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub enum NetworkTag {
+    #[serde(rename = "network")]
+    Network,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub enum ProxyTag {
+    #[serde(rename = "proxy")]
+    Proxy,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkReportParams {
+    pub service_id: NetworkTag,
+    pub state: NetworkState,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxyReportParams {
+    pub service_id: ProxyTag,
+    pub epoch: String,
+    pub state: crate::local_services::ProxyState,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[serde(transparent)]
+pub struct ExtensionServiceId(
+    #[schemars(regex(pattern = "^(?!proxy$|network$)[A-Za-z0-9_.-]{1,160}$"))] pub String,
+);
+impl<'de> Deserialize<'de> for ExtensionServiceId {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        let id = String::deserialize(d)?;
+        if matches!(id.as_str(), "network" | "proxy") {
+            return Err(serde::de::Error::custom(
+                "known service requires its typed report",
+            ));
+        }
+        workflow_environment::persist::identifier(&id).map_err(serde::de::Error::custom)?;
+        Ok(Self(id))
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionReportParams {
+    pub service_id: ExtensionServiceId,
+    pub state: OpaqueObject,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceReport<T> {
+    pub format: u32,
+    pub state: T,
+    pub reported_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch: Option<String>,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum ReportedState {
+    Network(NetworkState),
+    Extension(OpaqueObject),
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum StoredReport {
+    Network(ServiceReport<NetworkState>),
+    Proxy(crate::local_services::Measurement),
+    Extension(ServiceReport<OpaqueObject>),
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceReportResult {
+    pub revision: u64,
+    pub service_id: String,
+    pub state: ReportedState,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ServiceControl {
+    pub proxy: crate::local_services::Control,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ServicesResult {
+    pub services: BTreeMap<String, StoredReport>,
+    pub desired: Option<OpaqueJson>,
+    pub control: ServiceControl,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct UploadBeginParams {
+    #[serde(flatten)]
+    pub destination: workflow_filework::UploadDestination,
+    pub size: u64,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+
+#[cfg(test)]
+mod service_tests {
+    use super::*;
+    #[test]
+    fn known_reports_cannot_fall_through_to_an_opaque_extension() {
+        assert!(parse::<ServiceReportParams>(br#"{"serviceId":"network","state":{}}"#).is_err());
+        assert!(
+            parse::<ServiceReportParams>(br#"{"serviceId":"proxy","state":{"running":false}}"#)
+                .is_err()
+        );
+        assert!(
+            parse::<ServiceReportParams>(
+                br#"{"serviceId":"network","state":{"connected":true,"dnsServers":[]}}"#
+            )
+            .is_ok()
+        );
+    }
+    #[test]
+    fn extension_measurements_preserve_precise_numbers_and_reserved_looking_objects() {
+        let source=br#"{"serviceId":"extension","state":{"huge":123456789012345678901234567890,"decimal":0.12345678901234567890123456789,"literal":{"$serde_json::private::Number":"plain text"}}}"#;
+        let report: ServiceReportParams = parse(source).unwrap();
+        let encoded = serde_json::to_string(&report).unwrap();
+        assert!(encoded.contains("123456789012345678901234567890"));
+        assert!(encoded.contains("0.12345678901234567890123456789"));
+        assert!(encoded.contains(r#"{"$serde_json::private::Number":"plain text"}"#));
     }
 }

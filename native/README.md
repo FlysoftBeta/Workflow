@@ -1,7 +1,7 @@
 # Android native adapters
 
 This directory contains the Android PTY/JNI adapter and the root proxy guardian. The production
-container is Rust under [`engine/runtime/`](../engine/runtime/README.md); no archived C container
+container is Rust under [`engine/environment/runtime/`](../engine/environment/runtime/README.md); no archived C container
 source is a build input here.
 
 `pty/pty_process.c` implements process, PTY and lifetime primitives. `pty/pty_jni.cpp` exposes them
