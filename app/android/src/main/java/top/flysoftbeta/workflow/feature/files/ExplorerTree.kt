@@ -154,7 +154,7 @@ internal fun ExplorerTree(explorer: FilesExplorer, variant: ExplorerVariant, mod
 
 private fun accepts(payload: DragPayload, folder: String): Boolean = when (payload) {
     is FilesDragPayload -> ExplorerModel.canMoveInto(payload.paths, folder)
-    is ExternalDragPayload -> true
+    is ExternalDragPayload -> ExplorerModel.canImportInto(folder)
     else -> false
 }
 
@@ -220,7 +220,11 @@ private fun NodeRow(explorer: FilesExplorer, row: TreeRow.Node, selected: Boolea
                     if (row.expanded) Sym.KeyboardArrowDown else Sym.ChevronRight, null, size = 16.dp, tint = colors.onSurfaceVariant,
                 )
             }
-            SymbolIcon(FileTypeIcons.forName(entry.name, entry.isDirectory, row.expanded), null, size = 16.dp, tint = colors.onSurfaceVariant)
+            SymbolIcon(
+                if (entry.path == WorkspacePaths.INTERNAL) Sym.Settings else FileTypeIcons.forName(entry.name, entry.isDirectory, row.expanded),
+                if (entry.path == WorkspacePaths.INTERNAL) "受保护的配置文件夹" else null,
+                size = 16.dp, tint = colors.onSurfaceVariant,
+            )
             Spacer(Modifier.width(6.dp))
             Text(
                 entry.name,

@@ -62,4 +62,28 @@ class ExplorerModelTest {
         assertFalse(ExplorerModel.canMoveInto(listOf("docs/guide.md"), "docs"))
         assertFalse(ExplorerModel.canMoveInto(emptyList(), "docs"))
     }
+
+    @Test fun `the workspace folder is protected from moves, imports and structural row actions`() {
+        assertTrue(ExplorerModel.isProtected(".workspace"))
+        assertTrue(ExplorerModel.isProtected(".workspace/agents/codex/config.toml"))
+        assertFalse(ExplorerModel.isProtected(".workspaces"))
+        assertFalse(ExplorerModel.isProtected("docs/.workspace"))
+        assertFalse(ExplorerModel.canMoveInto(listOf(".workspace"), "docs"))
+        assertFalse(ExplorerModel.canMoveInto(listOf(".workspace/env.json"), ""))
+        assertFalse(ExplorerModel.canMoveInto(listOf("docs/guide.md"), ".workspace/agents/claude/commands"))
+        assertFalse(ExplorerModel.canImportInto(".workspace/proxy"))
+        assertTrue(ExplorerModel.canImportInto("docs"))
+        assertEquals(ExplorerModel.RowCapabilities(false, false, false), ExplorerModel.rowCapabilities(".workspace/agents"))
+        assertEquals(ExplorerModel.RowCapabilities(true, true, true), ExplorerModel.rowCapabilities("docs"))
+        assertEquals("", ExplorerModel.terminalDirectory(".workspace/agents/codex"))
+        assertEquals("docs", ExplorerModel.terminalDirectory("docs"))
+    }
+
+    @Test fun `revealing workspace configuration does not require hidden files`() {
+        assertFalse(ExplorerModel.needsHiddenFiles(".workspace/agents/codex/config.toml"))
+        assertFalse(ExplorerModel.needsHiddenFiles(".workspace"))
+        assertTrue(ExplorerModel.needsHiddenFiles(".workspace/agents/claude/commands/.draft.md"))
+        assertTrue(ExplorerModel.needsHiddenFiles(".github/workflows/ci.yml"))
+        assertFalse(ExplorerModel.needsHiddenFiles("docs/guide.md"))
+    }
 }

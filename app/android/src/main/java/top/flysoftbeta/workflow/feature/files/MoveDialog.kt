@@ -42,7 +42,7 @@ internal fun MoveDialog(explorer: FilesExplorer, paths: List<String>) {
         while (queue.isNotEmpty() && result.size < 3000) {
             val directory = queue.removeFirst()
             val entries = runCatching { explorer.context.store.listDirectory(directory, explorer.showHidden) }.getOrDefault(emptyList())
-            entries.filter { it.isDirectory && paths.none { moving -> WorkspacePaths.isWithin(it.path, moving) } }.forEach {
+            entries.filter { it.isDirectory && !ExplorerModel.isProtected(it.path) && paths.none { moving -> WorkspacePaths.isWithin(it.path, moving) } }.forEach {
                 result += it.path
                 queue += it.path
             }

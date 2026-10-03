@@ -72,7 +72,7 @@ internal fun FilesWorkbench(env: WorkbenchEnv, session: Session, wb: Workbench, 
             StackView(
                 env, session, wb, maximized, PanelPlacement.EDITOR, facts, Modifier.fillMaxSize().padding(gap),
                 leading = left, trailing = right,
-                shellActions = listOf(ToolAction("restore", Sym.CloseFullscreen, "还原") { env.layout(LayoutOp.SetMaximized(null)) }),
+                shellActions = listOf(restoreAction { env.layout(LayoutOp.SetMaximized(null)) }),
             )
             RegionOverlays(
                 env = env, sideOpen = presence.sideOverlay, auxOpen = presence.auxOverlay,
@@ -260,8 +260,8 @@ internal fun BottomStack(env: WorkbenchEnv, session: Session, wb: Workbench, fac
     val shellActions = buildList {
         if (empty) add(ToolAction("newTerminal", Sym.Add, "新建终端") { env.runtime.commands.newTerminal() })
         add(
-            if (collapsed) ToolAction("expand", Sym.KeyboardArrowUp, "展开") { env.layout(LayoutOp.SetRegionCollapsed(Region.BOTTOM, false)) }
-            else ToolAction("collapse", Sym.KeyboardArrowDown, "收起") { env.layout(LayoutOp.SetRegionCollapsed(Region.BOTTOM, true)) },
+            if (collapsed) ToolAction("bottom", Sym.KeyboardArrowUp, "展开") { env.layout(LayoutOp.SetRegionCollapsed(Region.BOTTOM, false)) }
+            else ToolAction("bottom", Sym.KeyboardArrowDown, "收起") { env.layout(LayoutOp.SetRegionCollapsed(Region.BOTTOM, true)) },
         )
     }
     StackView(env, session, wb, Workbench.BOTTOM, PanelPlacement.BOTTOM, facts, modifier, shellActions = shellActions)
