@@ -4,9 +4,11 @@ Choose checks by the boundary a change affects. Pure model and protocol tests ar
 
 ## Host checks
 
-The supported development host is Linux, with Git, Python 3.11 or newer, JDK 25, Rust 1.93.1, the Android SDK/build-tools 37, the pinned NDK and CMake, Node.js, and zstd. Exact dependency manifests and the Gradle wrapper are checked into the repository. Configure the Android SDK through `local.properties` or the SDK environment variables; do not commit machine-local paths. Install web test dependencies with `npm ci --ignore-scripts` in `web/` before its first check.
+The supported development host is Linux, with Git, Python 3.11 or newer, JDK 25, Rust 1.93.1, the Android SDK/build-tools 37, the pinned NDK and CMake, Node.js, and zstd. The [build guide](building.md) gives exact toolchain setup, customized-image prerequisites, Debug/Release commands, and output paths. Exact dependency manifests and the Gradle wrapper are checked into the repository. Configure the Android SDK through `local.properties` or the SDK environment variables; do not commit machine-local paths. Install web test dependencies with `npm ci --ignore-scripts` in `web/` before its first check.
 
 `tools/workflow check NAME` runs a named suite in the coordinator checkout. Add `--task NAME` to run in an isolated task checkout. The catalog is executable configuration in `tools/workflow-suites.json`, so commands and output locations can be reviewed together.
+
+The `app-unit`, `lint`, and `android-apk` suites select the `x86_64` flavor for the default test target. The `arm64` and `x86_64` flavor names identify Android ABIs `arm64-v8a` and `x86_64`, independent of physical hardware or emulation. Standard `assembleDebug` and `assembleRelease` aggregate both; use the explicit ABI tasks in the build guide when only one APK is needed.
 
 | Suite | What it establishes |
 | --- | --- |
@@ -30,7 +32,7 @@ Additional Server black-box, differential layout and real-image lifecycle checks
 
 ## Android acceptance
 
-Build with `tools/workflow check android-apk`, then pass its printed run directory to `tools/workflow device`. The driver verifies both APK digests and the source snapshot before queuing. It uses the shared emulator wrapper, installs the pair, selects the emulator explicitly for every adb command, and saves instrumentation output and logcat. A suite with skipped tests does not pass by default.
+Build with `tools/workflow check android-apk`, then pass its printed run directory to `tools/workflow device`. The default suite builds the x86_64 Debug app and instrumentation APKs. The driver verifies both APK digests and the source snapshot before queuing. It uses the shared emulator wrapper, installs the pair, selects the emulator explicitly for every adb command, and saves instrumentation output and logcat. A suite with skipped tests does not pass by default.
 
 ```sh
 tools/workflow check android-apk
@@ -50,6 +52,6 @@ The daily tablet is not a disposable test device. Do not uninstall the app, ente
 
 Heavy commands share the primary checkout's `artifacts/.gradle.lock`; Cargo uses at most two jobs. Use `tools/with-build-lock.sh COMMAND ...` for an extra heavy command that is not in the suite catalog. Task checkouts link their conventional lock filenames to that same resource. Do not hold the build lease while waiting for a device lease, and do not wrap a command that already owns its build lock.
 
-Release signing remains in the coordinator checkout. `tools/init-release-key.sh` creates a local key only when absent; `tools/build-release.sh` acquires the build lease, packages both customized images, copies outputs under that lease, and verifies signatures, ABI, assets, version and digests. Signing keys, APKs and source checkpoints are ignored local material. A release still needs its own startup/connection smoke test because a Debug instrumentation result does not exercise the Release package flags.
+Release signing remains in the coordinator checkout. Follow the [Release build procedure](building.md#build-and-verify-release-apks) for key initialization and APK paths. `tools/init-release-key.sh` creates a local key only when absent; `tools/build-release.sh` acquires the build lease, packages both customized images, copies outputs under that lease, and verifies signatures, ABI, assets, version and digests. Signing keys, APKs and source checkpoints are ignored local material. A release still needs its own startup/connection smoke test because a Debug instrumentation result does not exercise the Release package flags.
 
 Record a result only for what ran. State the actual device/API/ABI, selected classes, source identity, artifact hashes, failures and skipped cases, and whether a backend used real credentials or a fixture. Keep raw logs and screenshots outside Git; put a concise English explanation in `docs/report/` when the evidence matters to a maintained claim.
