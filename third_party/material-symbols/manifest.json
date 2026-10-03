@@ -13,7 +13,7 @@
       1
     ]
   },
-  "packagedAs": "app/src/main/res/drawable/sym_*.xml (vector drawables, only the glyphs listed here)",
+  "packagedAs": "app/android/src/main/res/drawable/sym_*.xml (vector drawables, only the glyphs listed here)",
   "files": [
     {
       "file": "symbols/web/home/materialsymbolsrounded/home_20px.svg",

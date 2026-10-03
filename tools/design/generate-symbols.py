@@ -2,12 +2,12 @@
 """Converts the Material Symbols Rounded glyphs used by ui.design into Android vector drawables.
 
 Source: google/material-design-icons at a pinned commit (Apache-2.0), optical size 20, weight 400,
-grade 0; fill 0 by default and fill 1 for the glyphs listed in FILLED (active states, docs/ui.md §1.3).
+grade 0; fill 0 by default and fill 1 for the glyphs listed in FILLED (active states, docs/ux/README.md §1.3).
 Downloads are cached in third_party/.cache/material-symbols/<commit>/ and recorded with SHA-256 in
 third_party/material-symbols/manifest.json. A cached SVG whose digest differs from the manifest fails
 the run (delete it to re-fetch). Outputs:
-  app/src/main/res/drawable/sym_<name>[_fill].xml
-  app/src/main/java/top/flysoftbeta/workflow/ui/design/icons/Symbols.kt
+  app/android/src/main/res/drawable/sym_<name>[_fill].xml
+  app/android/src/main/java/top/flysoftbeta/workflow/ui/design/icons/Symbols.kt
   third_party/material-symbols/{manifest.json,LICENSE}
 
 Usage: python3 tools/design/generate-symbols.py [--offline]
@@ -80,8 +80,8 @@ FILLED = [
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / "third_party/.cache/material-symbols" / COMMIT
-DRAWABLES = ROOT / "app/src/main/res/drawable"
-KOTLIN = ROOT / "app/src/main/java/top/flysoftbeta/workflow/ui/design/icons/Symbols.kt"
+DRAWABLES = ROOT / "app/android/src/main/res/drawable"
+KOTLIN = ROOT / "app/android/src/main/java/top/flysoftbeta/workflow/ui/design/icons/Symbols.kt"
 NOTICE = ROOT / "third_party/material-symbols"
 
 
@@ -162,7 +162,7 @@ def main() -> None:
         "source": "https://github.com/google/material-design-icons",
         "commit": COMMIT,
         "style": {"family": "Material Symbols Rounded", "opticalSize": OPSZ, "weight": 400, "grade": 0, "fill": [0, 1]},
-        "packagedAs": "app/src/main/res/drawable/sym_*.xml (vector drawables, only the glyphs listed here)",
+        "packagedAs": "app/android/src/main/res/drawable/sym_*.xml (vector drawables, only the glyphs listed here)",
         "files": files + [{"file": "LICENSE", "sha256": hashlib.sha256(license_bytes).hexdigest(), "bytes": len(license_bytes)}],
     }
     manifest_file.write_text(json.dumps(manifest, indent=2) + "\n")

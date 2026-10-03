@@ -1,18 +1,159 @@
 {
   "version": 1,
   "suites": {
-    "core": {"command": ["./gradlew", ":core:test"], "heavy": true, "reports": ["core/build/test-results/test"]},
-    "agent": {"command": ["./gradlew", ":agent-model:test", ":agent:test", ":engine-chat:test", ":engine-chat:serviceJar"], "heavy": true, "reports": ["agent-model/build/test-results/test", "agent/build/test-results/test", "engine/chat/build/test-results/test"]},
-    "proxy": {"command": ["./gradlew", ":proxy:test"], "heavy": true, "reports": ["proxy/build/test-results/test"]},
-    "app-unit": {"command": ["./gradlew", ":app:testX86_64DebugUnitTest"], "heavy": true, "reports": ["app/build/test-results/testX86_64DebugUnitTest"]},
-    "lint": {"command": ["./gradlew", ":app:lintX86_64Debug"], "heavy": true, "reports": ["app/build/reports/lint-results-x86_64Debug.txt"]},
-    "android-apk": {"command": ["./gradlew", ":app:assembleX86_64Debug", ":app:assembleX86_64DebugAndroidTest"], "heavy": true, "apkSnapshot": true},
-    "rust-server": {"command": ["cargo", "test", "--manifest-path", "engine/Cargo.toml", "--locked", "-p", "workflow-server", "-p", "workflow-environment", "-p", "workflow-workspace", "-p", "workflow-filework", "-p", "workflow-terminal", "-j", "2"], "heavy": true},
-    "runtime-host": {"command": ["engine/environment/runtime/test-host.sh"], "heavy": true},
-    "native": {"command": ["native/test-host.sh"], "heavy": false},
-    "web": {"command": ["npm", "test"], "cwd": "web", "heavy": false},
-    "image": {"command": ["python3", "-m", "unittest", "discover", "-s", "image/tests", "-v"], "env": {"PYTHONPATH": "image"}, "heavy": false},
-    "infrastructure": {"command": ["python3", "-m", "unittest", "discover", "-s", "tools/tests", "-v"], "env": {"PYTHONPATH": "tools"}, "heavy": false},
-    "documentation": {"command": ["python3", "tools/check-docs.py"], "heavy": false}
+    "agent": {
+      "command": [
+        "./gradlew",
+        ":app:client:test",
+        ":agent:test",
+        ":engine-chat:test",
+        ":engine-chat:serviceJar"
+      ],
+      "heavy": true,
+      "reports": [
+        "app/client/build/test-results/test",
+        "agent/build/test-results/test",
+        "engine/chat/build/test-results/test"
+      ]
+    },
+    "proxy": {
+      "command": [
+        "./gradlew",
+        ":app:proxy:test"
+      ],
+      "heavy": true,
+      "reports": [
+        "app/proxy/build/test-results/test"
+      ]
+    },
+    "app-unit": {
+      "command": [
+        "./gradlew",
+        ":app:client:test",
+        ":app:proxy:test",
+        ":agent:test",
+        ":engine-chat:test",
+        ":app:android:testX86_64DebugUnitTest"
+      ],
+      "heavy": true,
+      "reports": [
+        "app/android/build/test-results/testX86_64DebugUnitTest",
+        "app/client/build/test-results/test",
+        "app/proxy/build/test-results/test",
+        "agent/build/test-results/test",
+        "engine/chat/build/test-results/test"
+      ]
+    },
+    "lint": {
+      "command": [
+        "./gradlew",
+        ":app:android:lintX86_64Debug"
+      ],
+      "heavy": true,
+      "reports": [
+        "app/android/build/reports/lint-results-x86_64Debug.txt"
+      ]
+    },
+    "android-apk": {
+      "command": [
+        "./gradlew",
+        ":app:android:assembleX86_64Debug",
+        ":app:android:assembleX86_64DebugAndroidTest",
+        ":app:android:assembleArm64Debug"
+      ],
+      "heavy": true,
+      "apkSnapshot": true
+    },
+    "rust-server": {
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "engine/Cargo.toml",
+        "--locked",
+        "-p",
+        "workflow-server",
+        "-p",
+        "workflow-environment",
+        "-p",
+        "workflow-workspace",
+        "-p",
+        "workflow-filework",
+        "-p",
+        "workflow-terminal",
+        "-p",
+        "workflow-chat",
+        "-j",
+        "2"
+      ],
+      "heavy": true
+    },
+    "runtime-host": {
+      "command": [
+        "engine/environment/runtime/test-host.sh"
+      ],
+      "heavy": true
+    },
+    "native": {
+      "command": [
+        "app/native/test-host.sh"
+      ],
+      "heavy": false
+    },
+    "web": {
+      "command": [
+        "npm",
+        "test"
+      ],
+      "cwd": "app/web",
+      "heavy": false
+    },
+    "image": {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "image/tests",
+        "-v"
+      ],
+      "env": {
+        "PYTHONPATH": "image"
+      },
+      "heavy": false
+    },
+    "infrastructure": {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/tests",
+        "-v"
+      ],
+      "env": {
+        "PYTHONPATH": "tools"
+      },
+      "heavy": false
+    },
+    "documentation": {
+      "command": [
+        "python3",
+        "tools/check-docs.py"
+      ],
+      "heavy": false
+    },
+    "client": {
+      "command": [
+        "./gradlew",
+        ":app:client:test"
+      ],
+      "heavy": true,
+      "reports": [
+        "app/client/build/test-results/test"
+      ]
+    }
   }
 }

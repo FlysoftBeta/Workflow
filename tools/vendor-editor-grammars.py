@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "app/src/main/assets/textmate"
+TARGET = ROOT / "app/android/src/main/assets/textmate"
 VSCODE = "https://raw.githubusercontent.com/microsoft/vscode/529ee19061e6723e0a640fe432e57c69d50a4f4f/"
 KOTLIN = "https://raw.githubusercontent.com/fwcd/vscode-kotlin/4a7c1538754828c1d22a8bee8ff3400045b4352a/"
 SOURCES = {

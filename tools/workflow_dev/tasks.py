@@ -48,7 +48,7 @@ def packet(task: dict) -> str:
 {task['objective']}
 
 Work in `{task['checkout']}` on `{task['branch']}`, starting at `{task['base']}`.
-Read AGENTS.md, the relevant product and UX documents, and docs/implementation/protocol.md before editing contracts.
+Read AGENTS.md, the relevant product and UX documents, and docs/engine/protocol.md before editing contracts.
 Your exclusive source ownership is {paths}. Ask the coordinator to transfer ownership before changing another area.
 Other agents have separate checkouts; do not copy their uncommitted files or edit their working trees.
 
@@ -203,21 +203,47 @@ def archive_task(repo: Repository, name: str):
         return task
 
 
-def change_scope(repo: Repository, name: str, scopes: list[str]):
-    scopes = sorted(set(map(scope_path, scopes)))
-    if not scopes:
-        raise WorkflowError("A task needs at least one owned path")
+def change_scope(repo: Repository, name: str, scopes: list[str] | None, checks: list[str] | None = None,
+                 share_paths: list[str] | None = None, reason: str | None = None):
     with lock(repo.state / "registry.lock"):
         task = load_task(repo, name)
+        scopes = sorted(set(map(scope_path, scopes))) if scopes is not None else task["owns"]
+        if not scopes:
+            raise WorkflowError("A task needs at least one owned path")
         if task["status"] != "active":
             raise WorkflowError("Only active tasks can change ownership")
+        shared = set(task.get("sharedPaths", []))
+        if share_paths:
+            if not reason or not reason.strip():
+                raise WorkflowError("Explicit shared-file coordination needs a recorded reason")
+            for path in map(scope_path, share_paths):
+                checkout = Path(task["checkout"])
+                is_file = (checkout / path).is_file() or git(checkout, "cat-file", "-t", task["base"] + ":" + path, check=False) == "blob"
+                if path not in scopes or not is_file:
+                    raise WorkflowError("Only an explicitly claimed source file can be shared")
+                shared.add(path)
+        shared &= set(scopes)
         for other in all_tasks(repo):
-            if other["name"] != name and other["status"] in {"active", "ready", "integrating"} and overlap(scopes, other["owns"]):
-                raise WorkflowError(f"Ownership overlaps {other['name']}")
+            if other["name"] != name and other["status"] in {"active", "ready", "integrating"}:
+                conflicts = [path for path in scopes if overlap([path], other["owns"]) and path not in shared]
+                if conflicts:
+                    raise WorkflowError(f"Ownership overlaps {other['name']}: {conflicts}")
         outside = [p for p in changed_paths(Path(task["checkout"]), task["base"]) if not owns(scopes, p)]
         if outside:
             raise WorkflowError("Cannot release paths that already have changes: " + ", ".join(outside))
+        if checks is not None:
+            catalog = read_json(Path(task["checkout"]) / "tools/workflow-suites.json")["suites"]
+            if not checks or set(checks) - (set(catalog) | {"android"}):
+                raise WorkflowError("Required checks must name existing suites")
+            task["checks"] = sorted(set(checks))
         task["owns"] = scopes
+        if shared:
+            task["sharedPaths"] = sorted(shared)
+        else:
+            task.pop("sharedPaths", None)
+        if share_paths:
+            task.setdefault("decisions", []).append({"action": "share-files", "paths": sorted(set(share_paths)),
+                                                   "reason": reason.strip(), "at": int(time.time())})
         atomic_json(task_file(repo, name), task)
         (repo.tasks / (name + ".md")).write_text(packet(task), encoding="utf-8")
         return task

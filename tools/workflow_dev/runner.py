@@ -48,8 +48,8 @@ def task_context(repo: Repository, task_name: str | None):
 
 
 def copy_apks(root: Path, output: Path) -> dict:
-    paths = {"app": "app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk",
-             "test": "app/build/outputs/apk/androidTest/x86_64/debug/app-x86_64-debug-androidTest.apk"}
+    paths = {"app": "app/android/build/outputs/apk/x86_64/debug/android-x86_64-debug.apk",
+             "test": "app/android/build/outputs/apk/androidTest/x86_64/debug/android-x86_64-debug-androidTest.apk"}
     output.mkdir(parents=True)
     result = {}
     for name, relative in paths.items():

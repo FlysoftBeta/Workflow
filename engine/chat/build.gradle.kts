@@ -10,7 +10,7 @@ java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaV
 kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17 } }
 dependencies {
     implementation(project(":agent"))
-    implementation(project(":core"))
+    implementation(project(":app:client"))
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }
