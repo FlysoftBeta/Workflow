@@ -23,19 +23,30 @@ macro_rules! eng_logf {
         }
     }};
 }
-#[cfg(all(target_os = "android", target_arch = "aarch64"))]
-mod android_aarch64;
-#[cfg(all(target_os = "android", target_arch = "x86_64"))]
-mod android_x86_64;
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-mod host;
+#[cfg(not(any(
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "android", target_arch = "x86_64"),
+    all(target_os = "android", target_arch = "aarch64"),
+)))]
+compile_error!("workflow-runtime supports Linux x86_64 and Android x86_64/aarch64");
+
+mod arch;
+mod cli;
+mod exec;
+mod guest;
+mod ident;
+mod install;
+mod json;
 mod logging;
+mod mem;
+mod meta;
+mod path;
+mod scratch;
+mod sha256;
+mod sys;
 mod sysinv;
+mod tracer;
+
 fn main() {
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    host::run();
-    #[cfg(all(target_os = "android", target_arch = "x86_64"))]
-    android_x86_64::run();
-    #[cfg(all(target_os = "android", target_arch = "aarch64"))]
-    android_aarch64::run();
+    cli::main();
 }
