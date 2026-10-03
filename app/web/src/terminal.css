@@ -11,6 +11,8 @@
 html, body, #terminal { height: 100%; margin: 0; overflow: hidden; }
 body { background: transparent; -webkit-tap-highlight-color: transparent; }
 #terminal { box-sizing: border-box; padding: 4px; }
+/* The adapter owns every touch gesture: no browser panning (which cancels the stream), callout or zoom. */
+#terminal { touch-action: none; -webkit-touch-callout: none; }
 .xterm { height: 100%; }
 .xterm-screen { position: relative; }
 /* Touch has no hover: links are always marked with a dashed underline, solid while pressed. */
@@ -59,6 +61,10 @@ body { background: transparent; -webkit-tap-highlight-color: transparent; }
 .workflow-selection-handle:focus { outline: 2px solid var(--link, #286B57); border-radius: 8px; }
 .workflow-selection-handle.dragging::after { box-shadow: 0 0 0 5px #80808040; }
 .workflow-selection-handle[hidden], .workflow-scrollbar[hidden] { display: none !important; }
+/* Android draws the platform teardrop handles; the buttons stay for keyboard and accessibility focus only. */
+.native-selection-chrome .workflow-selection-handle { pointer-events: none; }
+.native-selection-chrome .workflow-selection-handle::before,
+.native-selection-chrome .workflow-selection-handle::after { display: none; }
 /* The underline also provides a labelled, focusable link for keyboards/accessibility. */
 button.workflow-link { padding: 0; margin: 0; border: 0; border-bottom: 1px dashed currentColor; background: transparent; }
 .workflow-link { box-sizing: border-box; }
