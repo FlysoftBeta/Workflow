@@ -333,3 +333,38 @@ fn explicit_service_directories_are_listable_and_skip_symlinks() {
     assert_eq!(entries[0].path, format!("{path}/a"));
     assert_eq!(files.list_directory(path, true).unwrap().len(), 2);
 }
+
+#[test]
+fn terminal_link_classification_checks_existence_private_paths_and_symlinks() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = workflow_environment::Store::open(dir.path()).unwrap();
+    let files = crate::FileWork::new(dir.path().to_owned(), store.clone());
+    std::fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
+    std::fs::create_dir(dir.path().join("src")).unwrap();
+    std::os::unix::fs::symlink("main.rs", dir.path().join("link.rs")).unwrap();
+    assert_eq!(
+        files.existing_path_kind("main.rs").unwrap(),
+        Some(crate::ExistingPathKind::File)
+    );
+    assert_eq!(
+        files.existing_path_kind("src").unwrap(),
+        Some(crate::ExistingPathKind::Directory)
+    );
+    assert_eq!(files.existing_path_kind("absent.rs").unwrap(), None);
+    assert!(files.existing_path_kind("link.rs").is_err());
+    assert!(
+        files
+            .existing_path_kind(".workspace/state/workspace.json")
+            .is_err()
+    );
+    assert!(files.existing_path_kind("../outside").is_err());
+    store
+        .write_text("proxy/config.yaml", "mode: rule\n")
+        .unwrap();
+    assert_eq!(
+        files
+            .existing_path_kind(".workspace/proxy/config.yaml")
+            .unwrap(),
+        Some(crate::ExistingPathKind::File)
+    );
+}

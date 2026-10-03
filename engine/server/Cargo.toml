@@ -9,6 +9,7 @@ name = "workflow-engine"
 path = "src/main.rs"
 
 [dependencies]
+workflow-chat = { path = "../chat" }
 workflow-environment = { path = "../environment" }
 workflow-workspace = { path = "../workspace" }
 workflow-filework = { path = "../filework" }

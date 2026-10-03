@@ -1,10 +1,13 @@
 //! Engine-owned terminal resources. View attachment never owns process lifetime.
 //! Persistence and PTY operations go exclusively through workflow-environment.
+pub mod config;
 mod model;
 mod path;
 
 pub use model::{Metadata, ReadOptions, ReadResult, StartOptions, Status};
-pub use path::{resolve_workspace_path, working_directory};
+pub use path::{
+    PathKind, ResolvedPath, ResolvedPaths, candidates, resolve_workspace_path, working_directory,
+};
 
 use model::Saved;
 use std::{
@@ -165,6 +168,22 @@ impl Terminals {
     }
     pub fn status(&self, id: &str) -> Result<Metadata> {
         self.mutate(id, |_| Ok(()))
+    }
+    /// Capture only Engine-observed cwd; clients never supply a working directory for links.
+    pub fn resolution_context(&self, id: &str, generation: u64) -> Result<Metadata> {
+        self.ensure_loaded()?;
+        let items = self.items.lock().unwrap();
+        let metadata = &items
+            .get(id)
+            .ok_or_else(|| Error::business("not_found", "terminal not found"))?
+            .metadata;
+        if metadata.generation != generation {
+            return Err(Error::business(
+                "stale_terminal",
+                "terminal generation changed",
+            ));
+        }
+        Ok(metadata.clone())
     }
     pub fn rename(&self, id: &str, title: Option<&str>) -> Result<Metadata> {
         self.mutate(id, |terminal| {

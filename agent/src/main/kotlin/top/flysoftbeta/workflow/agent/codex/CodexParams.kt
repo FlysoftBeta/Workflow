@@ -23,7 +23,7 @@ object CodexParams {
     const val REVIEWER_USER = "user"
 
     /** Methods whose params must carry `approvalsReviewer: "user"`. */
-    val REVIEWER_METHODS = setOf(C.THREAD_START, C.THREAD_RESUME, C.THREAD_FORK, C.TURN_START)
+    val REVIEWER_METHODS = setOf(C.THREAD_START, C.THREAD_RESUME, C.THREAD_FORK, C.TURN_START, C.THREAD_SETTINGS_UPDATE, C.TURN_SETTINGS_UPDATE)
 
     data class Policy(val approvalPolicy: String, val sandboxMode: String, val sandboxPolicy: JsonObject)
 

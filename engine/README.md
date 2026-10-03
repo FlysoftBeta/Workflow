@@ -1,6 +1,6 @@
 # Rust Workspace Engine
 
-The Engine owns sessions, layouts, files, drafts, configuration, environments and managed processes. Android connects through `workflow.workspace/1`. The [generated contract](protocol/contract.json), schema and golden fixtures are exported from Rust types; the [protocol guide](../docs/implementation/protocol.md) describes their semantics.
+The Engine owns sessions, layouts, files, drafts, configuration, environments and managed processes. Android connects through `workflow.workspace/1`. The [generated contract](protocol/contract.json), schema and golden fixtures are exported from Rust types; the [protocol guide](../docs/engine/protocol.md) describes their semantics.
 
 The Cargo workspace contains these packages:
 

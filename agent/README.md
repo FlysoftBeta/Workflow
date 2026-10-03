@@ -27,5 +27,5 @@ flock artifacts/.gradle.lock ./gradlew :agent:test
 When intentionally updating the coverage golden file, add `-Pagent.updateGolden=true`. The
 `smoke` Gradle task is opt-in; its arguments and prerequisites are documented in the test source
 `smoke/SmokeMain.kt`. Generated classes, test reports and JARs belong in the ignored `build/`.
-The [agent integration guide](../docs/implementation/agents.md) explains the supported protocol
+The [agent integration guide](../docs/engine/chat.md) explains the supported protocol
 surface and the [testing guide](../docs/development/testing.md) describes acceptance limits.

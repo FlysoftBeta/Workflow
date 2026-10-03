@@ -12,7 +12,9 @@ class AgentReducerTest {
     private val B = BackendKind.CODEX
     private val key = ThreadKey(B, "th")
 
-    private fun fold(vararg events: E, from: AgentState = AgentState()) = AgentReducer.reduceAll(from, events.toList())
+    private fun fold(vararg events: E, from: AgentState = AgentState()) = AgentReducer.reduceAll(from, events.toList()).also {
+        top.flysoftbeta.workflow.agent.testing.RustParity.record(from, events.toList(), it)
+    }
     private fun AgentState.t() = threads.getValue(key)
     private fun request(id: Int, turn: String?, kind: RequestKind = RequestKind.CommandApproval("ls", "/", null)) = PendingRequest(
         RequestKey(B, JsonPrimitive(id)), "item/commandExecution/requestApproval", kind,

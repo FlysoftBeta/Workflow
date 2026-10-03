@@ -374,11 +374,9 @@ pub mod keys {
         ))
     }
     pub fn service(service: &str, key: &str) -> Result<String> {
-        Ok(format!(
-            "services/{}/{}",
-            identifier(service)?,
-            identifier(key)?
-        ))
+        let service = identifier(service)?;
+        let key = identifier(key)?;
+        Ok(if service == "proxy" { format!("proxy/{key}") } else { format!("services/{service}/{key}") })
     }
     pub fn service_sidecar(service: &str, key: &str) -> Result<String> {
         document(&format!("services.{}", identifier(service)?), key)
