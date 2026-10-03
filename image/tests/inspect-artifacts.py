@@ -23,7 +23,7 @@ with subprocess.Popen(["zstd", "-dcq", str(path)], stdout=subprocess.PIPE) as de
     with tarfile.open(fileobj=decompressor.stdout, mode="r|") as archive:
         for member in archive:
             if member.name == "rootfs/usr/local/bin/codex":
-                assert member.issym() and member.linkname == "/opt/workflow/bundled/libcodex.so"
+                assert member.issym() and member.linkname == "/opt/workflow/tools/codex/bin/codex"
                 entry_points["codex"] = member.linkname
             assert member.name != "rootfs/usr/bin/qemu-aarch64", "build-only emulator leaked into image"
             if not member.isfile():

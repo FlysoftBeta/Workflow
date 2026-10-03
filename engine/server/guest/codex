@@ -1,3 +1,3 @@
 #!/bin/sh
 # The APK supplies a standalone CLI, not the optional local daemon package.
-exec /opt/workflow/bundled/libcodex.so --no-daemon "$@"
+exec /opt/workflow/tools/codex/bin/codex --no-daemon "$@"

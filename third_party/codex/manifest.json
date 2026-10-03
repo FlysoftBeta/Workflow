@@ -3,7 +3,7 @@
   "version": "0.157.1",
   "license": "Apache-2.0",
   "source": "https://github.com/openai/codex/tree/rust-v0.157.1",
-  "packagedAs": "libcodex.so",
+  "packagedAs": "codex",
   "abis": {
     "arm64-v8a": {
       "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-aarch64-unknown-linux-musl.tar.gz",
@@ -23,5 +23,6 @@
       "sha256": "3e2584f3f3829a43a0495011a1cecb2facbe64a2403e2b682351fd9c2983f970",
       "bytes": 285340072
     }
-  }
+  },
+  "distribution": "engine-tools-payload"
 }

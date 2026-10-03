@@ -76,5 +76,5 @@ assert test "$(W "$E" state | field .profile)" = "$default_profile"
 state=$(W "$E" state)
 assert jq -e --arg py "$py_extra" --arg node "$node_extra" '.installedPython | index($py) != null' <<< "$state"
 assert jq -e --arg node "$node_extra" '.installedNode | index($node) != null' <<< "$state"
-assert test "$(R readlink /usr/local/bin/codex)" = /opt/workflow/bundled/libcodex.so
+assert test "$(R readlink /usr/local/bin/codex)" = /opt/workflow/tools/codex/bin/codex
 printf 'PASS: installs and verification preserve active; all selected versions run; secondary/order changes yield new profiles; empty languages return 127 with no fallback; malformed/missing inputs fail; rollback and Codex alias verified.\n'
