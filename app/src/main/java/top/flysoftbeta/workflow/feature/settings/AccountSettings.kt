@@ -21,6 +21,7 @@ import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
     val hub = remember(c.services) { c.services.hub }
     val state by hub.state.collectAsState()
     val available by hub.available.collectAsState()
+    val chatConfiguration by hub.configuration.collectAsState()
     val health by c.services.environment.collectAsState()
     var selected by remember { mutableStateOf<BackendKind?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -54,7 +55,7 @@ import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
     val kind = selected
     if (kind != null) ModalBottomSheet(onDismissRequest = { selected = null; secret = "" }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         val current = state.backend(kind).account
-        LaunchedEffect(current.login) { if (current.login != null) flow = current.login }
+        LaunchedEffect(current.login, current.state) { flow = current.login }
         LaunchedEffect(current.state) { if (current.state == LoginState.LOGGED_IN) { selected = null; secret = "" } }
         fun browse(url: String) { runCatching {
             require(Uri.parse(url).scheme in listOf("https", "http"))
@@ -92,7 +93,7 @@ import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
                         OutlinedTextField(secret, { secret = it }, label = { Text(if (secretMethod == LoginMethod.CLAUDE_SETUP_TOKEN) "访问令牌" else "API Key") },
                             singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                         Button(onClick = { val value = secret; secret = ""; val method = secretMethod!!; secretMethod = null; task { flow = hub.login(kind, method, value) } }, enabled = secret.isNotBlank() && !busy) { Text("登录") }
-                    } else hub.loginMethods(kind).forEach { method ->
+                    } else chatConfiguration.loginMethods[kind].orEmpty().forEach { method ->
                         TextButton(enabled = !busy, onClick = {
                             if (method in listOf(LoginMethod.CODEX_API_KEY, LoginMethod.CLAUDE_API_KEY, LoginMethod.CLAUDE_SETUP_TOKEN)) secretMethod = method
                             else task { flow = hub.login(kind, method) }
