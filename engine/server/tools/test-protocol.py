@@ -87,7 +87,8 @@ def protocol(engine, root):
     c.call('services.report',{'serviceId':'network','state':{'dnsServers':['127.0.0.1','::1'],'connected':False}})
     assert (root/'.workspace/environment/network/resolv.conf').read_text()=='nameserver 127.0.0.1\nnameserver ::1\n'
     c.call('services.report',{'serviceId':'network','state':{'dnsServers':['bad\nsearch example.invalid'],'connected':True}},error='invalid_params')
-    c.call('services.report',{'serviceId':'proxy','state':{'running':False,'reason':'permission_missing'}})
+    epoch=c.call('services.executor.register',{'serviceId':'proxy','executorId':'host-contract'})['epoch']
+    c.call('services.report',{'serviceId':'proxy','epoch':epoch,'state':{'running':False,'reason':'permission_missing'}})
     assert c.call('services.status')['services']['proxy']['state']['running'] is False
     c.call('process.spawn',{'argv':['/bin/echo','must not run on host']},error='environment_unavailable')
     revision=c.call('workspace.snapshot')['revision'];c.close()

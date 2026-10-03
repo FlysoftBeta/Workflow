@@ -1,4 +1,39 @@
 use super::*;
+use crate::state as workspace;
+use environment::persist as storage;
+use serde_json::{Value as V, json};
+use std::{
+    fs::{self, File},
+    io,
+};
+fn j(value: &impl serde::Serialize) -> V {
+    serde_json::to_value(value).unwrap()
+}
+fn valid_spec(value: &V) -> environment::Result<()> {
+    let spec = environment::json::strict_json::<environment::EnvironmentSpec>(
+        &serde_json::to_vec(value).unwrap(),
+    )
+    .map_err(|e| environment::Error::invalid(&e.to_string()))?;
+    environment::validate(&spec)
+}
+mod layout {
+    use super::*;
+    pub fn apply(before: &V, op: &V) -> V {
+        j(&workflow_workspace::layout::apply(
+            &environment::json::strict_json(&serde_json::to_vec(before).unwrap()).unwrap(),
+            &environment::json::strict_json(&serde_json::to_vec(op).unwrap()).unwrap(),
+        ))
+    }
+    pub fn normalize(value: &mut V) {
+        let mut typed: workflow_workspace::Workbench =
+            environment::json::strict_json(&serde_json::to_vec(value).unwrap()).unwrap();
+        workflow_workspace::layout::normalize(&mut typed);
+        *value = j(&typed);
+    }
+    pub fn empty() -> V {
+        j(&workflow_workspace::Workbench::default())
+    }
+}
 use std::io::BufRead;
 #[test]
 fn files_only_connection_does_not_install_an_unused_environment() {
@@ -9,12 +44,23 @@ fn files_only_connection_does_not_install_an_unused_environment() {
         image: Some(temp.path().join("unused-image")),
         ..Default::default()
     };
-    let environment = Arc::new(Mutex::new(environment::Environment::load(options,
-        Arc::new(AtomicUsize::new(0))).unwrap()));
+    let environment = Arc::new(Mutex::new(
+        environment::Environment::load(options, Arc::new(AtomicUsize::new(0))).unwrap(),
+    ));
     environment::Environment::reconcile_changed(&environment);
     assert!(!environment.lock().unwrap().building);
-    assert!(environment.lock().unwrap().state.get("requestedSpecHash").is_none());
-    assert_eq!(environment.lock().unwrap().status()["phase"], "not_installed");
+    assert!(
+        environment
+            .lock()
+            .unwrap()
+            .state
+            .requested_spec_hash
+            .is_none()
+    );
+    assert_eq!(
+        j(&environment.lock().unwrap().status())["phase"],
+        "not_installed"
+    );
 }
 #[test]
 fn atomic_create_and_upload_publication_never_replace_an_existing_file() {
@@ -25,7 +71,12 @@ fn atomic_create_and_upload_publication_never_replace_an_existing_file() {
     assert_eq!(fs::read(&destination).unwrap(), b"original");
     let staged = dir.path().join("staged");
     fs::write(&staged, b"upload").unwrap();
-    assert_eq!(storage::publish_new(&staged, &destination).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(
+        storage::publish_new(&staged, &destination)
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::AlreadyExists
+    );
     assert_eq!(fs::read(&staged).unwrap(), b"upload");
     assert_eq!(fs::read(&destination).unwrap(), b"original");
     let published = dir.path().join("new.txt");
@@ -40,7 +91,7 @@ fn temp_workspace() -> (tempfile::TempDir, workspace::Workspace) {
     (temp, w)
 }
 fn cmd(w: &mut workspace::Workspace, name: &str, a: V) -> V {
-    w.command(name, &a).unwrap()["value"].clone()
+    j(&w.command(name, &a).unwrap().value)
 }
 #[test]
 fn draft_detects_external_change_before_first_keystroke_and_survives_restart() {
@@ -59,7 +110,7 @@ fn draft_detects_external_change_before_first_keystroke_and_survives_restart() {
     );
     drop(w);
     let mut w = workspace::Workspace::load(t.path().to_owned()).unwrap();
-    assert_eq!(w.state["drafts"]["a.txt"]["text"], "mine");
+    assert_eq!(j(&w.state)["drafts"]["a.txt"]["text"], "mine");
     cmd(
         &mut w,
         "resolveConflict",
@@ -108,7 +159,7 @@ fn archive_save_preflights_all_files_and_closing_panels_keeps_drafts() {
         "applyLayout",
         json!({"sessionId":id,"op":{"type":"close","panelIds":["p1"]}}),
     );
-    assert_eq!(w.state["drafts"]["a"]["text"], "draft");
+    assert_eq!(j(&w.state)["drafts"]["a"]["text"], "draft");
     assert_eq!(
         cmd(
             &mut w,
@@ -117,7 +168,7 @@ fn archive_save_preflights_all_files_and_closing_panels_keeps_drafts() {
         )["kind"],
         "archived"
     );
-    assert!(w.state["drafts"]["b"].is_object());
+    assert!(j(&w.state)["drafts"]["b"].is_object());
 }
 #[test]
 fn composer_acknowledge_never_clears_a_newer_edit() {
@@ -161,14 +212,14 @@ fn shared_resource_only_protects_most_recent_live_session() {
     cmd(
         &mut w,
         "editFile",
-        json!({"path":"dirty","text":"draft","shown":storage::missing()}),
+        json!({"path":"dirty","text":"draft","shown":workflow_filework::FileVersion::default()}),
     );
     let time = storage::now() - 2 * 86_400_000;
-    w.state["sessions"][0]["lastUsedAt"] = json!(time - 1);
-    w.state["sessions"][1]["lastUsedAt"] = json!(time);
+    w.state.workspace.sessions[0].last_used_at = time - 1;
+    w.state.workspace.sessions[1].last_used_at = time;
     w.maintenance().unwrap();
-    assert!(w.state["sessions"][0]["archivedAt"].is_number());
-    assert!(w.state["sessions"][1]["archivedAt"].is_null());
+    assert!(j(&w.state)["sessions"][0]["archivedAt"].is_number());
+    assert!(j(&w.state)["sessions"][1]["archivedAt"].is_null());
 }
 #[test]
 fn internal_paths_symlinks_and_no_overwrite_are_enforced() {
@@ -221,10 +272,10 @@ fn trash_restore_move_and_drafts_follow_paths() {
         cmd(&mut w, "movePath", json!({"from":"dir","to":"renamed"}))["kind"],
         "done"
     );
-    assert_eq!(w.state["drafts"]["renamed/a.txt"]["text"], "draft");
+    assert_eq!(j(&w.state)["drafts"]["renamed/a.txt"]["text"], "draft");
     let trash = cmd(&mut w, "trashPath", json!({"path":"renamed"}));
     assert_eq!(trash["entry"]["path"], "renamed");
-    assert!(w.state["drafts"]["renamed/a.txt"].is_object());
+    assert!(j(&w.state)["drafts"]["renamed/a.txt"].is_object());
     let restored = cmd(
         &mut w,
         "restoreFromTrash",
@@ -241,7 +292,7 @@ fn corrupt_state_is_preserved_and_newer_schema_never_overwritten() {
     let path = t.path().join(".workspace/state/workspace.json");
     fs::write(&path, b"{truncated").unwrap();
     let recovered = workspace::Workspace::load(t.path().to_owned()).unwrap();
-    assert_eq!(recovered.state["sessions"][0]["name"], "retained");
+    assert_eq!(j(&recovered.state)["sessions"][0]["name"], "retained");
     assert!(
         fs::read_dir(t.path().join(".workspace/corrupt"))
             .unwrap()
@@ -250,20 +301,20 @@ fn corrupt_state_is_preserved_and_newer_schema_never_overwritten() {
     );
     fs::write(&path, b"{\"format\":77}").unwrap();
     let mut unknown = workspace::Workspace::load(t.path().to_owned()).unwrap();
-    assert_eq!(unknown.state["status"], "failed");
+    assert_eq!(j(&unknown.state)["status"], "failed");
     assert!(unknown.command("createSession", &json!({})).is_err());
     assert_eq!(fs::read(&path).unwrap(), b"{\"format\":77}");
 }
 #[test]
 fn environment_schema_accepts_arrays_and_rejects_invalid_or_duplicate_entries() {
-    assert!(environment::validate(&json!({"version":1,"python":["3.14","3.13.5"],"node":[],"post_scripts":[{"id":"setup","run":"true","user":"root"}]})).is_ok());
+    assert!(valid_spec(&json!({"version":1,"python":["3.14","3.13.5"],"node":[],"post_scripts":[{"id":"setup","run":"true","user":"root"}]})).is_ok());
     for v in [
         json!({"version":1,"python":"3.14"}),
         json!({"version":1,"node":["24","24"]}),
         json!({"version":1,"python":["3;rm"]}),
         json!({"version":1,"post_scripts":[{"id":"x","run":"true","user":"device_root"}]}),
     ] {
-        assert!(environment::validate(&v).is_err());
+        assert!(valid_spec(&v).is_err());
     }
 }
 fn approximately(a: &V, b: &V) -> bool {
@@ -316,17 +367,23 @@ fn layout_matches_kotlin_oracle_and_normalization_is_idempotent() {
 fn malformed_layout_is_reset_without_losing_session_or_unknown_drafts() {
     let (t, mut w) = temp_workspace();
     cmd(&mut w, "createSession", json!({"name":"retained"}));
-    w.state["sessions"][0]["workbench"] = json!({"files":"damaged","panels":[]});
     w.persist().unwrap();
+    let state_path = t.path().join(".workspace/state/workspace.json");
+    let mut broken: V = storage::read_json(&state_path).unwrap();
+    broken["state"]["sessions"][0]["workbench"] = json!({"files":"damaged","panels":[]});
+    storage::write_json(&state_path, &broken).unwrap();
     let loaded = workspace::Workspace::load(t.path().to_owned()).unwrap();
-    assert_eq!(loaded.state["sessions"][0]["workbench"], layout::empty());
+    assert_eq!(
+        j(&loaded.state)["sessions"][0]["workbench"],
+        layout::empty()
+    );
     let path = t.path().join(".workspace/state/workspace.json");
-    let mut document = storage::read_json(&path).unwrap();
+    let mut document: V = storage::read_json(&path).unwrap();
     document["state"]["drafts"]["a"] = json!({"format":2,"path":"a","text":"future"});
     storage::write_json(&path, &document).unwrap();
     let loaded = workspace::Workspace::load(t.path().to_owned()).unwrap();
     assert!(!loaded.writable);
-    assert_eq!(storage::read_json(&path).unwrap(), document);
+    assert_eq!(storage::read_json::<V>(&path).unwrap(), document);
 }
 
 #[test]
@@ -341,7 +398,7 @@ fn environment_corruption_does_not_block_files_and_unknown_format_is_preserved()
     let path = t.path().join(".workspace/environment/environment.json");
     fs::write(&path, b"{truncated").unwrap();
     let recovered = environment::Environment::load(options.clone(), running.clone()).unwrap();
-    assert_eq!(recovered.status()["phase"], "failed");
+    assert_eq!(j(&recovered.status())["phase"], "failed");
     assert!(
         fs::read_dir(t.path().join(".workspace/corrupt"))
             .unwrap()
@@ -350,7 +407,7 @@ fn environment_corruption_does_not_block_files_and_unknown_format_is_preserved()
     );
     fs::write(&path, b"{\"format\":4}").unwrap();
     let unknown = environment::Environment::load(options, running).unwrap();
-    assert_eq!(unknown.status()["phase"], "failed");
+    assert_eq!(j(&unknown.status())["phase"], "failed");
     assert_eq!(fs::read(&path).unwrap(), b"{\"format\":4}");
 }
 
@@ -358,10 +415,10 @@ fn environment_corruption_does_not_block_files_and_unknown_format_is_preserved()
 fn external_config_changes_win_compare_and_swap_and_invalid_files_stay_untouched() {
     let (t, mut w) = temp_workspace();
     let path = t.path().join(".workspace/config.json");
-    let mut externally_changed = w.state["config"].clone();
+    let mut externally_changed = j(&w.state)["config"].clone();
     externally_changed["appearance"]["theme"] = json!("dark");
     storage::write_json(&path, &externally_changed).unwrap();
-    let stale = w.state["config"].clone();
+    let stale = j(&w.state)["config"].clone();
     let revision = w.revision;
     assert_eq!(
         cmd(
@@ -371,7 +428,7 @@ fn external_config_changes_win_compare_and_swap_and_invalid_files_stay_untouched
         )["kind"],
         "conflict"
     );
-    assert_eq!(w.state["config"]["appearance"]["theme"], "dark");
+    assert_eq!(j(&w.state)["config"]["appearance"]["theme"], "dark");
     fs::write(&path, "{invalid").unwrap();
     let revision = w.revision;
     assert_eq!(
@@ -409,7 +466,7 @@ fn saving_preserves_executable_mode_and_move_never_overwrites_orphan_drafts() {
     cmd(
         &mut w,
         "editFile",
-        json!({"path":"destination","shown":storage::missing(),"text":"orphan"}),
+        json!({"path":"destination","shown":workflow_filework::FileVersion::default(),"text":"orphan"}),
     );
     let result = cmd(
         &mut w,
@@ -419,12 +476,12 @@ fn saving_preserves_executable_mode_and_move_never_overwrites_orphan_drafts() {
     // A clean source still must not silently shadow an orphan destination draft.
     assert_eq!(result["kind"], "failed");
     assert!(file.exists());
-    assert_eq!(w.state["drafts"]["destination"]["text"], "orphan");
+    assert_eq!(j(&w.state)["drafts"]["destination"]["text"], "orphan");
 }
 
 #[test]
 fn nested_service_assets_are_explicit_safe_paths() {
-    let (t, mut w) = temp_workspace();
+    let (_t, mut w) = temp_workspace();
     assert_eq!(
         cmd(
             &mut w,
@@ -434,12 +491,9 @@ fn nested_service_assets_are_explicit_safe_paths() {
         "done"
     );
     assert!(
-        storage::path(
-            t.path(),
-            ".workspace/services/example/providers/../state",
-            false
-        )
-        .is_err()
+        w.filework
+            .validate_path(".workspace/services/example/providers/../state")
+            .is_err()
     );
     let file = cmd(
         &mut w,

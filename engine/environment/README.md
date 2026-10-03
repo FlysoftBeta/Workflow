@@ -1,0 +1,13 @@
+# Environment
+
+`workflow-environment` owns private workspace persistence, environment declarations, image and tool provisioning, lifecycle recovery and guest process supervision. The Server maps its typed APIs to the workspace protocol; this crate has no Server or wire dependency.
+
+`Store` constructs every `.workspace` path and rejects unsafe keys and symbolic-link components. Callers supply typed serde documents. Reads reject duplicate JSON keys recursively, including in unknown extension fields. Writes are atomic and synchronize the file and parent directory. Backup and quarantine operations preserve the established filenames; each domain decides whether a document is damaged or belongs to an unsupported format. Upload staging is private and publishes without overwriting a concurrent destination. The Engine owner lock stays live through a `StoreLock` handle.
+
+The public `.workspace/env.json` declaration remains separate from private `.workspace/environment/environment.json` lifecycle state. `EnvironmentSpec` preserves omitted language arrays, explicit empty arrays and unknown fields. Fingerprints use the historical sorted-key JSON encoding. Builds retain the active generation, and post-scripts write a private home snapshot whose changes are merged only at activation after conflict checks.
+
+`runtime` is the only guest execution interface. Typed process requests return raw bytes and measured exit results; transport encoding belongs to the Server. PTY processes and piped supervisors spawn and reap on persistent owner threads so Linux parent-death signals cannot kill a child when a short-lived request thread exits. Process handles stop complete owned groups. The `test-support` feature exposes a host-command fixture entry point only for tests; production requests always require an activated guest environment.
+
+The concrete `workflow-runtime` binary and freestanding loader live in `runtime/` and `loader/`. Round one deliberately retains all three runtime target trees: host, Android ARM64 and Android x86_64. No target-parity claim or deduplication is implied by their relocation. The moved scripts resolve the Engine workspace and repository from their new paths and retain the shared build and emulator leases.
+
+Run crate tests from the Engine workspace with `tools/with-build-lock.sh cargo test --manifest-path engine/Cargo.toml -p workflow-environment -j2`. These tests cover typed persistence recovery, declaration fingerprints, tool inventory verification, transactional home activation and process supervision. They do not establish real image execution or Android acceptance; the runtime and device suites remain necessary for those claims.

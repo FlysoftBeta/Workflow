@@ -1,0 +1,20 @@
+[package]
+name = "workflow-environment"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+schemars.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["raw_value", "arbitrary_precision"] }
+libc.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+test-support = []

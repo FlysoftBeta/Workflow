@@ -7,8 +7,8 @@
   "methods": [
     "hello",
     "workspace.snapshot",
-    "workspace.command",
     "workspace.watch",
+    "workspace.command",
     "files.read",
     "files.upload.begin",
     "files.upload.chunk",
@@ -50,11 +50,366 @@
     "services.command",
     "services.complete"
   ],
+  "schemaFile": "schema.json",
+  "methodSchemas": {
+    "chat.command": {
+      "params": {
+        "$ref": "#/$defs/ChatCommandParams"
+      },
+      "result": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "chat.snapshot": {
+      "params": {
+        "$ref": "#/$defs/ChatSnapshotParams"
+      },
+      "result": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "chat.watch": {
+      "params": {
+        "$ref": "#/$defs/ChatWatchParams"
+      },
+      "result": {
+        "$ref": "#/$defs/OpaqueJson"
+      }
+    },
+    "client.config": {
+      "params": {
+        "$ref": "#/$defs/ClientConfigParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ClientConfigReply"
+      }
+    },
+    "documents.quarantine": {
+      "params": {
+        "$ref": "#/$defs/DocumentParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Revision"
+      }
+    },
+    "documents.read": {
+      "params": {
+        "$ref": "#/$defs/DocumentParams"
+      },
+      "result": {
+        "$ref": "#/$defs/DocumentResult"
+      }
+    },
+    "documents.write": {
+      "params": {
+        "$ref": "#/$defs/DocumentParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Revision"
+      }
+    },
+    "environment.reconcile": {
+      "params": {
+        "$ref": "#/$defs/RetryParams"
+      },
+      "result": {
+        "$ref": "#/$defs/EnvironmentStatus"
+      }
+    },
+    "environment.restart": {
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/EnvironmentStatus"
+      }
+    },
+    "environment.status": {
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/EnvironmentStatus"
+      }
+    },
+    "environment.tools.install": {
+      "params": {
+        "$ref": "#/$defs/ToolInstallParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ToolsStatus"
+      }
+    },
+    "environment.tools.status": {
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/ToolsStatus"
+      }
+    },
+    "files.read": {
+      "params": {
+        "$ref": "#/$defs/ReadFileParams"
+      },
+      "result": {
+        "$ref": "#/$defs/BlobResult"
+      }
+    },
+    "files.upload.begin": {
+      "params": {
+        "$ref": "#/$defs/UploadBeginParams"
+      },
+      "result": {
+        "$ref": "#/$defs/UploadStarted"
+      }
+    },
+    "files.upload.cancel": {
+      "params": {
+        "$ref": "#/$defs/UploadIdParams"
+      },
+      "result": {
+        "$ref": "#/$defs/CancelResult"
+      }
+    },
+    "files.upload.chunk": {
+      "params": {
+        "$ref": "#/$defs/UploadChunkParams"
+      },
+      "result": {
+        "$ref": "#/$defs/UploadProgress"
+      }
+    },
+    "files.upload.commit": {
+      "params": {
+        "$ref": "#/$defs/UploadIdParams"
+      },
+      "result": {
+        "$ref": "#/$defs/UploadOutcome"
+      }
+    },
+    "hello": {
+      "params": {
+        "$ref": "#/$defs/HelloParams"
+      },
+      "result": {
+        "$ref": "#/$defs/HelloResult"
+      }
+    },
+    "process.read": {
+      "params": {
+        "$ref": "#/$defs/ProcessReadParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ProcessReadResult"
+      }
+    },
+    "process.resize": {
+      "params": {
+        "$ref": "#/$defs/ProcessResizeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Dimensions"
+      }
+    },
+    "process.spawn": {
+      "params": {
+        "$ref": "#/$defs/SpawnOptions"
+      },
+      "result": {
+        "$ref": "#/$defs/Spawned"
+      }
+    },
+    "process.stop": {
+      "params": {
+        "$ref": "#/$defs/ProcessStopParams"
+      },
+      "result": {
+        "$ref": "#/$defs/StoppingResult"
+      }
+    },
+    "process.wait": {
+      "params": {
+        "$ref": "#/$defs/ProcessWaitParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WaitStatus"
+      }
+    },
+    "process.write": {
+      "params": {
+        "$ref": "#/$defs/ProcessWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WrittenResult"
+      }
+    },
+    "services.command": {
+      "params": {
+        "$ref": "#/$defs/CommandRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/Reply"
+      }
+    },
+    "services.complete": {
+      "params": {
+        "$ref": "#/$defs/CompleteRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/Reply"
+      }
+    },
+    "services.executor.register": {
+      "params": {
+        "$ref": "#/$defs/RegisterRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/Reply"
+      }
+    },
+    "services.executor.retire": {
+      "params": {
+        "$ref": "#/$defs/LeaseRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/Reply"
+      }
+    },
+    "services.report": {
+      "params": {
+        "$ref": "#/$defs/ServiceReportParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ServiceReportReply"
+      }
+    },
+    "services.status": {
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/ServicesResult"
+      }
+    },
+    "terminal.attach": {
+      "params": {
+        "$ref": "#/$defs/TerminalStartParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Metadata"
+      }
+    },
+    "terminal.clear": {
+      "params": {
+        "$ref": "#/$defs/TerminalIdParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Metadata"
+      }
+    },
+    "terminal.create": {
+      "params": {
+        "$ref": "#/$defs/StartOptions"
+      },
+      "result": {
+        "$ref": "#/$defs/Metadata"
+      }
+    },
+    "terminal.read": {
+      "params": {
+        "$ref": "#/$defs/TerminalReadParams"
+      },
+      "result": {
+        "$ref": "#/$defs/TerminalReadResult"
+      }
+    },
+    "terminal.rename": {
+      "params": {
+        "$ref": "#/$defs/TerminalRenameParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Metadata"
+      }
+    },
+    "terminal.resize": {
+      "params": {
+        "$ref": "#/$defs/TerminalResizeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Dimensions"
+      }
+    },
+    "terminal.restart": {
+      "params": {
+        "$ref": "#/$defs/TerminalStartParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Metadata"
+      }
+    },
+    "terminal.status": {
+      "params": {
+        "$ref": "#/$defs/TerminalIdParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Metadata"
+      }
+    },
+    "terminal.stop": {
+      "params": {
+        "$ref": "#/$defs/TerminalStopParams"
+      },
+      "result": {
+        "$ref": "#/$defs/StoppingResult"
+      }
+    },
+    "terminal.wait": {
+      "params": {
+        "$ref": "#/$defs/TerminalWaitParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WaitStatus"
+      }
+    },
+    "terminal.write": {
+      "params": {
+        "$ref": "#/$defs/TerminalWriteParams"
+      },
+      "result": {
+        "$ref": "#/$defs/WrittenResult"
+      }
+    },
+    "workspace.command": {
+      "params": {
+        "$ref": "#/$defs/Command"
+      },
+      "result": {
+        "$ref": "#/$defs/CommandReply"
+      }
+    },
+    "workspace.snapshot": {
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/Snapshot"
+      }
+    },
+    "workspace.watch": {
+      "params": {
+        "$ref": "#/$defs/WatchParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Snapshot"
+      }
+    }
+  },
   "compatibility": "Exact protocol match is mandatory. No legacy migration or protocol fallback.",
   "ownership": {
     "android": "Workbench presentation, connection profiles, workspace-delivered local configuration, disposable projections and local Android capability execution",
-    "engine": "Workspace transactions, imports and collision allocation, chat adapters and submission ledger, tool installation, terminal resources and desired local-service operations",
-    "guestChat": "Engine-supervised JVM service; private persistence through allowlisted Rust callbacks, no writable private-state mount",
+    "engine": "Typed Environment, Workspace, FileWork and Terminal domains composed by Server; chat adapters and send ledger remain in the supervised guest service until round 2",
+    "guestChat": "Engine-supervised JVM service; opaque ChatWire bodies inside typed private RPC, no writable private-state mount",
     "localServices": "Boot-bound executor epochs and measured operation receipts; no automatic replay of unknown outcomes"
   },
   "embeddedLifetime": "Stdio transport closure stops the Server and owned processes. Reconnect rehydrates committed state; there is no detached or remote execution promise."

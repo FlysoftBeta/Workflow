@@ -7,7 +7,7 @@ Tests opt in through `testFixtures(project(":core"))` and retain the original Ko
 Under `kotlin/top/flysoftbeta/workflow/core/`, `store/` holds `ReferenceWorkspaceStore`, its state
 paths and the disk-backed trash writer. `io/` contains the blocking filesystem port, JVM/memory
 implementations and watcher. `environment/` contains the earlier installer, planner and state
-writer. The production equivalents live in `engine/server/` and `engine/runtime/`; Android
+writer. The production equivalents live in `engine/server/` and `engine/environment/runtime/`; Android
 reference tests supply their filesystem adapter from `app/src/androidTest/`.
 
 Keep fixes that preserve oracle validity here, and keep real product behavior in the Rust owner.

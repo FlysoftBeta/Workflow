@@ -1,15 +1,13 @@
-//! Engine-owned guest chat service supervision and private bidirectional RPC.
-//! The Android client never receives the private process channel or executable paths.
-use crate::{
-    environment::Environment,
-    protocol::{Error, MAX_FRAME, Result, line, strict_json},
+//! Temporary round-1 bridge to the unchanged Kotlin service. Runtime owns its process.
+use crate::protocol::{
+    self, Error, MAX_FRAME, OpaqueJson, OpaqueObject, Request, Response, Result, RpcError, RpcId,
+    Version, line,
 };
-use serde_json::{Value as V, json};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     io::{BufReader, Read, Write},
-    os::unix::process::CommandExt,
-    process::{ChildStdin, Command, Stdio},
+    process::ChildStdin,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -17,9 +15,11 @@ use std::{
     },
     time::Duration,
 };
-
-type Callback = Arc<dyn Fn(&str, &V) -> Result<V> + Send + Sync>;
-
+use workflow_environment::{
+    Environment,
+    runtime::{self, CommandSpec, PipedProcess, ProcessHandle},
+};
+type Callback = Arc<dyn Fn(&str, &OpaqueObject) -> Result<OpaqueJson> + Send + Sync>;
 #[derive(Default)]
 pub struct Chat {
     host: Mutex<Option<Arc<Host>>>,
@@ -30,14 +30,13 @@ impl Chat {
         environment: &Arc<Mutex<Environment>>,
         callback: Callback,
     ) -> Result<Arc<Host>> {
-        let host = {
-            let mut slot = self.host.lock().unwrap();
-            if slot
-                .as_ref()
-                .is_none_or(|h| !h.alive.load(Ordering::SeqCst))
-            {
-                let environment = environment.lock().unwrap();
-                let argv = [
+        let mut slot = self.host.lock().unwrap();
+        if slot
+            .as_ref()
+            .is_none_or(|h| !h.alive.load(Ordering::SeqCst))
+        {
+            let request = CommandSpec {
+                argv: [
                     "/opt/workflow/tools/jre/bin/java",
                     "-Xms16m",
                     "-Xmx256m",
@@ -47,13 +46,17 @@ impl Chat {
                     "-jar",
                     "/opt/workflow/tools/chat/workflow-chat.jar",
                 ]
-                .map(String::from);
-                let command = environment.process_command(&argv, "/workspace", &json!({}))?;
-                *slot = Some(Host::spawn(command, environment.running.clone(), callback)?);
-            }
-            slot.as_ref().unwrap().clone()
-        };
-        Ok(host)
+                .map(String::from)
+                .to_vec(),
+                cwd: "/workspace".into(),
+                env: Default::default(),
+            };
+            *slot = Some(Host::spawn(
+                runtime::spawn_piped(environment, &request)?,
+                callback,
+            )?);
+        }
+        Ok(slot.as_ref().unwrap().clone())
     }
     pub fn stop(&self) {
         if let Some(host) = self.host.lock().unwrap().take() {
@@ -61,87 +64,49 @@ impl Chat {
         }
     }
 }
-
+fn present_payload<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<OpaqueJson>, D::Error> {
+    OpaqueJson::deserialize(d).map(Some)
+}
+#[derive(Deserialize)]
+struct PrivateFrame {
+    jsonrpc: Version,
+    id: Option<String>,
+    method: Option<String>,
+    #[serde(default)]
+    params: OpaqueObject,
+    #[serde(default, deserialize_with = "present_payload")]
+    result: Option<OpaqueJson>,
+    error: Option<RpcError>,
+    #[serde(flatten)]
+    _extra: OpaqueObject,
+}
 pub(crate) struct Host {
     input: Mutex<ChildStdin>,
-    pending: Mutex<HashMap<String, mpsc::Sender<Result<V>>>>,
+    pending: Mutex<HashMap<String, mpsc::Sender<Result<OpaqueJson>>>>,
     next: AtomicU64,
     alive: AtomicBool,
     callbacks: AtomicUsize,
-    pid: i32,
+    process: ProcessHandle,
 }
 impl Host {
-    fn spawn(
-        mut command: Command,
-        running: Arc<AtomicUsize>,
-        callback: Callback,
-    ) -> Result<Arc<Self>> {
-        command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        unsafe {
-            command.pre_exec(|| {
-                if libc::setsid() < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
-        // PR_SET_PDEATHSIG follows the spawning thread, so that thread also reaps.
-        let (spawn_tx, spawn_rx) = mpsc::sync_channel(1);
-        let (owner_tx, owner_rx) = mpsc::sync_channel::<Arc<Host>>(1);
-        let counter = running.clone();
-        std::thread::spawn(move || {
-            let mut child = match command.spawn() {
-                Ok(child) => child,
-                Err(error) => {
-                    let _ = spawn_tx.send(Err(error));
-                    return;
-                }
-            };
-            let pipes = (
-                child.id() as i32,
-                child.stdin.take().unwrap(),
-                child.stdout.take().unwrap(),
-                child.stderr.take().unwrap(),
-            );
-            if spawn_tx.send(Ok(pipes)).is_err() {
-                let _ = child.kill();
-                let _ = child.wait();
-                return;
-            }
-            let host = match owner_rx.recv() {
-                Ok(host) => host,
-                Err(_) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return;
-                }
-            };
-            let _ = child.wait();
-            host.fail();
-            counter.fetch_sub(1, Ordering::SeqCst);
-        });
-        let (pid, stdin, stdout, mut stderr) = spawn_rx
-            .recv()
-            .map_err(|_| Error::business("chat_start", "chat process owner exited"))??;
+    fn spawn(process: PipedProcess, callback: Callback) -> Result<Arc<Self>> {
+        let PipedProcess {
+            stdin,
+            stdout,
+            mut stderr,
+            handle,
+        } = process;
         let host = Arc::new(Self {
             input: Mutex::new(stdin),
             pending: Mutex::new(HashMap::new()),
             next: AtomicU64::new(0),
             alive: AtomicBool::new(true),
             callbacks: AtomicUsize::new(0),
-            pid,
+            process: handle,
         });
-        running.fetch_add(1, Ordering::SeqCst);
-        owner_tx
-            .send(host.clone())
-            .map_err(|_| Error::business("chat_start", "chat process owner exited"))?;
-        // Drain diagnostics without retaining secrets or printing vendor output.
+        // Drain without retaining credentials or printing backend diagnostics.
         std::thread::spawn(move || {
             let mut b = [0u8; 8192];
             while stderr.read(&mut b).is_ok_and(|n| n != 0) {}
@@ -150,66 +115,46 @@ impl Host {
         std::thread::spawn(move || {
             let mut input = BufReader::new(stdout);
             while let Ok(Some(bytes)) = line(&mut input) {
-                let frame = match strict_json(&bytes) {
+                let frame: PrivateFrame = match protocol::parse(&bytes) {
                     Ok(v) => v,
                     Err(_) => break,
                 };
-                if frame["jsonrpc"] != "2.0" {
-                    break;
-                }
-                if let Some(method) = frame["method"].as_str() {
-                    let Some(id) = frame.get("id").filter(|id| id.is_string()).cloned() else {
-                        break;
-                    };
+                let _ = frame.jsonrpc;
+                let Some(id) = frame.id else { break };
+                if let Some(method) = frame.method {
                     if reader.callbacks.fetch_add(1, Ordering::SeqCst) >= 64 {
                         reader.callbacks.fetch_sub(1, Ordering::SeqCst);
-                        let _ = reader
-                            .reply(id, Err(Error::business("limit", "too many chat callbacks")));
+                        let _ = reader.reply(
+                            &id,
+                            Err(Error::business("limit", "too many chat callbacks")),
+                        );
                         continue;
                     }
-                    let method = method.to_owned();
-                    let params = frame.get("params").cloned().unwrap_or(json!({}));
                     let child = reader.clone();
                     let callback = callback.clone();
                     std::thread::spawn(move || {
-                        let result = if allowed_callback(&method, &params) {
-                            callback(&method, &params)
+                        let result = if allowed_callback(&method, &frame.params) {
+                            callback(&method, &frame.params)
                         } else {
-                            Err(Error::method())
+                            Err(protocol::unknown_method())
                         };
-                        let _ = child.reply(id, result);
+                        let _ = child.reply(&id, result);
                         child.callbacks.fetch_sub(1, Ordering::SeqCst);
                     });
-                } else if let Some(id) = frame["id"].as_str() {
-                    if let Some(waiter) = reader.pending.lock().unwrap().remove(id) {
-                        let result = if let Some(error) = frame.get("error") {
-                            Err(Error {
-                                code: error["code"].as_i64().unwrap_or(-32000) as i32,
-                                kind: error["data"]["kind"]
-                                    .as_str()
-                                    .unwrap_or("chat_failed")
-                                    .into(),
-                                message: error["message"]
-                                    .as_str()
-                                    .unwrap_or("chat command failed")
-                                    .into(),
-                            })
-                        } else if let Some(result) = frame.get("result") {
-                            Ok(result.clone())
-                        } else {
-                            Err(Error::business("chat_protocol", "invalid chat response"))
-                        };
-                        let _ = waiter.send(result);
-                    }
-                } else {
-                    break;
+                } else if let Some(waiter) = reader.pending.lock().unwrap().remove(&id) {
+                    let result = match (frame.error, frame.result) {
+                        (Some(error), None) => Err(error.into()),
+                        (None, Some(result)) => Ok(result),
+                        _ => Err(Error::business("chat_protocol", "invalid chat response")),
+                    };
+                    let _ = waiter.send(result);
                 }
             }
             reader.stop();
         });
         Ok(host)
     }
-    fn write(&self, value: &V) -> Result<()> {
+    fn write(&self, value: &impl Serialize) -> Result<()> {
         let bytes = serde_json::to_vec(value).map_err(|_| Error::invalid("invalid chat frame"))?;
         if bytes.len() > MAX_FRAME {
             return Err(Error::business("too_large", "chat frame exceeds limit"));
@@ -220,13 +165,10 @@ impl Host {
         input.flush()?;
         Ok(())
     }
-    fn reply(&self, id: V, result: Result<V>) -> Result<()> {
-        self.write(&match result {
-            Ok(value) => json!({"jsonrpc":"2.0","id":id,"result":value}),
-            Err(e) => json!({"jsonrpc":"2.0","id":id,"error":{"code":e.code,"message":e.message,"data":{"kind":e.kind}}}),
-        })
+    fn reply(&self, id: &str, result: Result<OpaqueJson>) -> Result<()> {
+        self.write(&Response::new(RpcId::string(id), result))
     }
-    pub(crate) fn request(&self, method: &str, params: &V) -> Result<V> {
+    pub fn request(&self, method: &str, params: &OpaqueObject) -> Result<OpaqueJson> {
         let id = format!("chat{}", self.next.fetch_add(1, Ordering::SeqCst));
         let (tx, rx) = mpsc::channel();
         {
@@ -239,7 +181,13 @@ impl Host {
             }
             pending.insert(id.clone(), tx);
         }
-        let result = self.write(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}));
+        let result = self.write(&Request {
+            jsonrpc: Version::V2,
+            id: Some(RpcId::string(&id)),
+            method: method.into(),
+            params: params.clone(),
+            extra: Default::default(),
+        });
         let result = match result {
             Ok(()) => rx
                 .recv_timeout(Duration::from_secs(240))
@@ -263,14 +211,12 @@ impl Host {
     }
     fn stop(&self) {
         if self.alive.swap(false, Ordering::SeqCst) {
-            unsafe {
-                libc::kill(-self.pid, libc::SIGKILL);
-            }
+            let _ = self.process.stop(true);
         }
         self.fail();
     }
 }
-fn allowed_callback(method: &str, params: &V) -> bool {
+fn allowed_callback(method: &str, params: &OpaqueObject) -> bool {
     match method {
         "hello"
         | "workspace.snapshot"
@@ -280,31 +226,32 @@ fn allowed_callback(method: &str, params: &V) -> bool {
         | "environment.tools.status"
         | "environment.tools.install" => true,
         "documents.read" | "documents.write" | "documents.quarantine" => {
-            params["namespace"] == "chat"
+            protocol::params::<protocol::DocumentParams>(params)
+                .is_ok_and(|p| p.namespace == "chat")
         }
         _ => false,
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn callbacks_do_not_expose_process_launch_or_recursive_chat() {
-        assert!(!allowed_callback("process.spawn", &json!({})));
-        assert!(!allowed_callback("chat.command", &json!({})));
-        assert!(!allowed_callback(
-            "documents.write",
-            &json!({"namespace":"services.proxy"})
-        ));
-        assert!(allowed_callback(
-            "documents.write",
-            &json!({"namespace":"chat"})
-        ));
+        let params = protocol::object(&protocol::DocumentParams {
+            namespace: "chat".into(),
+            key: "index".into(),
+            document: None,
+            expected_revision: None,
+            extra: Default::default(),
+        })
+        .unwrap();
+        assert!(allowed_callback("documents.write", &params));
+        assert!(!allowed_callback("process.spawn", &params));
+        assert!(!allowed_callback("chat.command", &params));
     }
     #[test]
-    fn host_routes_callback_while_request_is_waiting_and_expires_waiters_on_exit() {
-        let mut command = Command::new("python3");
+    fn callback_while_request_waits_and_waiter_expires_on_exit() {
+        let mut command = std::process::Command::new("python3");
         command.arg("-u").arg("-c").arg(
             r#"
 import sys,json
@@ -315,18 +262,19 @@ print(json.dumps({'jsonrpc':'2.0','id':request['id'],'result':callback['result']
 sys.stdin.readline()
 "#,
         );
-        let running = Arc::new(AtomicUsize::new(0));
+        let process = runtime::spawn_fixture(command, Arc::new(AtomicUsize::new(0))).unwrap();
         let host = Host::spawn(
-            command,
-            running.clone(),
-            Arc::new(|_, _| Ok(json!({"revision":7}))),
+            process,
+            Arc::new(|_, _| protocol::opaque(&protocol::Revision { revision: 7 })),
         )
         .unwrap();
-        assert_eq!(
-            host.request("chat.snapshot", &json!({})).unwrap(),
-            json!({"revision":7})
-        );
+        let result = host
+            .request("chat.snapshot", &OpaqueObject::default())
+            .unwrap();
+        let revision: protocol::Revision =
+            serde_json::from_slice(&serde_json::to_vec(&result).unwrap()).unwrap();
+        assert_eq!(revision.revision, 7);
         host.stop();
-        assert!(host.request("chat.snapshot", &json!({})).is_err());
+        assert!(host.request("chat.snapshot", &Default::default()).is_err());
     }
 }

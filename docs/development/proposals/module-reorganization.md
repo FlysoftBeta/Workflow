@@ -1,6 +1,6 @@
 # Module reorganization: Engine domains and a thin App
 
-Status: draft (coordinator skeleton; module appendices pending). Owner: coordinator. Updated: 2026-10-03.
+Status: round-1 architecture and implementation plan. Owner: coordinator. Updated: 2026-10-03.
 
 ## Problem and intended outcome
 
@@ -77,12 +77,14 @@ Module appendices live in `docs/development/proposals/module-reorganization/`:
 - `server-domains.md` — server and protocol, workspace, filework, terminal (including the Engine side of the terminal defects).
 - `app.md` — App module layout, connection, synchronization, Workbench, proxy, the client side of the terminal defects, and the documentation reorganization.
 
-Each appendix maps current source to its target, defines the public interfaces the other modules rely on, and lists implementation tasks with owned paths, checks and dependencies. The coordinator settles cross-appendix contracts before implementation starts.
+Each appendix maps current source to its target, defines the public interfaces the other modules rely on, and lists implementation tasks with owned paths, checks and dependencies. Round 1 fixes the common contracts: typed domain models may derive serde/schema without owning wire methods; Server composes a single persisted workspace transaction; Environment owns the typed store and guest process API. The JVM Chat bridge is the explicit round-1 exception to the Rust-only target. Runtime target-tree deduplication is deferred because host parity cannot prove Android libc/register equivalence. The current public declaration remains `.workspace/env.json`, with the private lifecycle record at `.workspace/environment/environment.json`.
 
 ## Verification and rollout
 
-To be completed from the appendices. Compilation is not acceptance: Engine behavior needs host suites, and user-visible behavior needs the documented device matrix through `tools/workflow device`.
+Round 1 splits the Cargo domains, types storage/protocol, exports schema and golden fixtures, updates build paths and preserves current Android wire behavior. Its handoff requires source-bound `rust-server` (including domain tests and contract drift), `runtime-host`, `native`, `image`, `infrastructure`, `documentation` and `android-apk` results. Cargo uses at most two jobs under the shared build lease.
+
+Round 2 ports Chat with replay/codec/reducer parity, checks Kotlin bindings against the Rust export, relocates App modules and repairs terminal interactions. JRE/Kotlin deletion depends on isolated guest/device acceptance. Round 3 performs the full documentation move and integrated matrix. Compilation is not acceptance: user-visible behavior needs the documented device matrix through `tools/workflow device`, using disposable AVDs only in this task. No result on host or API 28 x86_64 establishes physical ARM64 acceptance. Each appendix ends with owned paths, dependencies and checks.
 
 ## Decision and completion
 
-Pending review of the appendices.
+The appendices record autonomous round-1 decisions and explicitly identify later-round work. Actual completion, source identity and check results belong to the contributor handoff; the target architecture is not a claim that every later-round capability already exists.

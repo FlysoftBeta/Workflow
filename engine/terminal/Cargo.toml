@@ -1,0 +1,15 @@
+[package]
+name = "workflow-terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+workflow-environment = { path = "../environment" }
+serde.workspace = true
+schemars.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
