@@ -30,7 +30,7 @@ Keep that Rust selection in the shell used for builds so both Cargo and the dire
 
 ## Prepare the customized images
 
-A fresh clone does not contain the ignored environment archives or the executable-prebuilt cache. Gradle downloads missing Codex and Mihomo executables from their pinned manifests and verifies both archive and binary SHA-256 values. An invalid cached executable fails verification and must be inspected before removing it to permit a new download. First-time dependency resolution and image construction require network access.
+A fresh clone does not contain the ignored environment archives or the executable-prebuilt cache. Gradle obtains missing Mihomo, Codex and the Linux JRE from pinned manifests. Mihomo is staged as an Android local executable, while Codex and the JRE enter the Engine tools payload alongside the locally built chat-service JAR. Archive and member identities are verified. An invalid cached executable fails verification and must be inspected before removing it to permit a new download. First-time dependency resolution and image construction require network access.
 
 Gradle expects customized `workspace` images to exist before APK assembly. Build both explicitly:
 
@@ -44,6 +44,23 @@ The required input pairs are `artifacts/image/amd64/image.tar.zst` with `image.j
 The image builder coordinates its compression through the shared build lock. On an x86_64 host, the arm64 command uses the pinned build-only QEMU through a rootless Podman user namespace and a private mount namespace. This cross-build path requires Linux 6.7 or newer and does not configure global host binfmt. See [environment construction](../implementation/environment.md#building-and-checking-images) for the image inputs, checks, and runtime contract.
 
 APK assembly verifies the image profile, architecture, archive size, and SHA-256. It fails when the required pair is missing or invalid. Assembly does not provision the image, and a `base` image cannot replace the customized environment. Prepared task checkouts can receive independent image snapshots through `tools/workflow prepare NAME`, as described in the [multi-agent workflow](multi-agent.md).
+
+## Engine tools payload
+
+The `agent` verification suite builds `:engine-chat:serviceJar`, producing `engine/chat/build/libs/workflow-chat.jar`. This is Java 17 bytecode for the bundled guest JRE, independent of both the Gradle JDK and Android's runtime. Android production depends on `:agent-model`; `:agent` and `:engine-chat` must not enter its production dependency graph. Instrumentation may retain adapter/process fixtures explicitly.
+
+APK assembly invokes `engine/tools/package.py` for the selected architecture. It produces `tools.json` and `tools.zip` under generated assets at `assets/environment/tools/`. The payload combines pinned Codex, Eclipse Temurin JRE 17.0.20.1+1, the service JAR and retained upstream notices. Its catalog records per-file size, SHA-256 and executable mode, archive identity, architecture, fixed guest entry points and the pinned optional Claude release. Ignored downloads live beneath `third_party/.cache/engine`; a corrupt existing cache fails rather than being silently replaced.
+
+For a standalone distribution, build the JAR under the normal build lease and package the same pair:
+
+```sh
+tools/with-build-lock.sh ./gradlew :engine-chat:serviceJar
+python3 engine/tools/package.py --architecture amd64 \
+  --jar engine/chat/build/libs/workflow-chat.jar \
+  --output artifacts/engine-tools/amd64
+```
+
+Use `arm64` for the other architecture. Supply that output directory with Server `--tools`; the embedded bootstrap uses the pair carried in the APK. Missing or invalid mandatory payload members fail explicitly. Engine performs verification and binds tools into existing generations without replaying post-scripts. Claude remains a pinned optional Engine-managed runtime installation, requested through its tool API rather than an Android download script.
 
 ## Build Debug APKs
 
@@ -60,7 +77,7 @@ tools/with-build-lock.sh ./gradlew :app:assembleArm64Debug
 tools/with-build-lock.sh ./gradlew :app:assembleX86_64Debug
 ```
 
-Gradle automatically cross-compiles the Rust Workspace Server, runtime, and loader, builds the native PTY and proxy guardian, stages verified executable prebuilts and notices, and packages the selected environment image. No separate manual native build is needed. Generated inputs stay under `app/build/`; Cargo and other build caches remain ignored. Shared native preparation currently builds both Android ABIs even when assembling a single flavor, so install both Rust targets.
+Gradle automatically cross-compiles the Rust Workspace Server, runtime, and loader, builds the local proxy guardian and native test support as configured, stages verified Mihomo and notices, builds the guest chat service and Engine tools payload, and packages the selected environment image. Codex is a guest payload executable, not `libcodex.so` in Android JNI libraries. No separate manual native build is needed. Generated inputs stay under `app/build/`; Cargo and other build caches remain ignored. Shared native preparation currently builds both Android ABIs even when assembling a single flavor, so install both Rust targets.
 
 The Debug outputs use standard Android debug signing:
 
@@ -95,7 +112,7 @@ For the verified release delivery, run:
 tools/build-release.sh
 ```
 
-The helper acquires the shared build lease, builds both Release variants, and copies and verifies them before releasing it. It checks v1/v2/v3 signatures, version and minSdk, non-debuggable flags, the exact packaged ABI, native executables, offline terminal assets, and the customized image metadata and digest. Successful delivery writes:
+The helper acquires the shared build lease, builds both Release variants, and copies and verifies them before releasing it. It checks v1/v2/v3 signatures, version and minSdk, non-debuggable flags, the exact packaged ABI, native executables, the verified Engine tools payload, offline terminal assets, and the customized image metadata and digest. Successful delivery writes:
 
 | Output under `artifacts/delivery/1.0.0/` | Purpose |
 | --- | --- |

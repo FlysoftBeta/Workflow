@@ -8,11 +8,11 @@ The [product specification](../product/README.md) defines observable behavior, t
 
 `engine/server` implements the JSONL Workspace Server, state transactions, file operations, service documents, environment lifecycle, and managed processes. `engine/runtime` implements the container CLI, ptrace scheduling, path and identity translation, image installation, and generation metadata. `engine/loader` is the `no_std` ELF loader used by the runtime. These are separate executables: the Android package contains `libworkflow-engine.so`, `libworkflow-runtime.so`, and `libworkflow-loader.so`, respectively.
 
-The JVM modules separate platform-independent responsibilities. `:core` contains protocol and connection types, workspace models, reference layout semantics, and terminal stream utilities. `:agent` contains the Codex and Claude adapters, transport machinery, neutral conversation model, and approval constraints. `:proxy` contains Mihomo configuration, controller access, and guardian protocol handling. None of these modules references Android; `:agent` and `:proxy` do not depend on one another. Historical Kotlin workspace writers and their blocking filesystem/trash helpers are test fixtures, not production stores. Production core retains the file-entry value model and hashing utility needed by connection APIs without exposing the old writer implementation.
+The JVM modules separate presentation data from execution. `:core` contains protocol and connection types, workspace models, reference layout semantics, and terminal stream utilities. `:agent-model` contains immutable conversation models, the shared `ChatWire` codec, JSON values, and the pure event reducer. Android depends on these shared definitions, not on vendor backends. `:agent` contains Codex and Claude adapters, transports, process ports, and approval enforcement and is an Engine-only production dependency. `:engine-chat`, rooted at `engine/chat`, owns conversation orchestration and runs inside the environment on the bundled Linux JRE. Rust supervises this service and mediates its private persistence callbacks. `:proxy` remains an independent pure JVM local-capability module; it does not depend on the agent modules.
 
-`:app` contains the Android connection shell, independent feature packages, Compose UI, Sora and xterm adapters, and local capability executors. Feature packages communicate through injected service ports and panel navigation contracts; they do not import each other. `AppGraph` assembles connections, snapshot projections, and platform executors. A ViewModel can coordinate an interaction, but cannot become an owner of durable workspace state.
+`:app` contains the connection shell, independent feature packages, Compose UI, Sora and xterm adapters, and Android capability executors. `AppGraph` composes RPC clients and disposable projections. Android does not construct vendor backends, install tools, maintain conversation indexes, allocate terminal identities, or decide resource cleanup. Features submit semantic Engine commands through injected ports and do not import one another. Historical Kotlin workspace writers and host-shell adapters exist only in test fixtures or instrumentation sources.
 
-`native/` holds Android PTY/JNI and the Root proxy guardian, not the container implementation. `web/` holds offline xterm assets, input adaptation, and tests. `image/` builds the customized environment images. `third_party/` records pinned downloads, hashes, provenance, and licenses; its ignored cache holds the downloaded binaries.
+The architecture-specific Engine tools distribution contains Codex, the guest JRE and the chat service JAR. APK assets transport the verified catalog and payload; they do not turn these tools into Android native libraries. Engine owns their verification, bindings and optional Claude installation. `native/` contains the local proxy guardian and isolated PTY test support, not the container implementation. `web/` contains offline xterm assets and tests, `image/` builds customized images, and `third_party/` retains pinned manifests and licenses. Generated binaries remain in ignored caches and build directories.
 
 ## Workspace storage
 
@@ -25,6 +25,8 @@ The user selects a workspace root. User files live directly beneath that root, w
     env.json                    environment declaration
     state/workspace.json        sessions, layouts, file and composer drafts
     state/services/             measured local service reports
+    state/local-services/       desired proxy state and executor operation receipts
+    state/terminals.json         terminal metadata and resource identities
     environment/                generations, home, toolchains, activation records
     services/<serviceId>/       service configuration, assets, redacted logs
     documents/                  opaque adapter documents and revision metadata
@@ -49,9 +51,13 @@ Disconnection disables workspace mutations, cancels the failed connection's cons
 
 ## Execution and presentation
 
-Every product terminal and coding-agent process is started by the Server through the configured Rust runtime and a verified environment generation. The process API carries PTY or stdio bytes. There is no Android shell, host agent, or old repository fallback. The Server does not parse or answer vendor approval requests; the agent adapters preserve them for the user.
+The Server starts product terminals and the guest chat service through the configured Rust runtime and a verified environment generation. The chat service launches vendor adapters inside that environment. Android receives terminal resources through `terminal.*` and chat projections through `chat.*`, rather than directing vendor process setup. There is no Android shell, Android-JVM chat-service, host-agent, or local-repository fallback. Vendor approval policy remains in the Engine adapters, and only an explicit user response can approve a request.
 
-`RuntimeService` maintains the embedded connection and local capability lifecycle. Root Mihomo is a separate local executor, outside the development container. Its desired configuration and published status still belong to the Engine, as described in the [proxy document](proxy.md).
+Terminal resources own stable IDs, titles, cwd, process association, output generation and cleanup policy. Closing a view removes only its UI attachment. The Engine observes references in live workspace sessions and ends unreferenced resources after a fifteen-second grace period. Environment activation restores previously running terminal resources; a restart with no verified pending generation does not disturb them.
+
+The embedded stdio Server still ends when its transport closes and stops its processes. Durable resource metadata and drafts can be loaded on reconnect, but moving ownership into Engine does not imply a detached daemon, uninterrupted process survival, or remote transport.
+
+`LocalRuntimeService` maintains the embedded connection and local capability lifecycle. Root Mihomo is a separate local executor, outside the development container. Its desired configuration and published status still belong to the Engine, as described in the [proxy document](proxy.md).
 
 Chat is rendered by native Compose components: CommonMark supplies the Markdown model, native elements render text, tables, and code, and Canvas renders mathematical notation. Scroll state is sent back through panel commands. Only the offline xterm terminal uses WebView, including compatibility assets for Android 9's Chromium 66. The [Android client](android-client.md) explains rendering, input, and platform adapters.
 

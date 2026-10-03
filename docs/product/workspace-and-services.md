@@ -4,7 +4,7 @@ The [product model](README.md) explains Sessions, shared drafts, and the Files a
 
 ## Files and terminals
 
-The file explorer is a tree with creation, rename, move, copy, copy-path, and upload actions. Upload accepts camera, photo-library, and device-file input and writes into the selected directory. The internal `.workspace/` directory never appears in normal exploration, including when Show hidden files is enabled. Configuration is opened through explicit configuration actions instead.
+The file explorer is a tree with creation, rename, move, copy, copy-path, and upload actions. Upload accepts camera, photo-library, and device-file input and writes into the selected directory. Workspace allocates a free name at commit, preserving existing files even when another writer races the import. Android imports are limited to 512 MiB per file; switching connections while a picker is open requires choosing the file again. The internal `.workspace/` directory never appears in normal exploration, including when Show hidden files is enabled. Configuration is opened through explicit configuration actions instead.
 
 Deleting a file moves it into the workspace trash and offers Undo in a Snackbar, without a confirmation dialog. Trash is cleaned after seven days. Moving a file by dropping it onto a folder does require confirmation. Internal atomic-write and backup files must not leak into the user's tree.
 
@@ -12,7 +12,7 @@ The text editor provides syntax highlighting, Undo, Redo, Save, and Find through
 
 Terminals run inside the workspace environment, initially as user `work` in the workspace root. Multiple terminals appear as tabs in one Stack. A URL opens in the system browser; a local path, including `path:line:column`, opens and positions the editor. Relative paths use the terminal's current directory, and `~` refers to the environment's home directory. Dropping a file pastes its escaped path.
 
-The terminal's special-key row provides Esc, Tab, Ctrl, Alt, arrows, Home, End, Page Up, Page Down, function keys, and common shell characters. Ctrl and Alt can apply once or stay locked. Selection offers Copy, Paste, and Select all. A finished process leaves its output visible and offers Restart or Close.
+The terminal's special-key row provides Esc, Tab, Ctrl, Alt, arrows, Home, End, Page Up, Page Down, function keys, and common shell characters. Ctrl and Alt can apply once or stay locked. Selection offers Copy, Paste, and Select all. A finished process leaves its retained output visible and offers Restart or Close. Recreating or switching a panel does not restart the terminal. Terminal names, cwd and restart state belong to the Workspace; a terminal no longer referenced by a live Session is cleaned up after a fifteen-second grace period.
 
 ## Conversations and coding agents
 
@@ -24,17 +24,17 @@ Messages support selectable text, tables, inline and block mathematics, and copy
 
 A segmented slider combines model and reasoning-effort selection: each model has a segment, and its supported reasoning levels occupy positions within that segment. Changes apply to the next turn without another confirmation. The full model list remains available from the slider. Speed controls appear only when supported by the backend.
 
-Attachments can come from camera, photo library, device files, workspace files, or dragging a file into the composer. The picker and explorer upload use the same interaction. Pending attachments appear above the input, show upload progress or failure, and can be removed. Draft text and attachments belong to the conversation and survive closing its panel.
+Attachments can come from camera, photo library, device files, workspace files, or dragging a file into the composer. The picker and explorer upload use the same interaction. Pending attachments appear above the input, show upload progress or failure, and can be removed. Draft text and attachments belong to the conversation and survive closing its panel. Workspace acknowledges only the exact submitted draft after backend acceptance, preserving newer edits. If submission outcome is uncertain, the app reports it rather than silently sending the same message again.
 
 Agent requests for commands, file changes, permissions, user input, and MCP interactions appear as cards awaiting a user decision. The application never approves or answers automatically. It presents only the decisions the request permits, preserves unrecognized requests for inspection, and does not focus or preselect Approve. Pressing hardware Enter must not approve a request. Pending cards remain visible above the composer; after a decision they become a compact transcript record, and cancellation marks them expired.
 
 ## The environment and workspace connection
 
-The environment is the complete runtime: tools, packages, variables, mounts, processes, and lifecycle. Environment configuration can select multiple Python and Node versions, additional packages, variables, and post-build scripts. Both supported ABIs ship customized images, so preparing the default environment does not require an online toolchain installation.
+The environment is the complete runtime: tools, packages, variables, mounts, processes, and lifecycle. Environment configuration can select multiple Python and Node versions, additional packages, variables, and post-build scripts. Both supported ABIs ship customized images and the verified mandatory Engine tools payload, so preparing the default environment does not require an online toolchain installation. Optional Claude installation and additional packages can require downloads; their progress and readiness come from Engine checks.
 
 A failed build or verification leaves the previous usable environment intact. A successful replacement waits for an explicit restart when processes are still running; otherwise it can activate directly. Users see actual preparation progress, readiness, restart requirements, or errors. Terminals and coding agents run only inside this environment and do not fall back to host execution.
 
-User files live at the workspace root. Workspace configuration and private state live under `.workspace/`; the workspace service owns their durable state. The Android shell can retain connection profiles and local configuration delivered by the workspace, but does not become an alternative store for Sessions or drafts. Disconnecting disables workspace changes until authoritative state is available again.
+User files live at the workspace root. Workspace configuration and private state live under `.workspace/`; the workspace service owns their durable state. The Android shell can retain connection profiles and local configuration delivered by the workspace, but does not become an alternative store for Sessions or drafts. Disconnecting disables workspace changes until authoritative state is available again. The embedded connection currently stops its Server and running processes when the transport closes; reconnect restores committed state, not uninterrupted execution. A restart action with no pending environment replacement leaves running resources alone.
 
 ## Floating controls
 
@@ -46,6 +46,6 @@ A capability is available only when the underlying permission and operation work
 
 ## Proxy and Settings
 
-Proxy offers start and stop, Rule/Global/Direct modes, proxy groups, node selection, latency tests, and live traffic in one screen. Logs and connections are secondary panels. Configuration is edited directly rather than through an override layer; its files live under `.workspace/services/proxy/`. The service runs through root with TUN. If another VPN or TUN is already active, Workflow reports the conflict instead of silently taking it over.
+Proxy offers start and stop, Rule/Global/Direct modes, proxy groups, node selection, latency tests, and live traffic in one screen. Logs and connections are secondary panels. Configuration is edited directly rather than through an override layer; its files live under `.workspace/services/proxy/`. Workspace records desired operations before the Android executor performs measured local root/TUN work. Failed or interrupted operations remain distinct from successful execution; an old connection cannot authorize a new executor. The service runs through root with TUN. If another VPN or TUN is already active, Workflow reports the conflict instead of silently taking it over.
 
 Settings contains appearance and density, backend accounts, environment status, floating controls, default-Home status, permissions, and About. It shows only details needed for a user decision. Accounts offer login and logout, with browser and device-code login choices where supported. Environment settings offer Restart environment when a verified replacement is ready. Permission rows report measured state and offer authorization when needed. Version and open-source licenses belong in About.

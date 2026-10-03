@@ -15,9 +15,10 @@ workflow-engine serve --root <user-file-root>
   [--runtime <workflow-runtime>] [--loader <workflow-loader>]
   [--apk <Android-APK>] [--native-dir <nativeLibraryDir>]
   [--image <image.tar.zst> --image-index <image.json>]
+  [--tools <directory-containing-tools.json-and-tools.zip>]
 ```
 
-Android packages the Server as `libworkflow-engine.so`, the container runtime as `libworkflow-runtime.so`, and the loader as `libworkflow-loader.so`. Runtime CLI commands such as `run`, `install`, `verify`, `fsck`, and `probe` retain their separate runtime contract and acceptance workloads.
+Android packages the Server as `libworkflow-engine.so`, the container runtime as `libworkflow-runtime.so`, and the loader as `libworkflow-loader.so`. The APK carries the same architecture-specific tools pair under `assets/environment/tools/`; standalone execution supplies `--tools`. Codex and the Linux JRE are guest tools, not Android JNI libraries. Runtime CLI commands such as `run`, `install`, `verify`, `fsck`, and `probe` retain their separate runtime contract and acceptance workloads.
 
 ## Authoritative state
 
@@ -77,9 +78,11 @@ Layout operation `type` values use lower camel case: `open`, `focus`, `focusStac
 
 `files.read {path,offset,length}` returns `{data,nextOffset,eof,size}`, with `length` at most 65,536. Paths must remain beneath the workspace root and cannot traverse symlinks or private state. Explicit configuration editing permits `.workspace/config.json`, `.workspace/env.json`, and safe paths beneath `.workspace/services/<serviceId>/`.
 
-An upload begins with `files.upload.begin {path,size}`, which returns `{uploadId}`. Each `files.upload.chunk {uploadId,offset,data}` must use the previous `nextOffset` and returns the next one. `files.upload.commit {uploadId}` returns a file-operation result only after receiving the declared byte count and atomically publishing the new file without replacing an existing destination. `files.upload.cancel {uploadId}` abandons the staging file. Incomplete uploads remain in a restricted staging directory until cleanup; disconnection never turns a partial file into a user file.
+`files.upload.begin` accepts `{directory,name,size}` for an import whose final destination must be allocated by the Engine. `directory` is workspace-relative and `name` is a single filename. The Engine validates both and returns `{uploadId}`. The exact-destination form `{path,size}` remains available for file creation and explicit service assets; it rejects an existing destination rather than allocating a variant.
 
-The client's import port accepts a length and an `InputStream` factory. Known bytes or an already staged file provide their length directly and stream in 64 KiB chunks. A changed source length, exception, or cancellation cancels the upload. The client does not create another persistent copy of workspace file contents.
+`files.upload.chunk {uploadId,offset,data}` must use the previous `nextOffset` and returns the next one. `files.upload.commit {uploadId}` requires the declared byte count, synchronizes the staging file, and publishes without replacing an existing destination. For the allocating form, the Engine chooses a free filename variant while committing, including when another writer races publication. Success is `{kind:"done",path:<final-workspace-relative-path>}`. Clients use that returned path instead of predicting a name. `files.upload.cancel {uploadId}` abandons staging. Incomplete uploads remain private and never become user files merely because a connection ends.
+
+Android supplies a length and stream factory and sends 64 KiB chunks. URI/camera staging is capped at 512 MiB per import, is disposable, and is bound to the connection instance that opened the picker. A source-length change, failure, cancellation or connection switch cancels or rejects the operation; it cannot redirect a result into another Workspace. The client does not list filenames or decide collision policy locally.
 
 ## Documents and local services
 
@@ -87,7 +90,19 @@ The client's import port accepts a length and an `InputStream` factory. Known by
 
 For namespace `services.<serviceId>`, a key is a safe single filename, and the document is the original file `.workspace/services/<serviceId>/<key>`. For example, `services.proxy` with `config.yaml` addresses exactly the same text as the explicit editor path `.workspace/services/proxy/config.yaml`. A sidecar stores its content hash and revision, not a second copy of its body. Reads and compare-and-set writes inspect the original file first, so editor or external changes invalidate stale revisions. Service documents are UTF-8 text of at most 16 MiB, with format interpreted by the service. Identifiers reject slashes and `.` or `..`. The explicit file API additionally permits safe multi-segment service asset paths, including binary assets, but still rejects symlinks and parent traversal.
 
-`services.report {serviceId,state}` accepts measured results from a local capability executor. The Engine persists and publishes those results; a UI switch or an installed executable cannot establish that an operation succeeded. `services.status {}` returns `{services,desired}`, separating stored reports from the service configuration in the workspace document.
+`services.status {}` returns `{services,desired,control}`. `services` contains measured reports, `desired` retains workspace service configuration, and `control.proxy` contains the Engine's proxy control projection. Desired state and successful execution are separate facts.
+
+The proxy executor obtains a boot-bound lease through `services.executor.register {serviceId:"proxy",executorId}` → `{epoch,control}`. Re-registering the same active executor ID is idempotent; a different executor or Engine process retires its predecessor. `services.executor.retire {serviceId:"proxy",epoch}` → `{control}` invalidates the lease. Epochs fence stale instances; they are not an authentication mechanism.
+
+`services.command {serviceId:"proxy",epoch,name,args}` commits an intent before returning a ticket `{operation:{id,name,args,config?},control}`. Supported device operations are `start`, `stop`, `checkConfig`, `refreshProviders`, `setMode {mode}`, `select {group,node}`, `testNode {name,url?,timeoutMs?}`, and `testGroup {group,url?,timeoutMs?}`. Modes are `rule`, `global` or `direct`; test timeouts are 1–60000 ms. Start, configuration check and provider refresh receive current canonical `{text,revision}` configuration in the ticket. Only one device operation may remain pending; an uncertain operation is not automatically replayed.
+
+Configuration-only commands run in Engine: `ensureConfig {}` and `importConfig {text,expectedRevision}` return `{operation:null,config:{text,revision},control}`. The Engine creates template secrets and performs compare-and-set import. `publishLog {text,expectedRevision}` publishes up to 1 MiB of already-redacted log text and returns `{operation:null,revision,control}`.
+
+`services.complete {serviceId:"proxy",epoch,operationId,success,state}` requires the current lease and pending operation ID, records measured state, and returns `{serviceId,state,revision,control}`. A successful start requires a running phase and positive PID; stop requires a stopped phase, no PID and no unconfirmed stop; mode and node selection require matching measurements. A failed completion preserves desired intent while recording failure. `services.report {serviceId:"proxy",epoch,state}` publishes measurements with the same receipt shape but never completes a ticket. Proxy reports are bounded to 1 MiB and exclude secrets.
+
+`control` contains `desired:{running,mode,selections}`, `operation` or null, `executor:{epoch,active}`, and `measuredConfirmed`. Operation status is `pending`, `completed`, `failed` or `interrupted`. Replacing or retiring an executor interrupts a pending operation and clears measured confirmation. An installed binary, a UI switch or a stale report cannot establish success.
+
+Other local measurements use `services.report {serviceId,state}`. The Engine persists and publishes them with `{revision,serviceId,state}`.
 
 The network executor reports `{serviceId:"network",state:{dnsServers:[...],connected:boolean}}`. The Server validates IPv4/IPv6 addresses, accepts at most 16 entries, and writes an internal resolver file with mode 0644, bound only to guest `/etc/resolv.conf`. It never changes Android or host DNS, routing, or other applications.
 
@@ -103,9 +118,51 @@ First use explicitly requests `environment.reconcile {retry?}`. Once enrolled, t
 
 `environment.restart {}` activates only an already verified pending generation. If none exists, it returns status without stopping processes. Otherwise it stops Engine-owned process groups, waits up to ten seconds, and switches only after they exit. A successful build with no running processes can activate directly. Post-script home changes use private mode-0700 staging and content-version checks when merged at activation. Concurrent user changes that the script did not touch survive; a conflict leaves the old generation active and reports failure. Staged home contents do not belong in backups or release artifacts.
 
+## Engine-managed tools
+
+`environment.tools.status {}` returns `{revision,tools:[...]}`. Each tool has `id`, `version`, `architecture`, `binary`, `phase`, `progress`, `error`, and `operationId`; unavailable values can be null. The catalog includes `codex`, `jre`, `chat`, and optional `claude`. Phases are `not_installed`, `installing`, `verifying`, `ready` or `failed`. A ready chat artifact means the JAR is verified; the chat supervisor separately establishes service startup and protocol readiness.
+
+`environment.tools.install {toolId:"claude",retry?:boolean}` starts or observes an Engine-owned asynchronous job and returns the current tools projection. Failed unchanged work requires explicit retry. The Engine selects the pinned download, validates length and SHA-256, runs the measured version check, and publishes its outcome. Android does not supply an executable path, release version, URL or script. A restart marks interrupted install/verification work failed rather than inventing completion.
+
+## Chat resources
+
+`chat.snapshot {}` returns `ChatSnapshot {epoch,revision,state,metadata}` using the shared [`ChatWire`](../../agent-model/src/main/kotlin/top/flysoftbeta/workflow/agent/rpc/ChatWire.kt) codec. `metadata` contains `conversations`, `available`, `loginMethods`, `permissions`, `defaultBackend`, and `processEpochs`. Tagged classes use `_type`; enums use their shared uppercase names and maps with structured keys use alternating key/value arrays. Vendor values remain lossless JSON, including string versus numeric request IDs. Clients must use the shared codec rather than invent another encoding.
+
+Snapshots larger than 1 MiB use frozen transfers: `{transferId,offset,data,nextOffset,eof}`, with base64 data in at most 65536-byte raw chunks. Continue with `chat.snapshot {transferId,offset:nextOffset}` and decode the complete UTF-8 snapshot. A snapshot is at most 64 MiB; two frozen transfers are retained. An expired transfer requires a new snapshot.
+
+`chat.watch {epoch,afterRevision,timeoutMs?}` accepts 0–30000 ms and returns `ChatUpdate {epoch,revision,events,metadata,resnapshot}`. The journal retains up to 4096 changes and 8 MiB of event data; a reply contains at most 512 changes and 1 MiB of event data. Metadata corresponds to exactly the returned revision. A different service epoch, unavailable cursor or oversized single change requests `resnapshot:true`; the client replaces its projection rather than guessing missing changes.
+
+`chat.command {name,args}` returns a direct command value, not a workspace snapshot. Operations are `newConversation`, `ensureConversation`, `open`, `loadEarlier`, `send`, `interrupt`, `cancelQueued`, `respond`, `rename`, `archive`, `deleteConversation`, `compact`, `refreshUsage`, `rawRequest`, `fork`, `setPermissions`, `rememberSelection`, `setBackend`, `login`, `cancelLogin`, `logout`, `refreshAccount`, `warmUp`, and `flush`. Conversation operations use `id`; backend operations use `kind`, while `newConversation` takes optional `backend` and `id`. Shared request/response, settings and login values use `ChatWire`. IDs are returned as strings, void operations as null, and the advanced console returns its original JSON value.
+
+A send includes `{id,text,attachments,settings,mode,operationId,submitted}`. Attachments are `{path,mimeType?}`; `submitted` is the exact composer draft encoding, including revision. Engine records the operation intent and argument fingerprint before vendor dispatch, records acceptance, and acknowledges only that submitted draft. Retrying an accepted operation returns the original message ID; a reused ID with different arguments or ambiguous outcome fails without another vendor submission. Android never issues a separate successful-send acknowledgement.
+
+`respond` includes `{key,response,processEpoch}`. The service checks that the process epoch matches and the original request is still open before forwarding the user's choice. Neither the Rust supervisor nor the shared client reducer auto-approves vendor requests. Service epoch changes and per-backend process epoch changes are distinct.
+
+The guest JVM service communicates privately with Rust over bidirectional JSON-RPC. Callbacks permit the Workspace handshake, snapshots, watches, commands, file reads, tool status/install and `chat` document reads/writes/quarantine. Other methods, including recursive chat and generic process spawn, are rejected. Private state is not mounted writable into the service; persistence uses those callbacks.
+
+## Terminal resources
+
+Android addresses stable terminal resources, not generic process IDs. Metadata is `{id,ordinal,generation,cwd,title,customTitle,status,exitCode?,error?,rows,columns}`, with guest-absolute cwd and status describing the actual process. Terminal identity and metadata are Engine-owned and persisted; output is an Engine process-lifetime ring, not durable transcript storage.
+
+| Method | Contract |
+| --- | --- |
+| `terminal.create` | `{directory,rows?,columns?}` with workspace-relative directory → metadata |
+| `terminal.attach` | `{terminalId,rows?,columns?}` → metadata; attaches without restarting an existing live or exited process, and rehydrates a resource with no process after Server restart |
+| `terminal.restart` | `{terminalId,rows?,columns?}` → metadata after an explicit resource restart |
+| `terminal.status` | `{terminalId}` → metadata |
+| `terminal.read` | `{terminalId,generation,offset,maxBytes?,waitMs?}` → `{data,startOffset,nextOffset,eof,exitCode?,reset,terminal}`; raw chunks at most 65536 bytes and waits at most 1000 ms |
+| `terminal.write` | `{terminalId,data}` with bounded base64 bytes |
+| `terminal.resize` | `{terminalId,rows,columns}` |
+| `terminal.stop` | `{terminalId,force?}` |
+| `terminal.wait` | `{terminalId,timeoutMs}` → `{running,exitCode?}` |
+| `terminal.rename` | `{terminalId,title}` → metadata; null or blank removes the custom title |
+| `terminal.clear` | `{terminalId}` → metadata after clearing retained output and advancing generation |
+
+A generation mismatch resets reading to offset zero. Clipped reads disclose the retained starting offset. The client applies a frame's metadata, generation reset and bytes together, and continues observing after EOF so another client's restart becomes visible. Closing a view cancels only its attachment. Engine examines references in live workspace sessions, retaining an unreferenced terminal for a fifteen-second grace period before cleanup. A real environment activation restores previously running terminal resources; a no-op restart leaves them unchanged.
+
 ## Processes
 
-All product terminals and coding agents execute inside the environment. The Engine uses the runtime and loader supplied by the APK through distinct argv elements, without shell concatenation or host execution fallback.
+The generic process API remains an Engine execution primitive. Product terminal UI uses terminal resources and chat UI uses chat commands. All product terminals and coding agents execute inside the environment. The Engine uses the runtime and loader supplied by the APK through distinct argv elements, without shell concatenation or host execution fallback.
 
 | Method | Arguments and result |
 | --- | --- |
@@ -123,3 +180,5 @@ Output streams use bounded ring buffers; a reader whose offset was clipped recei
 Android uses `WorkspaceConnectionConfig`, `WorkspaceBootstrapper`, and `WorkspaceTransport`. Embedded bootstrap implements that same interface. Remote and SSH are abstraction and configuration types only in 1.0.0; attempts to use them explicitly return unsupported.
 
 On connection failure the client clears the current connection, cancels all its session consumers, retires the corresponding foreground-service leases, and marks the old projection failed. Workspace mutations remain disabled until reconnection obtains a fresh authoritative snapshot. There is no silent local-store fallback. Drafts already accepted by the Engine remain owned by it.
+
+The embedded stdio transport is not a detached daemon: closing it shuts down the Server, chat service and owned processes. Reconnection loads committed state and rehydrates resource metadata; it does not promise uninterrupted process or output survival.
