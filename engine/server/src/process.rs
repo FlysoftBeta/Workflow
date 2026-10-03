@@ -364,6 +364,12 @@ impl Processes {
             _ => Err(Error::method()),
         }
     }
+    pub fn clear_output(&self, id: &str) -> Result<()> {
+        let p = self.get(&json!({"processId":id}))?;
+        let mut out = p.output.lock().unwrap();
+        out.stdout.bytes.clear(); out.stdout.start = 0;
+        Ok(())
+    }
     pub fn stop_all(&self) {
         for p in self.items.lock().unwrap().values() {
             if p.output.lock().unwrap().exit.is_none() {

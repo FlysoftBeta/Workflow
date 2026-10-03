@@ -1,10 +1,12 @@
 mod chat;
 mod environment;
 mod home_stage;
+mod imports;
 mod layout;
 mod process;
 mod protocol;
 mod storage;
+mod terminal;
 mod tools;
 mod workspace;
 use protocol::{
@@ -29,6 +31,7 @@ struct Upload {
     temp: PathBuf,
     size: u64,
     offset: u64,
+    unique: Option<(String, String)>,
 }
 struct Server {
     workspace: Mutex<workspace::Workspace>,
@@ -36,6 +39,8 @@ struct Server {
     environment: Arc<Mutex<environment::Environment>>,
     processes: Arc<process::Processes>,
     chat: chat::Chat,
+    terminals: terminal::Terminals,
+    execution: Mutex<()>,
     uploads: Mutex<HashMap<String, Upload>>,
     closed: AtomicBool,
     workers: AtomicUsize,
@@ -157,6 +162,12 @@ impl Server {
                 | "environment.restart"
                 | "process.spawn"
                 | "chat.command"
+                | "environment.tools.install"
+                | "terminal.create"
+                | "terminal.attach"
+                | "terminal.restart"
+                | "terminal.rename"
+                | "terminal.clear"
         ) && !self.workspace.lock().unwrap().writable
         {
             return Err(Error::business(
@@ -236,14 +247,30 @@ impl Server {
             }
             "files.upload.begin" => {
                 let root = self.workspace.lock().unwrap().root.clone();
-                let raw = workspace::required(a, "path")?;
-                let p = storage::path(&root, raw, false)?;
+                let unique = if a.get("path").is_none() {
+                    let directory = workspace::required(a, "directory")?;
+                    let name = workspace::required(a, "name")?;
+                    imports::validate(&root, directory, name)?;
+                    Some((directory.to_owned(), name.to_owned()))
+                } else {
+                    None
+                };
+                let raw = if let Some((directory, name)) = &unique {
+                    if directory.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{directory}/{name}")
+                    }
+                } else {
+                    workspace::required(a, "path")?.to_owned()
+                };
+                let p = storage::path(&root, &raw, false)?;
                 if raw.starts_with(".workspace/") && !raw.starts_with(".workspace/services/") {
                     return Err(Error::invalid(
                         "upload is only for user files and explicit service assets",
                     ));
                 }
-                if p.exists() {
+                if p.exists() && unique.is_none() {
                     return Err(Error::business("exists", "destination already exists"));
                 }
                 let size = a["size"]
@@ -269,6 +296,7 @@ impl Server {
                         temp,
                         size,
                         offset: 0,
+                        unique,
                     },
                 );
                 Ok(json!({"uploadId":id}))
@@ -306,20 +334,25 @@ impl Server {
                     ));
                 }
                 let mut w = self.workspace.lock().unwrap();
-                let p = storage::path(&w.root, &upload.path, false)?;
-                fs::create_dir_all(p.parent().unwrap())?;
                 File::open(&upload.temp)?.sync_all()?;
-                if let Err(e) = storage::publish_new(&upload.temp, &p) {
-                    return Ok(json!({"kind":"failed","message":e.to_string()}));
-                }
-                File::open(p.parent().unwrap())?.sync_all()?;
+                let final_path = if let Some((directory, name)) = &upload.unique {
+                    imports::publish(&w.root, &upload.temp, directory, name)?
+                } else {
+                    let p = storage::path(&w.root, &upload.path, false)?;
+                    fs::create_dir_all(p.parent().unwrap())?;
+                    if let Err(e) = storage::publish_new(&upload.temp, &p) {
+                        return Ok(json!({"kind":"failed","message":e.to_string()}));
+                    }
+                    File::open(p.parent().unwrap())?.sync_all()?;
+                    upload.path.clone()
+                };
                 File::open(upload.temp.parent().unwrap())?.sync_all()?;
                 uploads.remove(id);
                 let mut candidate = w.clone();
                 candidate.refresh()?;
                 w.commit(candidate)?;
                 self.changed.notify_all();
-                Ok(json!({"kind":"done"}))
+                Ok(json!({"kind":"done","path":final_path}))
             }
             "files.upload.cancel" => {
                 if let Some(u) = self
@@ -459,11 +492,30 @@ impl Server {
                     json!({"revision":w.revision,"config":{"appearance":c["appearance"],"overlay":c["overlay"],"launcher":c["launcher"],"terminal":c["terminal"]}}),
                 )
             }
+            "environment.tools.status" => tools::status(&self.environment),
+            "environment.tools.install" => tools::install(
+                &self.environment,
+                self.processes.clone(),
+                workspace::required(a, "toolId")?,
+                a["retry"] == true,
+            ),
+            "terminal.create" | "terminal.attach" | "terminal.restart" => {
+                let _execution = self.execution.lock().unwrap();
+                self.terminals
+                    .call(&self.processes, &self.environment, method, a)
+            }
+            "terminal.status" | "terminal.read" | "terminal.write" | "terminal.resize"
+            | "terminal.stop" | "terminal.wait" | "terminal.rename" | "terminal.clear" => self
+                .terminals
+                .call(&self.processes, &self.environment, method, a),
             "environment.status" => Ok(self.environment.lock().unwrap().status()),
             "environment.reconcile" => {
                 environment::Environment::reconcile(&self.environment, a["retry"] == true)
             }
             "environment.restart" => {
+                let _execution = self.execution.lock().unwrap();
+                self.terminals.refresh(&self.processes)?;
+                let due = self.terminals.running();
                 let mut environment = self.environment.lock().unwrap();
                 if !environment.has_verified_pending()? {
                     return Ok(environment.status());
@@ -484,7 +536,11 @@ impl Server {
                         ));
                     }
                 }
-                environment.restart()
+                let result = environment.restart();
+                drop(environment);
+                self.terminals
+                    .restore(&due, &self.processes, &self.environment);
+                result
             }
             "process.spawn" => self.processes.spawn(&self.environment, a),
             "process.read" | "process.write" | "process.resize" | "process.stop"
@@ -507,6 +563,7 @@ fn serve(options: environment::Options) -> Result<()> {
         ));
     }
     let workspace = workspace::Workspace::load(options.root.clone())?;
+    let terminals = terminal::Terminals::load(&options.root)?;
     let running = Arc::new(AtomicUsize::new(0));
     let environment = Arc::new(Mutex::new(environment::Environment::load(
         options,
@@ -518,6 +575,8 @@ fn serve(options: environment::Options) -> Result<()> {
         environment,
         processes: Arc::new(process::Processes::new(running)),
         chat: chat::Chat::default(),
+        terminals,
+        execution: Mutex::new(()),
         uploads: Mutex::new(HashMap::new()),
         closed: AtomicBool::new(false),
         workers: AtomicUsize::new(0),
@@ -545,6 +604,11 @@ fn serve(options: environment::Options) -> Result<()> {
                     let _ = w.commit(next);
                     watcher.changed.notify_all();
                 }
+            }
+            let references = terminal::references(&watcher.workspace.lock().unwrap().state);
+            {
+                let _execution = watcher.execution.lock().unwrap();
+                let _ = watcher.terminals.reap(&references, &watcher.processes);
             }
             environment::Environment::reconcile_changed(&watcher.environment);
         }
@@ -659,7 +723,15 @@ fn serve(options: environment::Options) -> Result<()> {
         }
         let concurrent = matches!(
             method.as_str(),
-            "chat.snapshot"
+            "environment.tools.status"
+                | "environment.tools.install"
+                | "terminal.create"
+                | "terminal.attach"
+                | "terminal.restart"
+                | "terminal.read"
+                | "terminal.wait"
+                | "terminal.write"
+                | "chat.snapshot"
                 | "chat.watch"
                 | "chat.command"
                 | "workspace.watch"
@@ -730,6 +802,7 @@ fn options() -> Result<environment::Options> {
             "--loader" => o.loader = Some(value.into()),
             "--apk" => o.apk = Some(value.into()),
             "--native-dir" => o.native_dir = Some(value.into()),
+            "--tools" => o.tools = Some(value.into()),
             "--image" => o.image = Some(value.into()),
             "--image-index" => o.image_index = Some(value.into()),
             _ => return Err(Error::invalid("unknown CLI option")),
@@ -745,6 +818,7 @@ fn options() -> Result<environment::Options> {
         &mut o.loader,
         &mut o.apk,
         &mut o.native_dir,
+        &mut o.tools,
         &mut o.image,
         &mut o.image_index,
     ]

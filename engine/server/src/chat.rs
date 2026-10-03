@@ -99,25 +99,49 @@ impl Host {
         std::thread::spawn(move || {
             let mut child = match command.spawn() {
                 Ok(child) => child,
-                Err(error) => { let _ = spawn_tx.send(Err(error)); return; }
+                Err(error) => {
+                    let _ = spawn_tx.send(Err(error));
+                    return;
+                }
             };
-            let pipes = (child.id() as i32, child.stdin.take().unwrap(), child.stdout.take().unwrap(), child.stderr.take().unwrap());
-            if spawn_tx.send(Ok(pipes)).is_err() { let _ = child.kill(); let _ = child.wait(); return; }
+            let pipes = (
+                child.id() as i32,
+                child.stdin.take().unwrap(),
+                child.stdout.take().unwrap(),
+                child.stderr.take().unwrap(),
+            );
+            if spawn_tx.send(Ok(pipes)).is_err() {
+                let _ = child.kill();
+                let _ = child.wait();
+                return;
+            }
             let host = match owner_rx.recv() {
                 Ok(host) => host,
-                Err(_) => { let _ = child.kill(); let _ = child.wait(); return; }
+                Err(_) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return;
+                }
             };
             running.fetch_add(1, Ordering::SeqCst);
             let _ = child.wait();
             host.fail();
             running.fetch_sub(1, Ordering::SeqCst);
         });
-        let (pid, stdin, stdout, mut stderr) = spawn_rx.recv().map_err(|_| Error::business("chat_start", "chat process owner exited"))??;
+        let (pid, stdin, stdout, mut stderr) = spawn_rx
+            .recv()
+            .map_err(|_| Error::business("chat_start", "chat process owner exited"))??;
         let host = Arc::new(Self {
-            input: Mutex::new(stdin), pending: Mutex::new(HashMap::new()),
-            next: AtomicU64::new(0), alive: AtomicBool::new(true), callbacks: AtomicUsize::new(0), pid,
+            input: Mutex::new(stdin),
+            pending: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(0),
+            alive: AtomicBool::new(true),
+            callbacks: AtomicUsize::new(0),
+            pid,
         });
-        owner_tx.send(host.clone()).map_err(|_| Error::business("chat_start", "chat process owner exited"))?;
+        owner_tx
+            .send(host.clone())
+            .map_err(|_| Error::business("chat_start", "chat process owner exited"))?;
         // Drain diagnostics without retaining secrets or printing vendor output.
         std::thread::spawn(move || {
             let mut b = [0u8; 8192];
