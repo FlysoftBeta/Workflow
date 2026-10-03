@@ -1,5 +1,5 @@
 [workspace]
-members = ["environment", "environment/runtime", "environment/loader", "workspace", "filework", "terminal", "server"]
+members = ["environment", "environment/runtime", "environment/loader", "workspace", "filework", "terminal", "chat", "server"]
 resolver = "3"
 
 [workspace.package]

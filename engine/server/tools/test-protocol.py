@@ -62,10 +62,10 @@ def protocol(engine, root):
         data=c.call('files.read',{'path':'media/data.bin','offset':offset,'length':65536}); result+=base64.b64decode(data['data']);offset=data['nextOffset']
         if data['eof']:break
     assert result==payload
-    u=c.call('files.upload.begin',{'path':'.workspace/services/proxy/assets/provider.dat','size':3})['uploadId']
+    u=c.call('files.upload.begin',{'path':'.workspace/proxy/assets/provider.dat','size':3})['uploadId']
     c.call('files.upload.chunk',{'uploadId':u,'offset':0,'data':base64.b64encode(b'\x00\xffx').decode()})
     assert c.call('files.upload.commit',{'uploadId':u})['kind']=='done'
-    assert base64.b64decode(c.call('files.read',{'path':'.workspace/services/proxy/assets/provider.dat'})['data'])==b'\x00\xffx'
+    assert base64.b64decode(c.call('files.read',{'path':'.workspace/proxy/assets/provider.dat'})['data'])==b'\x00\xffx'
 
     u=c.call('files.upload.begin',{'path':'race','size':0})['uploadId'];(root/'race').write_text('never replace')
     assert c.call('files.upload.commit',{'uploadId':u})['kind']=='failed';assert(root/'race').read_text()=='never replace'
@@ -77,10 +77,10 @@ def protocol(engine, root):
     assert c.call('documents.read',{'namespace':'chat','key':'conversations'})['document']=='{"unknownField":42}'
     c.call('documents.read',{'namespace':'../x','key':'y'},error='invalid_params')
     service=c.call('documents.write',{'namespace':'services.proxy','key':'config.yaml','document':'mode: direct\n','expectedRevision':0})
-    assert (root/'.workspace/services/proxy/config.yaml').read_text()=='mode: direct\n'
-    snap=c.command('openFile',{'path':'.workspace/services/proxy/config.yaml'})
-    c.command('editFile',{'path':'.workspace/services/proxy/config.yaml','text':'mode: rule\n','shown':snap['disk']})
-    assert c.command('saveFile',{'path':'.workspace/services/proxy/config.yaml'})['kind']=='saved'
+    assert (root/'.workspace/proxy/config.yaml').read_text()=='mode: direct\n'
+    snap=c.command('openFile',{'path':'.workspace/proxy/config.yaml'})
+    c.command('editFile',{'path':'.workspace/proxy/config.yaml','text':'mode: rule\n','shown':snap['disk']})
+    assert c.command('saveFile',{'path':'.workspace/proxy/config.yaml'})['kind']=='saved'
     c.call('documents.write',{'namespace':'services.proxy','key':'config.yaml','document':'stale','expectedRevision':service['revision']},error='conflict')
     assert c.call('documents.read',{'namespace':'services.proxy','key':'config.yaml'})['document']=='mode: rule\n'
 

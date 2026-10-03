@@ -442,6 +442,58 @@ impl Server {
                     &a.options,
                 )?)
             }
+            ResolveTerminalPaths(a) => {
+                if a.candidates.len() > 128 || a.candidates.iter().any(|s| s.len() > 4096) {
+                    return Err(Error::invalid("terminal path batch exceeds limit"));
+                }
+                self.terminals.refresh(&self.processes)?;
+                let context = self
+                    .terminals
+                    .resolution_context(&a.terminal_id, a.generation)?;
+                let w = self.workspace.lock().unwrap();
+                let paths = a
+                    .candidates
+                    .iter()
+                    .map(|text| {
+                        let mut result = workflow_terminal::ResolvedPath::rejected(text);
+                        for (path, line, column) in
+                            workflow_terminal::candidates(&context.cwd, text)
+                        {
+                            if let Ok(Some(kind)) = w.filework.existing_path_kind(&path) {
+                                result.path = Some(path);
+                                result.kind = Some(match kind {
+                                    workflow_filework::ExistingPathKind::Directory => {
+                                        workflow_terminal::PathKind::Directory
+                                    }
+                                    workflow_filework::ExistingPathKind::File => {
+                                        workflow_terminal::PathKind::File
+                                    }
+                                });
+                                result.line = line;
+                                result.column = column;
+                                break;
+                            }
+                        }
+                        result
+                    })
+                    .collect();
+                drop(w);
+                let current = self
+                    .terminals
+                    .resolution_context(&a.terminal_id, a.generation)?;
+                if current.cwd != context.cwd {
+                    return Err(Error::business(
+                        "stale_terminal",
+                        "terminal working directory changed",
+                    ));
+                }
+                Reply::TerminalPaths(workflow_terminal::ResolvedPaths {
+                    terminal_id: a.terminal_id,
+                    generation: a.generation,
+                    cwd: context.cwd,
+                    paths,
+                })
+            }
             TerminalStatus(a) => Reply::Terminal(self.terminals.status(&a.terminal_id)?),
             RenameTerminal(a) => {
                 Reply::Terminal(self.terminals.rename(&a.terminal_id, a.title.as_deref())?)

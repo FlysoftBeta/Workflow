@@ -339,23 +339,7 @@ pub struct WatchParams {
 fn watch_timeout() -> u64 {
     30_000
 }
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct DocumentParams {
-    pub namespace: String,
-    pub key: String,
-    #[serde(default)]
-    pub document: Option<String>,
-    #[serde(default)]
-    pub expected_revision: Option<u64>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct DocumentResult {
-    pub document: Option<String>,
-    pub revision: u64,
-}
+pub use workflow_environment::documents::{DocumentParams, DocumentResult};
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Revision {
     pub revision: u64,
@@ -473,6 +457,15 @@ pub struct TerminalReadParams {
     pub max_bytes: usize,
     #[serde(default = "read_wait")]
     pub wait_ms: u64,
+    #[serde(flatten)]
+    pub extra: OpaqueObject,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalResolvePathsParams {
+    pub terminal_id: String,
+    pub generation: u64,
+    pub candidates: Vec<String>,
     #[serde(flatten)]
     pub extra: OpaqueObject,
 }

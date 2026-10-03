@@ -13,4 +13,4 @@ tools/workflow check rust-server --task engine-reorg-r1
 tools/with-build-lock.sh cargo run --manifest-path engine/Cargo.toml --locked -p workflow-server --bin workflow-engine -j 2 -- export-contract --out engine/protocol
 ```
 
-Regeneration is explicit: the Rust test fails if any checked-in generated contract file differs. Round 2 will check Kotlin bindings against these fixtures and schemas. The [protocol guide](../../docs/implementation/protocol.md), [ownership guide](../../docs/implementation/workspace-engine.md) and [testing guide](../../docs/development/testing.md) describe the supported contract and acceptance limits.
+Regeneration is explicit: the Rust test fails if any checked-in generated contract file differs. Round 2 will check Kotlin bindings against these fixtures and schemas. The [protocol guide](../../docs/engine/protocol.md), [ownership guide](../../docs/engine/server.md) and [testing guide](../../docs/development/testing.md) describe the supported contract and acceptance limits.

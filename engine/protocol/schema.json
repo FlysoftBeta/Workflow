@@ -663,6 +663,22 @@
       "properties": {
         "method": {
           "type": "string",
+          "const": "terminal.resolvePaths"
+        },
+        "params": {
+          "$ref": "#/$defs/TerminalResolvePathsParams"
+        }
+      },
+      "required": [
+        "method",
+        "params"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
           "const": "services.executor.register"
         },
         "params": {
@@ -4480,6 +4496,13 @@
         "$ref": "#/$defs/OpaqueJson"
       }
     },
+    "PathKind": {
+      "type": "string",
+      "enum": [
+        "file",
+        "directory"
+      ]
+    },
     "Placement": {
       "oneOf": [
         {
@@ -6124,6 +6147,105 @@
         "terminalId",
         "rows",
         "columns"
+      ]
+    },
+    "TerminalResolvePathsParams": {
+      "type": "object",
+      "properties": {
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "terminalId",
+        "generation",
+        "candidates"
+      ]
+    },
+    "TerminalResolvedPath": {
+      "type": "object",
+      "properties": {
+        "column": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PathKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "line": {
+          "description": "Zero-based source position, converted from a positive terminal suffix.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "TerminalResolvedPaths": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TerminalResolvedPath"
+          }
+        },
+        "terminalId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminalId",
+        "generation",
+        "cwd",
+        "paths"
       ]
     },
     "TerminalStartParams": {

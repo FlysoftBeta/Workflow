@@ -17,7 +17,7 @@ lock. Output belongs under ignored `artifacts/`, not this source directory.
 Loader behavior is exercised with the real runtime by
 [`runtime/tests/`](../runtime/tests/README.md), including static and dynamic guest workloads.
 Successful linking alone is not acceptance on Android. See the
-[runtime guide](../../../docs/implementation/container-runtime.md) and
+[runtime guide](../../../docs/engine/loader.md) and
 [testing guide](../../../docs/development/testing.md) for the platform matrix.
 
 The loader is also registered as the `workflow-loader` Cargo workspace member.
