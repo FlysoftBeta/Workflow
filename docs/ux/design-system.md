@@ -12,8 +12,8 @@ Settings → Appearance offers Compact, the default, and Standard density. Compo
 
 | Token | Compact | Standard | Purpose |
 | --- | --- | --- | --- |
-| `bar` | 36dp | 44dp | Tab rows, region headers, shared find bars |
-| `iconBtn`, visual/touch | 32/36dp | 40/48dp | Toolbar icon buttons |
+| `bar` | 32dp | 44dp | Tab rows, region headers, shared find bars |
+| `iconBtn`, visual/touch | 28/32dp | 40/48dp | Toolbar icon buttons |
 | `icon` | 20dp; 18dp in menus and trees | 24dp | Interface icons |
 | `treeRow` | 32dp | 40dp | File tree and conversation list |
 | `listRow`, one/two lines | 36/48dp | 48/64dp | Session view and app picker; Settings rows stay 48dp |
@@ -21,7 +21,7 @@ Settings → Appearance offers Compact, the default, and Standard density. Compo
 | `extraKeys`, row/key | 40/34dp | 48/40dp | Special-key strip |
 | `gap` / `padH` / `indent` | 4/12/12dp | 6/16/16dp | Region spacing, horizontal content padding, and tree indentation |
 
-Compact toolbar buttons occupy separate 36×36dp touch cells without overlapping targets. A full-width row is clickable across its entire width. Standalone controls have touch targets of at least 40dp; Launcher and floating controls use at least 48dp. A smaller visual glyph or the composer's 36dp send circle does not reduce that target.
+Compact toolbar buttons occupy separate 32×32dp touch cells without overlapping targets. A full-width row is clickable across its entire width. Standalone controls have touch targets of at least 40dp; Launcher and floating controls use at least 48dp. A smaller visual glyph or the composer's 36dp send circle does not reduce that target.
 
 The established viewport references are 1177×approximately 675dp landscape and 736×approximately 1115dp portrait at 261 dpi, and 960×approximately 540dp landscape and 600×approximately 900dp portrait at native 320 dpi. Below 600dp, Workbench presents one focused Stack. Landscape with the keyboard open may leave only about 350dp of height, so keyboard focus must redistribute existing space rather than add more chrome.
 

@@ -62,6 +62,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import top.flysoftbeta.workflow.ui.design.dnd.DragDropState
 import top.flysoftbeta.workflow.ui.design.dnd.DragPayload
 import top.flysoftbeta.workflow.ui.design.dnd.DropTargetKind
@@ -70,6 +71,7 @@ import top.flysoftbeta.workflow.ui.design.dnd.dragAutoScroll
 import top.flysoftbeta.workflow.ui.design.dnd.dragSource
 import top.flysoftbeta.workflow.ui.design.dnd.dropTarget
 import top.flysoftbeta.workflow.ui.design.icons.Sym
+import top.flysoftbeta.workflow.ui.design.theme.WorkflowRadii
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowShapes
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
 import top.flysoftbeta.workflow.ui.design.theme.frame
@@ -172,7 +174,7 @@ fun StackTabBar(
 
     BoxWithConstraints(modifier.fillMaxWidth().heightIn(min = dimens.bar).background(WorkflowTheme.colors.frame)) {
         val touch = dimens.iconButtonTouch
-        val fixed = with(density) { (leadingWidth + trailingWidth).toDp() } + touch /* More */ +
+        val fixed = with(density) { (leadingWidth + trailingWidth).toDp() } + WorkflowRadii.md + touch /* More */ +
             (if (hidden > 0) touch + 12.dp else 0.dp)
         val room = maxWidth - fixed - dimens.surfacedActionsMinTabSpace
         val visibleCount = (room / touch).toInt().coerceIn(0, actions.size)
@@ -184,6 +186,8 @@ fun StackTabBar(
         }
 
         Row(Modifier.fillMaxWidth().height(dimens.bar), verticalAlignment = Alignment.CenterVertically) {
+            // Keep tabs past the content card's rounded corner, even while scrolling.
+            Spacer(Modifier.width(WorkflowRadii.md))
             if (leading != null) {
                 Row(Modifier.onSizeChanged { leadingWidth = it.width }, verticalAlignment = Alignment.CenterVertically, content = leading)
             }
@@ -330,23 +334,23 @@ private fun StackTab(
                 },
         ) {
             Row(
-                Modifier.fillMaxHeight().padding(start = 10.dp, end = 4.dp),
+                Modifier.fillMaxHeight().padding(start = 6.dp, end = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (item.icon != null) {
                     SymbolIcon(item.icon, null, size = dimens.tabIcon, tint = if (active) colors.primary else colors.onSurfaceVariant)
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(4.dp))
                 }
                 Text(
                     item.title,
                     Modifier.weight(1f, fill = false),
-                    style = if (active) text.labelActive else text.label,
+                    style = (if (active) text.labelActive else text.label).copy(fontSize = 12.sp, lineHeight = 16.sp),
                     color = if (active) colors.onSurface else colors.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 if (item.caption != null) {
                     Spacer(Modifier.width(4.dp))
-                    Text(item.caption, style = text.caption, color = colors.onSurfaceVariant, maxLines = 1)
+                    Text(item.caption, style = text.micro, color = colors.onSurfaceVariant, maxLines = 1)
                 }
                 Spacer(Modifier.width(2.dp))
                 TabTrailingSlot(item.dirty, focused && active, onClose)

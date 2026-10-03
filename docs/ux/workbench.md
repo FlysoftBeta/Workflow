@@ -47,11 +47,11 @@ Docking is based on available space. The left sidebar docks if the center can st
 | Auxiliary area | 360dp conversation or 400dp files | 300dp | 55% of window width |
 | Center | Remaining width | 360dp wide | Available space |
 | Editor Stack | Available editor region | 240×120dp including tabs | Available space |
-| Bottom Stack | 35% of its column height | Header only, 36dp in Compact | Column height minus minimum editor height |
+| Bottom Stack | 35% of its column height | Header only, 32dp in Compact | Column height minus minimum editor height |
 
 The ordinary 4dp gap also acts as a splitter with a 20dp touch target. Pressing reveals a 4×32dp primary pill. Dragging starts only after movement exceeds touch slop along the splitter's axis; otherwise content receives the gesture. Regions follow the drag. Going below half the minimum size snaps a sidebar to zero or the bottom Stack to its tab row, with a clock-tick haptic. Double tap restores default proportions. Ratios and maximized state belong to the Session; resizing the window reapplies the ratio and clamps it to the allowed range.
 
-A maximized Stack fills Workbench and shows an inline Restore control. When the keyboard appears, the focused Stack temporarily fills its own column and other Stacks in that column reduce to compact 36dp tab rows. Other columns simply become shorter. Hiding the keyboard restores the previous proportions; this temporary focus layout is not persisted. The terminal key strip sits directly above the keyboard.
+A maximized Stack fills Workbench and shows an inline Restore control. When the keyboard appears, the focused Stack temporarily fills its own column and other Stacks in that column reduce to compact 32dp tab rows. Other columns simply become shorter. Hiding the keyboard restores the previous proportions; this temporary focus layout is not persisted. The terminal key strip sits directly above the keyboard.
 
 Back dismisses, in order, menus and tooltips, an active drag, popovers/sheets/dialogs, then overlay side regions. With none left, it returns to Launcher. It never closes tabs or changes paradigm. A Solo opened from Launcher returns there on Back; Back on Launcher does nothing.
 
@@ -69,7 +69,9 @@ Below 600dp, the sidebar is a modal drawer with scrim and width `min(320dp, 85% 
 
 ## Tabs, the explorer, and editors
 
-Compact tabs are 36dp high, 72–220dp wide, and padded 10dp horizontally and 4dp vertically. They contain a 16dp type icon, an end-ellipsized `label`, and a 24dp trailing slot. Files with identical names add the parent directory as a caption. The trailing slot is always visible on touch devices: it shows an 8dp draft dot, primary in the focused Stack, or a 16dp close icon. Tapping the dot closes the tab while retaining the shared draft, without confirmation.
+Compact tabs are 32dp high, 72–220dp wide, with 6dp leading and 2dp trailing padding. They contain a 16dp type icon separated from the title by 4dp, an end-ellipsized 12sp title with 16sp line height, and a 32dp trailing touch slot. Files with identical names add the parent directory as an 11sp caption. The trailing slot is always visible on touch devices: it shows an 8dp draft dot, primary in the focused Stack, or a 16dp close icon. Tapping the dot closes the tab while retaining the shared draft, without confirmation.
+
+Content cards retain all four 12dp rounded corners. The tab bar reserves a fixed 12dp leading inset outside its scrolling viewport so tabs join the straight top edge of the content instead of overlapping its rounded corner.
 
 Tab rows scroll horizontally with a 16dp fade at each end. The active tab scrolls into view. Overflow shows a count and opens the Stack's tab list; more than eight entries adds search. Tap activates, while a 300ms long press gives pickup haptics; releasing in place opens the menu and moving begins a drag. Opening an already-open resource focuses its tab and pulses its highlight once.
 

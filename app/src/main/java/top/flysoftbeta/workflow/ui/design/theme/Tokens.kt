@@ -66,7 +66,7 @@ data class WorkflowDimens(
 
     companion object {
         val Compact = WorkflowDimens(
-            density = UiDensity.Compact, bar = 36.dp, iconButton = 32.dp, iconButtonTouch = 36.dp,
+            density = UiDensity.Compact, bar = 32.dp, iconButton = 28.dp, iconButtonTouch = 32.dp,
             icon = 20.dp, iconSmall = 18.dp, treeRow = 32.dp, listRow = 36.dp, listRowTwoLine = 48.dp,
             settingsRow = 48.dp, menuItem = 36.dp, extraKeysRow = 40.dp, extraKey = 34.dp,
             gap = 4.dp, padH = 12.dp, indent = 12.dp,
