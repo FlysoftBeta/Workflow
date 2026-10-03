@@ -1,0 +1,15 @@
+[package]
+name = "workflow-loader"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "workflow-loader"
+path = "src/main.rs"
+test = false
+bench = false
+required-features = ["freestanding"]
+
+[features]
+freestanding = []
