@@ -4,3 +4,5 @@
 mod parity;
 #[path = "../../chat/tests/service.rs"]
 mod service;
+#[path = "../../chat/tests/transport.rs"]
+mod transport;

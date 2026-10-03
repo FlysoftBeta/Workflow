@@ -17,6 +17,7 @@ pub enum ErrorKind {
 pub struct ChatError {
     pub kind: ErrorKind,
     pub message: String,
+    pub vendor: Option<crate::transport::raw::RawJson>,
 }
 pub type Result<T> = std::result::Result<T, ChatError>;
 impl ChatError {
@@ -24,7 +25,14 @@ impl ChatError {
         Self {
             kind,
             message: message.into(),
+            vendor: None,
         }
+    }
+}
+impl ChatError {
+    pub fn with_vendor(mut self, raw: crate::transport::raw::RawJson) -> Self {
+        self.vendor = Some(raw);
+        self
     }
 }
 impl fmt::Display for ChatError {

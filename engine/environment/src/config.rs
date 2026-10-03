@@ -275,3 +275,77 @@ where
     config.patch(patch)?;
     Ok(config)
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[schemars(
+    rename = "ConfigOutcome",
+    bound = "A: JsonSchema + Default + Serialize, T: JsonSchema + Default + Serialize"
+)]
+#[serde(bound(deserialize = "A: Deserialize<'de> + Default, T: Deserialize<'de> + Default"))]
+pub enum ConfigOutcome<A: Default, T: Default> {
+    Updated { config: ClientConfig<A, T> },
+    Conflict { revision: u64 },
+    Blocked { problem: String },
+    Failed { message: String },
+}
+pub struct ConfigChange<A: Default, T: Default> {
+    pub outcome: ConfigOutcome<A, T>,
+    pub reloaded: bool,
+}
+/// Configuration conflict and mutation policy. The Server supplies its transaction
+/// revision, then refreshes its discardable aggregate projection when requested.
+pub fn update<A, T>(
+    store: &Store,
+    observed: &ClientConfig<A, T>,
+    revision: u64,
+    expected_revision: u64,
+    patch: ConfigPatch<A::Patch, T::Patch>,
+) -> Result<ConfigChange<A, T>>
+where
+    A: ConfigSection + Clone + PartialEq + Serialize,
+    T: ConfigSection + Clone + PartialEq + Serialize,
+    A::Patch: DeserializeOwned,
+    T::Patch: DeserializeOwned,
+{
+    if expected_revision != revision {
+        return Ok(ConfigChange {
+            outcome: ConfigOutcome::Conflict { revision },
+            reloaded: false,
+        });
+    }
+    let mut current = match load::<A, T>(store) {
+        Ok(config) => config,
+        Err(error) => {
+            return Ok(ConfigChange {
+                outcome: ConfigOutcome::Blocked {
+                    problem: error.message,
+                },
+                reloaded: true,
+            });
+        }
+    };
+    if &current != observed {
+        return Ok(ConfigChange {
+            outcome: ConfigOutcome::Conflict {
+                revision: revision
+                    .checked_add(1)
+                    .ok_or_else(|| Error::business("overflow", "revision overflow"))?,
+            },
+            reloaded: true,
+        });
+    }
+    let outcome = match current.patch(patch) {
+        Ok(()) => {
+            store.write(CONFIG, &current)?;
+            ConfigOutcome::Updated { config: current }
+        }
+        Err(error) => ConfigOutcome::Failed {
+            message: error.message,
+        },
+    };
+    Ok(ConfigChange {
+        outcome,
+        reloaded: true,
+    })
+}

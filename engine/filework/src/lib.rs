@@ -69,6 +69,9 @@ impl FileWork {
     }
     /// Checked path classification for terminal links; avoids reading or hashing file contents.
     pub fn existing_path_kind(&self, raw: &str) -> Result<Option<ExistingPathKind>> {
+        if raw.is_empty() {
+            return Ok(Some(ExistingPathKind::Directory));
+        }
         let (file, directory) = match self.location(raw)? {
             Location::User(path) => match stdfs::metadata(path) {
                 Ok(meta) => (meta.is_file(), meta.is_dir()),
