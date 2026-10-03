@@ -187,7 +187,7 @@ class CodexBackend(
                 loginLock.withLock {
                     events.forEach { event ->
                         if (event is AgentEvent.LoginChanged && event.flow is LoginFlow.Completed) {
-                            if (event.flow.loginId == pendingLogin) {
+                            if ((event.flow as LoginFlow.Completed).loginId == pendingLogin) {
                                 pendingLogin = null
                                 loginMonitor?.cancel()
                                 emit(event)

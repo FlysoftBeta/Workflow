@@ -101,9 +101,9 @@ class CodexBackendReplayTest {
         assertEquals("chatgpt", status.account.method)
         assertEquals("prolite", status.account.plan)
         assertEquals(false, status.rateLimits!!.ordinaryUsageAllowed)
-        assertNotNull(status.rateLimits.upsell)
+        assertNotNull(status.rateLimits!!.upsell)
         assertEquals(7, status.models!!.models.size)
-        assertEquals(listOf("low", "medium", "high", "xhigh", "max", "ultra"), status.models.model("gpt-6-astra")!!.efforts.map { it.id })
+        assertEquals(listOf("low", "medium", "high", "xhigh", "max", "ultra"), status.models!!.model("gpt-6-astra")!!.efforts.map { it.id })
 
         val id = codex.startThread(ThreadOptions("/workspace", TurnSettings(model = "gpt-reserve")))
         assertEquals(thread, id)

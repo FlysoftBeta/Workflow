@@ -23,7 +23,7 @@ fun interface AgentEventSink {
 }
 
 /**
- * Process-lifetime owner of [AgentState] (the app's `AgentHub` holds one). Events are folded
+ * Engine service owner of [AgentState]. Events are folded
  * synchronously so no event is lost between a backend emitting it and the UI subscribing.
  */
 class AgentStateStore(initial: AgentState = AgentState()) : AgentEventSink {
@@ -32,8 +32,10 @@ class AgentStateStore(initial: AgentState = AgentState()) : AgentEventSink {
     private val listeners = java.util.concurrent.CopyOnWriteArrayList<(AgentEvent) -> Unit>()
 
     override fun emit(event: AgentEvent) {
-        synchronized(this) { mutable.value = AgentReducer.reduce(mutable.value, event) }
-        listeners.forEach { it(event) }
+        synchronized(this) {
+            mutable.value = AgentReducer.reduce(mutable.value, event)
+            listeners.forEach { it(event) }
+        }
     }
 
     /** Observes every event after it is reduced (index maintenance, persistence). */
@@ -48,16 +50,6 @@ data class ThreadOptions(
     val title: String? = null,
 )
 
-enum class SendMode {
-    /** Start a turn when idle, otherwise queue behind the running turn. */
-    AUTO,
-    START,
-    /** Inject into the running turn (Codex `turn/steer`; Claude: priority `now`). */
-    STEER,
-    /** Run after the current turn (Codex `thread/queue/add`; Claude: queued user message). */
-    QUEUE,
-}
-
 /** A thread known to the backend (Codex `thread/list`); used to import into the app's index. */
 data class ThreadSummary(
     val id: String,
@@ -70,7 +62,7 @@ data class ThreadSummary(
 )
 
 /**
- * Backend-neutral control surface the chat UI talks to. State is observed through the
+ * Backend-neutral control surface used only by the Engine chat service. State is observed through the
  * [AgentEventSink]/[AgentStateStore], never returned piecemeal. Every method is main-safe
  * (suspends; IO happens on the process transport).
  */
