@@ -383,6 +383,16 @@ class ReferenceWorkspaceStore(
         if (clean in trackedPaths()) refreshPaths(listOf(clean), force = true)
     }
 
+    override suspend fun importUnique(directory: String, name: String, size: Long, open: () -> InputStream): String = call {
+        val parent = WorkspacePaths.normalize(directory)
+        require(top.flysoftbeta.workflow.core.io.FileNames.problem(name, parent) == null)
+        if (parent.isNotEmpty()) fs.createDirectories(editablePath(parent))
+        val path = top.flysoftbeta.workflow.core.io.FileNames.variants(name).take(10000)
+            .map { WorkspacePaths.child(parent, it) }.first { fs.stat(it) == null }
+        fs.writeAtomic(editablePath(path)) { output -> open().use { input -> check(input.copyTo(output) == size) } }
+        path
+    }
+
     override suspend fun createDirectory(path: String): FileOpResult = fileOp {
         val clean = editablePath(path)
         if (fs.stat(clean) != null) throw IOException("Already exists: $clean")

@@ -48,7 +48,6 @@ class EngineController(context: Context, val scope: CoroutineScope, private val 
             try {
                 store().awaitReady()
                 refresh()
-                if (health.value == EnvironmentHealth.NotInstalled) rpc.request("environment.reconcile")
                 while (isActive) { refresh(); delay(750) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { mutable.value = EnvironmentHealth.Unavailable(error.message ?: "环境不可用") }
@@ -77,6 +76,13 @@ class EngineController(context: Context, val scope: CoroutineScope, private val 
     }
     suspend fun awaitUsable() {
         start()
+        // A terminal/user action enrolls an unused environment; attaching to a ready one is read-only.
+        store().awaitReady()
+        refresh()
+        if (health.value == EnvironmentHealth.NotInstalled) {
+            rpc.request("environment.reconcile")
+            refresh()
+        }
         val state = health.first { it.usable || it is EnvironmentHealth.Unavailable || it is EnvironmentHealth.Failed }
         if (!state.usable) throw EnvironmentUnavailableException(state, describe(state))
     }

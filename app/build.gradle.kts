@@ -295,8 +295,8 @@ val buildEngine = tasks.register<BuildEngineTask>("buildEngine") {
     description = "Cross-builds the Rust Workspace server, runtime and loader for the packaged ABIs."
     val engine = repositoryRoot.dir("engine")
     sources.from(engine.asFileTree.matching {
-        exclude("target/**", "**/target/**")
-        include("**/*.rs", "**/Cargo.toml", "Cargo.lock", "**/*.sh", "**/*.json", "**/*.S", "server/guest/**")
+        exclude("target/**", "**/target/**", "**/build/**", "chat/**")
+        include("**/*.rs", "**/Cargo.toml", "Cargo.lock", "**/*.sh", "**/*.json", "**/*.S", "server/guest/**", "server/resources/**")
     })
     abis.set(listOf("arm64-v8a", "x86_64"))
     toolchainVersion.set(libs.versions.ndk)
@@ -450,6 +450,8 @@ composeCompiler {
 }
 
 androidComponents.onVariants { variant ->
+    // The old JNI PTY is an instrumentation fixture, never a release execution path.
+    if (variant.buildType == "release") variant.packaging.jniLibs.excludes.add("**/libworkflow_pty.so")
     variant.sources.jniLibs?.addGeneratedSourceDirectory(buildProxyGuard, BuildProxyGuardTask::outputDirectory)
     variant.sources.jniLibs?.addGeneratedSourceDirectory(fetchPrebuilts, FetchPrebuiltsTask::outputDirectory)
     variant.sources.jniLibs?.addGeneratedSourceDirectory(buildEngine, BuildEngineTask::outputDirectory)
@@ -468,6 +470,7 @@ dependencies {
     implementation(project(":agent-model"))
     testImplementation(project(":agent"))
     androidTestImplementation(project(":agent"))
+    androidTestImplementation(testFixtures(project(":proxy")))
     implementation(project(":proxy"))
     implementation(libs.androidx.webkit)
     implementation(platform(libs.sora.editor.bom))

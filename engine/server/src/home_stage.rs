@@ -127,19 +127,96 @@ pub fn prepare(root: &Path, generation: &Path) -> Result<()> {
             "persistent home root is not a directory",
         ));
     }
-    let before = scan(&live)?;
+    prepare_snapshot(&live, generation, &|_, _| {})
+}
+
+// A stable version of each file is enough for the later three-way merge. An unrelated
+// live file changing after its copy must not make an active agent block every build.
+fn prepare_snapshot(live: &Path, generation: &Path, copied: &dyn Fn(&Path, &Path)) -> Result<()> {
     let stage = generation.join("post-home");
     fs::DirBuilder::new().mode(0o700).create(&stage)?;
-    copy_tree(&live, &stage)?;
+    snapshot_entries(live, &stage, copied)?;
     fs::set_permissions(&stage, fs::Permissions::from_mode(0o700))?;
-    if scan(&live)? != before || scan(&stage)? != before {
-        return Err(Error::business(
-            "home_changed",
-            "home changed while preparing post scripts; retry",
-        ));
-    }
-    storage::write_json(&generation.join("home-baseline.json"), &json!(before))
+    storage::write_json(
+        &generation.join("home-baseline.json"),
+        &json!(scan(&stage)?),
+    )
 }
+fn entry_version(path: &Path) -> Result<V> {
+    // Inspect a single entry without scanning its siblings or following symlinks.
+    let meta = fs::symlink_metadata(path)?;
+    let kind = if meta.is_file() {
+        "file"
+    } else if meta.is_dir() {
+        "directory"
+    } else if meta.file_type().is_symlink() {
+        "symlink"
+    } else {
+        "process"
+    };
+    let mut version = json!({"kind":kind,"mode":meta.permissions().mode() & 0o7777});
+    if kind == "file" {
+        use sha2::{Digest, Sha256};
+        use std::io::Read;
+        let mut file = fs::File::open(path)?;
+        let mut hash = Sha256::new();
+        let mut bytes = [0u8; 65536];
+        loop {
+            let count = file.read(&mut bytes)?;
+            if count == 0 {
+                break;
+            }
+            hash.update(&bytes[..count]);
+        }
+        version["sha256"] = json!(
+            hash.finalize()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+        );
+    } else if kind == "symlink" {
+        version["target"] = json!(
+            fs::read_link(path)?
+                .to_str()
+                .ok_or_else(|| Error::business("home_stage", "home symlink target is not UTF-8"))?
+        );
+    }
+    Ok(version)
+}
+fn snapshot_entries(from: &Path, to: &Path, copied: &dyn Fn(&Path, &Path)) -> Result<()> {
+    let mut entries = fs::read_dir(from)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let source = entry.path();
+        let destination = to.join(entry.file_name());
+        let before = entry_version(&source)?;
+        if before["kind"] == "process" {
+            continue;
+        }
+        if before["kind"] == "directory" {
+            fs::create_dir(&destination)?;
+            snapshot_entries(&source, &destination, copied)?;
+            fs::set_permissions(
+                &destination,
+                fs::Permissions::from_mode(before["mode"].as_u64().unwrap() as u32),
+            )?;
+        } else {
+            copy_tree(&source, &destination)?;
+        }
+        copied(&source, &destination);
+        if entry_version(&source)? != before || entry_version(&destination)? != before {
+            return Err(Error::business(
+                "home_changed",
+                &format!(
+                    "home file changed while preparing post scripts: {}; retry",
+                    source.file_name().unwrap().to_string_lossy()
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn baseline(generation: &Path) -> Result<BTreeMap<String, V>> {
     let v = storage::read_json(&generation.join("home-baseline.json"))?;
     serde_json::from_value(v).map_err(|_| Error::business("home_stage", "invalid home baseline"))
@@ -267,6 +344,44 @@ pub fn cleanup(generation: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn snapshot_accepts_unrelated_live_change_but_activation_still_conflicts_on_script_edits() {
+        let temp = tempfile::tempdir().unwrap();
+        let live = live_home(temp.path());
+        fs::create_dir_all(&live).unwrap();
+        fs::write(live.join("a"), "before").unwrap();
+        fs::write(live.join("b"), "stable").unwrap();
+        let generation = temp.path().join("generation");
+        fs::create_dir(&generation).unwrap();
+        prepare_snapshot(&live, &generation, &|source, _| {
+            if source.file_name().unwrap() == "b" {
+                fs::write(live.join("a"), "agent wrote later").unwrap();
+            }
+        })
+        .unwrap();
+        fs::write(generation.join("post-home/b"), "script").unwrap();
+        activate(temp.path(), &generation).unwrap();
+        assert_eq!(
+            fs::read_to_string(live.join("a")).unwrap(),
+            "agent wrote later"
+        );
+        assert_eq!(fs::read_to_string(live.join("b")).unwrap(), "script");
+    }
+    #[test]
+    fn snapshot_rejects_a_file_changed_during_its_own_copy() {
+        let temp = tempfile::tempdir().unwrap();
+        let live = live_home(temp.path());
+        fs::create_dir_all(&live).unwrap();
+        fs::write(live.join("a"), "before").unwrap();
+        let generation = temp.path().join("generation");
+        fs::create_dir(&generation).unwrap();
+        let error = prepare_snapshot(&live, &generation, &|source, _| {
+            fs::write(source, "racing write").unwrap();
+        })
+        .unwrap_err();
+        assert_eq!(error.kind, "home_changed");
+        assert_eq!(fs::read_to_string(live.join("a")).unwrap(), "racing write");
+    }
     #[test]
     fn merge_preserves_unrelated_live_edits_and_publishes_script_changes() {
         let t = tempfile::tempdir().unwrap();

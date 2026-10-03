@@ -53,6 +53,8 @@ interface WorkspaceStore {
     suspend fun createFile(path: String, bytes: ByteArray = ByteArray(0)): FileOpResult
     /** Streams exactly [size] bytes to an Engine-owned staging upload. Opens and closes the source on IO. */
     suspend fun importFile(path: String, size: Long, open: () -> InputStream): FileOpResult
+    /** Engine chooses a free destination atomically; clients never enumerate names to allocate. */
+    suspend fun importUnique(directory: String, name: String, size: Long, open: () -> InputStream): String
     suspend fun createDirectory(path: String): FileOpResult
     suspend fun listDirectory(path: String, showHidden: Boolean = false): List<FileEntry>
     fun directoryChanges(path: String): Flow<Unit>

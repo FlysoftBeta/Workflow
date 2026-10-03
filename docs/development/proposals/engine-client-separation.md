@@ -1,6 +1,6 @@
 # Complete Engine and client separation
 
-Status: implemented changes awaiting integration validation. Owner: coordinator. Updated: 2026-10-03.
+Status: implemented with targeted integrated acceptance. Owner: coordinator. Updated: 2026-10-03.
 
 ## Problem and intended outcome
 
@@ -30,4 +30,6 @@ The current embedded stdio server ends when its transport closes. This work must
 
 ## Verification and completion
 
-Preserve adapter replay and protocol coverage, and add codec round trips, stale-epoch rejection, send deduplication, reconnect projection and terminal ownership checks. Validate the actual guest JRE and service on Android 9 before claiming support. Use source-bound suite records and isolated AVDs; do not modify the daily tablet. The shared model/service worker passed its 67-test JVM suite and built the service JAR; this establishes source-bound host coverage only. Integrated application compilation, real guest runtime and Android acceptance remain separate gates. This proposal does not claim final acceptance; maintained status and the final evidence report record actual validation and remaining limits.
+The adapter replay suites, codec round trips, stale-epoch rejection, durable send deduplication and resource ownership checks were retained or extended. Actual Linux JRE subprocess behavior was verified through the runtime, followed by integrated Android 9 execution. The final isolated API 28 x86_64 run passed 13 tests with zero skips, covering guest chat startup, client reattachment, generation restart, terminal resources, imports and local proxy execution.
+
+The [separation report](../../report/2026-10-03-engine-client-separation.md) identifies source-bound records and the remaining limits. No real account/model turn, physical ARM64 acceptance or detached/remote server is claimed. The daily tablet was not used as a test fixture.

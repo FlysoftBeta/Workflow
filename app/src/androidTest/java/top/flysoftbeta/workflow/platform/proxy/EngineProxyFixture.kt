@@ -42,7 +42,7 @@ internal class EngineProxyFixture private constructor(
         executor = runtime
         session.scope.coroutineContext[Job]!!.invokeOnCompletion { runtime.closeOwnedChannel() }
         session.scope.launch { session.rpc.failure.filterNotNull().first(); runtime.closeOwnedChannel() }
-        return WorkspaceProxyApi(runtime, EngineProxyWorkspace(session.rpc, session.store::readBytes), session.scope)
+        return WorkspaceProxyApi(runtime, EngineProxyWorkspace(session.rpc, session.token, session.store::readBytes), session.scope)
     }
 
     suspend fun config(text: String) {

@@ -36,6 +36,16 @@ class ImportServiceTest {
         scope.cancel()
     }
 
+    @Test fun changedConnectionCannotReceivePickerBytes() = runBlocking<Unit> {
+        store.awaitReady()
+        var checks = 0
+        val service = ImportService(context, { if (++checks == 1) "original" else "replacement" }) { store }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", source)
+        assertTrue(service.importUris(listOf(uri), "inbox") is ImportResult.Failed)
+        assertTrue(store.listDirectory("", true).isEmpty())
+        assertTrue(File(context.cacheDir, "import-staging").listFiles().orEmpty().isEmpty())
+    }
+
     @Test fun importsProviderContentUnderFreeNamesAndCleansStaging() = runBlocking {
         store.awaitReady()
         val service = ImportService(context) { store }

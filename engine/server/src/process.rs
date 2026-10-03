@@ -367,7 +367,8 @@ impl Processes {
     pub fn clear_output(&self, id: &str) -> Result<()> {
         let p = self.get(&json!({"processId":id}))?;
         let mut out = p.output.lock().unwrap();
-        out.stdout.bytes.clear(); out.stdout.start = 0;
+        let next = out.stdout.next();
+        out.stdout.bytes.clear(); out.stdout.start = next;
         Ok(())
     }
     pub fn stop_all(&self) {

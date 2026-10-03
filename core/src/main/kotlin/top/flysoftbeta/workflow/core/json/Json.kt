@@ -68,7 +68,7 @@ object Json {
             } }
             append('"')
         }
-        is Boolean, is Int, is Long -> value.toString()
+        is Boolean, is Int, is Long, is java.math.BigInteger, is java.math.BigDecimal -> value.toString()
         is Number -> value.toDouble().also { require(it.isFinite()) }.toString()
         is Map<*, *> -> value.entries.filter { it.value !== Omit }.joinToString(",", "{", "}") { (key, item) ->
             require(key is String)
@@ -182,7 +182,7 @@ object Json {
                 while (offset < input.length && input[offset].isDigit()) offset++
             }
             val token = input.substring(start, offset)
-            return token.toLongOrNull() ?: token.toDouble().also { require(it.isFinite()) }
+            return token.toLongOrNull() ?: if (token.any { it in ".eE" }) java.math.BigDecimal(token) else java.math.BigInteger(token)
         }
     }
 }

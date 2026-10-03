@@ -24,42 +24,51 @@ struct Terminal {
 pub struct Terminals {
     path: PathBuf,
     items: Mutex<HashMap<String, Terminal>>,
+    failure: Option<Error>,
 }
 impl Terminals {
     pub fn load(root: &std::path::Path) -> Result<Self> {
         let path = root.join(".workspace/state/terminals.json");
-        let saved = if path.exists() {
-            storage::read_json(&path)?
-        } else {
-            json!({"format":1,"terminals":[]})
+        let loaded = (|| -> Result<HashMap<String, Terminal>> {
+            let saved = if path.exists() {
+                storage::read_json(&path)?
+            } else {
+                json!({"format":1,"terminals":[]})
+            };
+            if saved["format"] != 1 || !saved["terminals"].is_array() {
+                return Err(Error::business(
+                    "unsupported_format",
+                    "unsupported terminal state",
+                ));
+            }
+            let mut items = HashMap::new();
+            for v in saved["terminals"].as_array().unwrap() {
+                let id = required(v, "id")?.to_owned();
+                storage::identifier(&id)?;
+                let mut value = v.clone();
+                value["status"] = json!("ended");
+                value["exitCode"] = V::Null;
+                items.insert(
+                    id,
+                    Terminal {
+                        value,
+                        process: None,
+                        scan: 0,
+                        osc: vec![],
+                        unreferenced: Some(Instant::now()),
+                    },
+                );
+            }
+            Ok(items)
+        })();
+        let (items, failure) = match loaded {
+            Ok(items) => (items, None),
+            Err(error) => (HashMap::new(), Some(error)),
         };
-        if saved["format"] != 1 || !saved["terminals"].is_array() {
-            return Err(Error::business(
-                "unsupported_format",
-                "unsupported terminal state",
-            ));
-        }
-        let mut items = HashMap::new();
-        for v in saved["terminals"].as_array().unwrap() {
-            let id = required(v, "id")?.to_owned();
-            storage::identifier(&id)?;
-            let mut value = v.clone();
-            value["status"] = json!("ended");
-            value["exitCode"] = V::Null;
-            items.insert(
-                id,
-                Terminal {
-                    value,
-                    process: None,
-                    scan: 0,
-                    osc: vec![],
-                    unreferenced: Some(Instant::now()),
-                },
-            );
-        }
         Ok(Self {
             path,
             items: Mutex::new(items),
+            failure,
         })
     }
     fn save(&self, items: &HashMap<String, Terminal>) -> Result<()> {
@@ -75,6 +84,9 @@ impl Terminals {
         method: &str,
         a: &V,
     ) -> Result<V> {
+        if let Some(error) = &self.failure {
+            return Err(error.clone());
+        }
         if method == "terminal.create" {
             let mut items = self.items.lock().unwrap();
             let id = format!("t-{}", uuid::Uuid::new_v4());
@@ -132,7 +144,10 @@ impl Terminals {
             .ok_or_else(|| Error::business("not_found", "terminal not found"))?;
         match method {
             "terminal.attach" => {
-                if t.process.is_none() {
+                if t.process.is_none()
+                    && t.value["status"] != "failed"
+                    && t.value["exitCode"].is_null()
+                {
                     start(t, processes, environment, a)?;
                 }
             }
@@ -186,16 +201,30 @@ impl Terminals {
         Ok(value)
     }
     pub fn refresh(&self, processes: &Processes) -> Result<()> {
+        if self.failure.is_some() {
+            return Ok(());
+        }
         let mut items = self.items.lock().unwrap();
         let mut changed = false;
         for t in items.values_mut() {
             let Some(p) = t.process.clone() else { continue };
             let before = t.value.clone();
             for _ in 0..16 {
-                let output = processes.request(
+                let output = match processes.request(
                     "process.read",
                     &json!({"processId":p,"offset":t.scan,"maxBytes":65536}),
-                )?;
+                ) {
+                    Ok(output) => output,
+                    Err(error) if error.kind == "not_found" => {
+                        t.process = None;
+                        if t.value["status"] == "running" {
+                            t.value["status"] = json!("failed");
+                            t.value["error"] = json!("terminal process record has expired");
+                        }
+                        break;
+                    }
+                    Err(error) => return Err(error),
+                };
                 if output["startOffset"].as_u64().unwrap_or(0) != t.scan {
                     t.osc.clear();
                 }
@@ -353,8 +382,7 @@ fn scan_osc(t: &mut Terminal, b: u8) {
                 "7" => {
                     if let Some(uri) = payload.strip_prefix("file://") {
                         if let Some(i) = uri.find('/') {
-                            let path = &uri[i..];
-                            if !path.contains('\0') && !path.split('/').any(|p| p == "..") {
+                            if let Some(path) = decode_cwd(&uri[i..]) {
                                 t.value["cwd"] = json!(path);
                             }
                         }
@@ -365,6 +393,30 @@ fn scan_osc(t: &mut Terminal, b: u8) {
         }
         t.osc.clear();
     }
+}
+fn decode_cwd(path: &str) -> Option<String> {
+    let input = path.as_bytes();
+    let mut bytes = Vec::with_capacity(input.len());
+    let mut i = 0;
+    while i < input.len() {
+        if input[i] == b'%' && i + 2 < input.len() {
+            if let (Some(a), Some(b)) = (
+                (input[i + 1] as char).to_digit(16),
+                (input[i + 2] as char).to_digit(16),
+            ) {
+                bytes.push((a * 16 + b) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        bytes.push(input[i]);
+        i += 1;
+    }
+    let value = String::from_utf8(bytes).ok()?;
+    if value.len() > 4096 || value.contains('\0') || value.split('/').any(|p| p == "..") {
+        return None;
+    }
+    Some(value)
 }
 pub fn references(state: &V) -> HashSet<String> {
     fn walk(v: &V, out: &mut HashSet<String>) {
@@ -400,6 +452,33 @@ pub fn references(state: &V) -> HashSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn invalid_terminal_metadata_is_preserved_without_blocking_workspace_startup() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join(".workspace/state/terminals.json");
+        storage::write_json(&path, &json!({"format":99,"terminals":[]})).unwrap();
+        let terminals = Terminals::load(d.path()).unwrap();
+        assert_eq!(
+            terminals.failure.as_ref().unwrap().kind,
+            "unsupported_format"
+        );
+        assert_eq!(storage::read_json(&path).unwrap()["format"], 99);
+        assert!(
+            terminals
+                .refresh(&Processes::new(Arc::new(
+                    std::sync::atomic::AtomicUsize::new(0)
+                )))
+                .is_ok()
+        );
+    }
+    #[test]
+    fn osc_working_directories_decode_unicode_and_reject_parent_traversal() {
+        assert_eq!(
+            decode_cwd("/workspace/a%20b/%E4%B8%AD").unwrap(),
+            "/workspace/a b/中"
+        );
+        assert!(decode_cwd("/workspace/%2e%2e/elsewhere").is_none());
+    }
     #[test]
     fn osc_state_is_owned_without_client() {
         let mut t = Terminal {

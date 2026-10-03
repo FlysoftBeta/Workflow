@@ -27,7 +27,7 @@ internal class EmbeddedWorkspaceBootstrapper(context: Context) : WorkspaceBootst
             server.path, "serve", "--root", root.path,
             "--runtime", File(native, "libworkflow-runtime.so").path,
             "--loader", File(native, "libworkflow-loader.so").path,
-            "--apk", app.applicationInfo.sourceDir, "--native-dir", native.path,
+            "--apk", app.applicationInfo.sourceDir,
         ).directory(app.filesDir).apply {
             environment().keys.toList().forEach { key ->
                 if (!key.startsWith("ANDROID_") && key !in setOf("BOOTCLASSPATH", "DEX2OATBOOTCLASSPATH", "SYSTEMSERVERCLASSPATH")) environment().remove(key)

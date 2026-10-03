@@ -8,7 +8,7 @@ pub fn validate(root: &Path, directory: &str, name: &str) -> Result<()> {
     if name.trim().is_empty()
         || name == "."
         || name == ".."
-        || name.len() > 200
+        || name.len() > 255
         || name
             .chars()
             .any(|c| c == '/' || c == '\\' || c.is_control())
@@ -24,16 +24,8 @@ pub fn publish(root: &Path, temp: &Path, directory: &str, name: &str) -> Result<
     validate(root, directory, name)?;
     let parent = storage::path(root, directory, true)?;
     fs::create_dir_all(&parent)?;
-    let (stem, extension) = match name.rfind('.').filter(|i| *i > 0) {
-        Some(i) => (&name[..i], &name[i..]),
-        None => (name, ""),
-    };
     for n in 0..10000 {
-        let candidate = if n == 0 {
-            name.to_owned()
-        } else {
-            format!("{stem} ({n}){extension}")
-        };
+        let candidate = variant(name, n);
         let relative = if directory.is_empty() {
             candidate
         } else {
@@ -50,6 +42,31 @@ pub fn publish(root: &Path, temp: &Path, directory: &str, name: &str) -> Result<
         }
     }
     Err(Error::business("name_limit", "no free import destination"))
+}
+fn prefix_bytes(text: &str, limit: usize) -> &str {
+    let mut end = text.len().min(limit);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+fn variant(name: &str, n: usize) -> String {
+    if n == 0 {
+        return name.into();
+    }
+    let lower = name.to_lowercase();
+    let split = [".tar.gz", ".tar.xz", ".tar.bz2", ".tar.zst", ".d.ts"]
+        .iter()
+        .find(|suffix| lower.ends_with(**suffix) && name.len() > suffix.len())
+        .map(|suffix| name.len() - suffix.len())
+        .or_else(|| name.rfind('.').filter(|i| *i > 0 && *i < name.len() - 1));
+    let (stem, extension) = split
+        .map(|i| (&name[..i], &name[i..]))
+        .unwrap_or((name, ""));
+    let suffix = format!(" ({n})");
+    let extension = prefix_bytes(extension, 255 - suffix.len() - 1);
+    let stem = prefix_bytes(stem, 255 - suffix.len() - extension.len());
+    format!("{stem}{suffix}{extension}")
 }
 #[cfg(test)]
 mod tests {
@@ -73,6 +90,14 @@ mod tests {
             publish(root.path(), &temp, "", "photo.jpg").unwrap(),
             "photo (2).jpg"
         );
+    }
+    #[test]
+    fn variants_preserve_compound_extensions_and_utf8_limits() {
+        assert_eq!(variant("bundle.tar.gz", 1), "bundle (1).tar.gz");
+        let name = format!("{}.txt", "界".repeat(83));
+        let name = variant(&name, 1);
+        assert!(name.len() <= 255);
+        assert!(name.ends_with(" (1).txt"));
     }
     #[test]
     fn private_state_and_path_components_cannot_be_allocated() {

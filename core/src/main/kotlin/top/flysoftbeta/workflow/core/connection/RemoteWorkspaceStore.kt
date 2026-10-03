@@ -216,12 +216,19 @@ class RemoteWorkspaceStore(val rpc: WorkspaceRpc, private val scope: CoroutineSc
     override suspend fun writeConversationIndex(text: String) { serial { ensureReady(); rpc.request("documents.write", documentKey + ("document" to text)) }; Unit }
     override suspend fun quarantineConversationIndex() { serial { ensureReady(); rpc.request("documents.quarantine", documentKey) }; Unit }
 
-    override suspend fun importFile(path: String, size: Long, open: () -> InputStream): FileOpResult = withContext(Dispatchers.IO) {
+    override suspend fun importFile(path: String, size: Long, open: () -> InputStream): FileOpResult =
+        try { upload(mapOf("path" to path), size, open); FileOpResult.Done }
+        catch (e: Exception) { if (e is CancellationException) throw e; FileOpResult.Failed(e.message ?: "导入失败") }
+
+    override suspend fun importUnique(directory: String, name: String, size: Long, open: () -> InputStream): String =
+        upload(mapOf("directory" to directory, "name" to name), size, open)
+
+    private suspend fun upload(destination: Map<String, Any?>, size: Long, open: () -> InputStream): String = withContext(Dispatchers.IO) {
         var uploadId: String? = null
         try {
             require(size >= 0) { "Import size must be nonnegative" }
             ensureReady()
-            val id = WorkspaceWire.string(WorkspaceWire.obj(rpc.request("files.upload.begin", mapOf("path" to path, "size" to size))), "uploadId")
+            val id = WorkspaceWire.string(WorkspaceWire.obj(rpc.request("files.upload.begin", destination + ("size" to size))), "uploadId")
             uploadId = id
             open().use { input ->
                 val buffer = ByteArray(65_536)
@@ -239,13 +246,11 @@ class RemoteWorkspaceStore(val rpc: WorkspaceRpc, private val scope: CoroutineSc
                 check(runInterruptible { input.read() } == -1) { "Import source exceeds its declared size" }
             }
             currentCoroutineContext().ensureActive()
-            val result = fileResult(rpc.request("files.upload.commit", mapOf("uploadId" to id)))
-            if (result == FileOpResult.Done) uploadId = null
+            val result = WorkspaceWire.obj(rpc.request("files.upload.commit", mapOf("uploadId" to id)))
+            check(result["kind"] == "done") { result["message"] as? String ?: "导入失败" }
+            uploadId = null
             accept(rpc.request("workspace.snapshot"))
-            result
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            FileOpResult.Failed(e.message ?: "导入失败")
+            result["path"] as? String ?: destination["path"] as? String ?: error("Engine omitted imported path")
         } finally {
             uploadId?.let { id ->
                 withContext(NonCancellable) { runCatching { rpc.request("files.upload.cancel", mapOf("uploadId" to id), 5_000) } }

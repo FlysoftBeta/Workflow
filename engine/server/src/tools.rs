@@ -370,26 +370,48 @@ fn optional_dir(opts: &Options, catalog: &V) -> Result<PathBuf> {
         .join(".workspace/environment/tools/optional/claude")
         .join(version))
 }
-fn state(opts: &Options) -> Arc<Mutex<V>> {
+fn state(opts: &Options) -> Result<Arc<Mutex<V>>> {
     let mut states = STATES.get_or_init(Default::default).lock().unwrap();
-    states
-        .entry(opts.root.clone())
-        .or_insert_with(|| {
-            let mut state =
-                storage::read_json(&opts.root.join(".workspace/environment/tools/state.json"))
-                    .unwrap_or_else(|_| json!({"revision":0,"tools":[]}));
-            state["measured"] = V::Null;
-            if let Some(items) = state["tools"].as_array_mut() {
-                for t in items {
-                    if t["phase"] == "installing" || t["phase"] == "verifying" {
-                        t["phase"] = json!("failed");
-                        t["error"] = json!("Installation interrupted; retry explicitly");
-                    }
-                }
+    if let Some(state) = states.get(&opts.root) {
+        return Ok(state.clone());
+    }
+    let path = opts.root.join(".workspace/environment/tools/state.json");
+    let mut value = if path.exists() {
+        match storage::read_json(&path) {
+            Ok(value)
+                if value.is_object()
+                    && value["revision"].is_u64()
+                    && value["tools"].as_array().is_some_and(|items| {
+                        items.iter().all(|item| {
+                            item.is_object() && item["id"].is_string() && item["phase"].is_string()
+                        })
+                    }) =>
+            {
+                value
             }
-            Arc::new(Mutex::new(state))
-        })
-        .clone()
+            _ => {
+                let quarantine = opts.root.join(".workspace/corrupt");
+                fs::create_dir_all(&quarantine)?;
+                fs::rename(
+                    &path,
+                    quarantine.join(format!("tools-state-{}.json", uuid::Uuid::new_v4())),
+                )?;
+                json!({"revision":0,"tools":[]})
+            }
+        }
+    } else {
+        json!({"revision":0,"tools":[]})
+    };
+    value["measured"] = V::Null;
+    for tool in value["tools"].as_array_mut().unwrap() {
+        if tool["phase"] == "installing" || tool["phase"] == "verifying" {
+            tool["phase"] = json!("failed");
+            tool["error"] = json!("Installation interrupted; retry explicitly");
+        }
+    }
+    let value = Arc::new(Mutex::new(value));
+    states.insert(opts.root.clone(), value.clone());
+    Ok(value)
 }
 fn persist(opts: &Options, state: &mut V) -> Result<()> {
     state["revision"] = json!(state["revision"].as_u64().unwrap_or(0) + 1);
@@ -456,7 +478,7 @@ pub fn status(shared: &Arc<Mutex<Environment>>) -> Result<V> {
         let env = shared.lock().unwrap();
         (env.options.clone(), env.state["active"].clone())
     };
-    let state = state(&opts);
+    let state = state(&opts)?;
     let mut state = state.lock().unwrap();
     if !active.is_object() {
         let tools: Vec<V> = [("codex", "/opt/workflow/tools/codex/bin/codex"), ("jre", "/opt/workflow/tools/jre/bin/java"), ("chat", "/opt/workflow/tools/chat/workflow-chat.jar"), ("claude", CLAUDE)].into_iter().map(|(id, binary)| json!({"id":id,"version":null,"architecture":architecture(),"binary":binary,"phase":"not_installed","progress":null,"error":null,"operationId":null})).collect();
@@ -551,7 +573,7 @@ pub fn install(
     let _ = status(shared)?;
     let opts = shared.lock().unwrap().options.clone();
     let (_, catalog) = prepare(&opts)?;
-    let state = state(&opts);
+    let state = state(&opts)?;
     let mut locked = state.lock().unwrap();
     let tool = locked["tools"]
         .as_array_mut()
@@ -593,7 +615,7 @@ pub fn install(
                 .as_u64()
                 .ok_or_else(|| err("missing Claude byte size"))?;
             let script = format!(
-                "set -eu\np={PREFIX}/claude/bin/claude.download\ntrap 'rm -f \"$p\"' EXIT\ncurl -fsSL --connect-timeout 20 --max-time 240 --retry 3 --retry-max-time 240 -o \"$p\" '{url}'\ntest \"$(wc -c < \"$p\")\" -eq {bytes}\nprintf '%s  %s\\n' '{sha}' \"$p\" | sha256sum -c --quiet\nchmod 0755 \"$p\"\n\"$p\" --version\nmv -f \"$p\" {CLAUDE}\n"
+                "set -eu\np={PREFIX}/claude/bin/claude.download\ncurl -fsSL --connect-timeout 20 --max-time 480 --retry 3 --retry-max-time 480 --max-filesize {bytes} -C - -o \"$p\" '{url}'\nif ! test \"$(wc -c < \"$p\")\" -eq {bytes}; then rm -f \"$p\"; exit 71; fi\nif ! printf '%s  %s\\n' '{sha}' \"$p\" | sha256sum -c --quiet; then rm -f \"$p\"; exit 72; fi\nchmod 0755 \"$p\"\n\"$p\" --version\nmv -f \"$p\" {CLAUDE}\n"
             );
             let spawned=processes.spawn(&shared,&json!({"argv":["/bin/bash","-c",script],"cwd":"/home/work","env":{},"label":"Install Claude Code"}))?;
             let id = spawned["processId"].clone();
@@ -603,7 +625,15 @@ pub fn install(
                     processes.request("process.wait", &json!({"processId":id,"timeoutMs":1000}))?;
                 if done["running"] == false {
                     if done["exitCode"] != 0 {
-                        return Err(err("Claude download or verification failed"));
+                        let code = done["exitCode"].as_i64().unwrap_or(-1);
+                        let reason = match code {
+                            28 => "Claude download timed out; retry resumes the partial download",
+                            6 | 7 => "Claude download could not connect; retry explicitly",
+                            22 => "Claude download server rejected the request; retry explicitly",
+                            60 => "Claude download TLS certificate verification failed",
+                            _ => "Claude download or verification failed",
+                        };
+                        return Err(err(&format!("{reason} (exit {code})")));
                     }
                     break;
                 }
@@ -722,6 +752,30 @@ mod tests {
         assert_eq!(result["tools"][1]["phase"], "failed");
         assert_eq!(result["tools"][3]["phase"], "not_installed");
         assert_eq!(status(&shared).unwrap()["revision"], result["revision"]);
+    }
+    #[test]
+    fn wrong_shape_state_is_preserved_without_poisoning_registry() {
+        let temp = tempfile::tempdir().unwrap();
+        let opts = Options {
+            root: temp.path().to_path_buf(),
+            ..Options::default()
+        };
+        storage::write_json(
+            &opts.root.join(".workspace/environment/tools/state.json"),
+            &json!([]),
+        )
+        .unwrap();
+        let recovered = state(&opts).unwrap();
+        assert_eq!(recovered.lock().unwrap()["tools"], json!([]));
+        let originals = fs::read_dir(opts.root.join(".workspace/corrupt"))
+            .unwrap()
+            .collect::<Vec<_>>();
+        assert_eq!(originals.len(), 1);
+        assert_eq!(
+            storage::read_json(&originals[0].as_ref().unwrap().path()).unwrap(),
+            json!([])
+        );
+        assert!(state(&opts).is_ok());
     }
     #[test]
     fn invalid_archive_is_not_published() {

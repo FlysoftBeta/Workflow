@@ -13,7 +13,7 @@ The Server's command line is:
 ```text
 workflow-engine serve --root <user-file-root>
   [--runtime <workflow-runtime>] [--loader <workflow-loader>]
-  [--apk <Android-APK>] [--native-dir <nativeLibraryDir>]
+  [--apk <Android-APK>]
   [--image <image.tar.zst> --image-index <image.json>]
   [--tools <directory-containing-tools.json-and-tools.zip>]
 ```

@@ -68,6 +68,7 @@ class EngineIntegrationTest {
         engine = EngineController(context, scope) { store }.also { it.start() }
     }
     private suspend fun ready() {
+        rpc.request("environment.reconcile")
         val health = withTimeout(180_000) { engine.health.first { it.usable || it is EnvironmentHealth.Failed || it is EnvironmentHealth.Unavailable } }
         assertTrue(engine.describe(health) + "\n" + engine.logTail(null), health.usable)
     }
@@ -108,7 +109,7 @@ class EngineIntegrationTest {
         }
     }
 
-    @Test fun installedEnvironmentRunsTerminalNetworkAndCodexAndReconcilesRestart() = runBlocking {
+    @Test fun installedEnvironmentRunsTerminalNetworkAndReconcilesRestart() = runBlocking {
         ready()
         println("ENGINE_ACCEPTANCE verified custom environment ready")
         val upload = WorkspaceWire.obj(rpc.request("files.upload.begin", mapOf("path" to "atomic.txt", "size" to 3)))
@@ -135,9 +136,8 @@ class EngineIntegrationTest {
         assertTrue(net.output.toString(Charsets.UTF_8).matches(Regex("[1-5][0-9]{2}")))
         println("ENGINE_ACCEPTANCE guest identity, language tools, files and HTTPS verified")
 
-        startCodexThroughChat()
-        println("ENGINE_ACCEPTANCE Engine guest JVM and Codex app-server account RPC verified")
-
+        // Chat startup writes plugin/cache/database files. Its generation restart is tested
+        // separately; post-script preparation must keep rejecting a file changing during copy.
         val terminal = createTerminal(TerminalSpec())
         val output = StringBuffer()
         val reader = launch { terminal.output.collect { output.append(it.toString(Charsets.UTF_8)) } }
@@ -272,7 +272,20 @@ class EngineIntegrationTest {
             assertEquals(connected.epoch, chatSnapshot().epoch)
             assertEquals(1, chatSnapshot().metadata.conversations.count { it.id == id })
         } finally { firstScope.cancel(); secondScope.cancel() }
-        println("ENGINE_ACCEPTANCE guest JVM chat, measured Codex account, event replay and disposable client reattachment verified")
+        // Changing only declared environment variables needs no home snapshot. Verify Engine
+        // owns stopping/rehydrating chat independently of the transactional post-script tests.
+        val declaration = Json.stringify(mapOf("version" to 1, "env" to mapOf("WF_CHAT_RESTART" to "yes")))
+        assertTrue(store.saveFile(WorkspacePaths.ENVIRONMENT, declaration) is SaveResult.Saved)
+        rpc.request("environment.reconcile")
+        val pending = withTimeout(120_000) { engine.health.first { it is EnvironmentHealth.NeedsRestart || it is EnvironmentHealth.Failed } }
+        assertTrue(engine.describe(pending), pending is EnvironmentHealth.NeedsRestart)
+        engine.restartEnvironment()
+        val restored = chatSnapshot()
+        assertNotEquals("A generation restart retires the old chat service", connected.epoch, restored.epoch)
+        assertEquals("Engine-owned conversation", restored.metadata.conversations.single { it.id == id }.title)
+        val restarted = startCodexThroughChat()
+        assertNotEquals(connected.metadata.processEpochs[BackendKind.CODEX], restarted.metadata.processEpochs[BackendKind.CODEX])
+        println("ENGINE_ACCEPTANCE guest JVM chat, measured Codex account, event replay, client reattachment and generation restart verified")
     }
 
     @Test fun terminalAttachmentsReplaySameShellAndNoOpRestartPreservesProcess() = runBlocking<Unit> {
@@ -311,9 +324,10 @@ class EngineIntegrationTest {
         }
     }
 
-    @Test fun claudeInstallsOnDemandAndRunsInsideTheEnvironment() = runBlocking<Unit> {
+    @Test fun selectingClaudeInstallsAndStartsItThroughEngine() = runBlocking<Unit> {
         ready()
-        rpc.request("environment.tools.install", mapOf("toolId" to "claude", "retry" to true), 90_000)
+        val id = chatCommand("newConversation", mapOf("backend" to "claude")).jsonPrimitive.content
+        assertTrue(chatSnapshot().metadata.conversations.any { it.id == id && it.backend == BackendKind.CLAUDE })
         val result = withTimeout(660_000) {
             var state = tool("claude")
             while (state["phase"] !in setOf("ready", "failed")) { delay(1000); state = tool("claude") }
@@ -326,5 +340,8 @@ class EngineIntegrationTest {
         val probe = runGuest(engine, listOf(binary, "--version"))
         assertEquals(probe.error, 0, probe.exitCode)
         assertTrue(probe.output.toString(Charsets.UTF_8).contains(version))
+        withTimeout(30_000) { while (BackendKind.CLAUDE !in chatSnapshot().metadata.available) delay(100) }
+        chatCommand("warmUp", mapOf("kind" to "claude"))
+        assertTrue(chatSnapshot().state.backend(BackendKind.CLAUDE).process is ProcessState.Ready)
     }
 }

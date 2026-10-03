@@ -3,7 +3,7 @@
 use base64::Engine;
 use serde::{
     Deserialize,
-    de::{self, MapAccess, SeqAccess, Visitor},
+    de::{self, MapAccess, Visitor},
 };
 use serde_json::{Value as V, json};
 use std::{
@@ -52,71 +52,68 @@ impl From<io::Error> for Error {
 }
 /// Reject duplicate keys; serde_json's default Value visitor silently accepts them.
 pub fn strict_json(bytes: &[u8]) -> std::result::Result<V, serde_json::Error> {
-    struct Strict(V);
-    impl<'de> Deserialize<'de> for Strict {
+    use serde_json::value::RawValue;
+    // Borrow child slices: validation never rounds numbers or interprets a user's object
+    // as serde_json's private arbitrary-precision-number representation.
+    struct Object<'a>(Vec<(String, &'a RawValue)>);
+    impl<'de> Deserialize<'de> for Object<'de> {
         fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
-            struct Vis;
-            impl<'de> Visitor<'de> for Vis {
-                type Value = Strict;
+            struct ObjectVisitor;
+            impl<'de> Visitor<'de> for ObjectVisitor {
+                type Value = Object<'de>;
                 fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                    write!(f, "JSON value")
-                }
-                fn visit_bool<E: de::Error>(self, v: bool) -> std::result::Result<Strict, E> {
-                    Ok(Strict(json!(v)))
-                }
-                fn visit_i64<E: de::Error>(self, v: i64) -> std::result::Result<Strict, E> {
-                    Ok(Strict(json!(v)))
-                }
-                fn visit_u64<E: de::Error>(self, v: u64) -> std::result::Result<Strict, E> {
-                    Ok(Strict(json!(v)))
-                }
-                fn visit_f64<E: de::Error>(self, v: f64) -> std::result::Result<Strict, E> {
-                    serde_json::Number::from_f64(v)
-                        .map(|n| Strict(V::Number(n)))
-                        .ok_or_else(|| E::custom("non-finite number"))
-                }
-                fn visit_str<E: de::Error>(self, v: &str) -> std::result::Result<Strict, E> {
-                    Ok(Strict(json!(v)))
-                }
-                fn visit_string<E: de::Error>(self, v: String) -> std::result::Result<Strict, E> {
-                    Ok(Strict(json!(v)))
-                }
-                fn visit_unit<E: de::Error>(self) -> std::result::Result<Strict, E> {
-                    Ok(Strict(V::Null))
-                }
-                fn visit_none<E: de::Error>(self) -> std::result::Result<Strict, E> {
-                    Ok(Strict(V::Null))
-                }
-                fn visit_seq<A: SeqAccess<'de>>(
-                    self,
-                    mut a: A,
-                ) -> std::result::Result<Strict, A::Error> {
-                    let mut out = vec![];
-                    while let Some(v) = a.next_element::<Strict>()? {
-                        out.push(v.0);
-                    }
-                    Ok(Strict(V::Array(out)))
+                    f.write_str("an object")
                 }
                 fn visit_map<A: MapAccess<'de>>(
                     self,
                     mut a: A,
-                ) -> std::result::Result<Strict, A::Error> {
-                    let mut out = serde_json::Map::new();
-                    while let Some((k, v)) = a.next_entry::<String, Strict>()? {
-                        if out.insert(k, v.0).is_some() {
+                ) -> std::result::Result<Self::Value, A::Error> {
+                    let mut fields = Vec::new();
+                    let mut keys = std::collections::HashSet::new();
+                    while let Some((key, value)) = a.next_entry::<String, &'de RawValue>()? {
+                        if !keys.insert(key.clone()) {
                             return Err(de::Error::custom("duplicate object key"));
                         }
+                        fields.push((key, value));
                     }
-                    Ok(Strict(V::Object(out)))
+                    Ok(Object(fields))
                 }
             }
-            d.deserialize_any(Vis)
+            d.deserialize_map(ObjectVisitor)
         }
     }
-    let mut decoder = serde_json::Deserializer::from_slice(bytes);
-    let v = Strict::deserialize(&mut decoder)?;
-    decoder.end()?;
-    Ok(v.0)
+    fn value(raw: &RawValue, depth: usize) -> std::result::Result<V, serde_json::Error> {
+        if depth > 128 {
+            return Err(de::Error::custom("JSON nesting exceeds limit"));
+        }
+        let text = raw.get();
+        Ok(match text.as_bytes().first() {
+            Some(b'{') => {
+                let object: Object<'_> = serde_json::from_str(text)?;
+                let mut fields = serde_json::Map::new();
+                for (key, raw) in object.0 {
+                    fields.insert(key, value(raw, depth + 1)?);
+                }
+                V::Object(fields)
+            }
+            Some(b'[') => {
+                let items: Vec<&RawValue> = serde_json::from_str(text)?;
+                V::Array(
+                    items
+                        .into_iter()
+                        .map(|v| value(v, depth + 1))
+                        .collect::<std::result::Result<_, _>>()?,
+                )
+            }
+            Some(b'"') => V::String(serde_json::from_str(text)?),
+            Some(b't') => V::Bool(true),
+            Some(b'f') => V::Bool(false),
+            Some(b'n') => V::Null,
+            _ => V::Number(text.parse()?),
+        })
+    }
+    let raw: &RawValue = serde_json::from_slice(bytes)?;
+    value(raw, 0)
 }
 pub fn decode_blob(s: &str, max: usize) -> Result<Vec<u8>> {
     if s.len() > max.div_ceil(3) * 4 {
@@ -214,6 +211,18 @@ pub(crate) fn line(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn opaque_numbers_and_reserved_looking_fields_are_lossless() {
+        let raw=br#"{"id":123456789012345678901234567890,"precise":0.12345678901234567890123456789,"$serde_json::private::Number":"not-a-number"}"#;
+        let value = strict_json(raw).unwrap();
+        assert_eq!(value["id"].to_string(), "123456789012345678901234567890");
+        assert_eq!(
+            value["precise"].to_string(),
+            "0.12345678901234567890123456789"
+        );
+        assert_eq!(value["$serde_json::private::Number"], "not-a-number");
+        assert!(strict_json(br#"{"outer":{"same":1,"same":2}}"#).is_err());
+    }
     #[test]
     fn strict_json_rejects_duplicate_keys_and_trailing_documents() {
         assert!(strict_json(br#"{"a":1,"a":2}"#).is_err());

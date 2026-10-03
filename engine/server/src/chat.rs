@@ -25,13 +25,11 @@ pub struct Chat {
     host: Mutex<Option<Arc<Host>>>,
 }
 impl Chat {
-    pub fn request(
+    pub fn ensure(
         &self,
         environment: &Arc<Mutex<Environment>>,
         callback: Callback,
-        method: &str,
-        params: &V,
-    ) -> Result<V> {
+    ) -> Result<Arc<Host>> {
         let host = {
             let mut slot = self.host.lock().unwrap();
             if slot
@@ -55,7 +53,7 @@ impl Chat {
             }
             slot.as_ref().unwrap().clone()
         };
-        host.request(method, params)
+        Ok(host)
     }
     pub fn stop(&self) {
         if let Some(host) = self.host.lock().unwrap().take() {
@@ -64,7 +62,7 @@ impl Chat {
     }
 }
 
-struct Host {
+pub(crate) struct Host {
     input: Mutex<ChildStdin>,
     pending: Mutex<HashMap<String, mpsc::Sender<Result<V>>>>,
     next: AtomicU64,
@@ -96,6 +94,7 @@ impl Host {
         // PR_SET_PDEATHSIG follows the spawning thread, so that thread also reaps.
         let (spawn_tx, spawn_rx) = mpsc::sync_channel(1);
         let (owner_tx, owner_rx) = mpsc::sync_channel::<Arc<Host>>(1);
+        let counter = running.clone();
         std::thread::spawn(move || {
             let mut child = match command.spawn() {
                 Ok(child) => child,
@@ -123,10 +122,9 @@ impl Host {
                     return;
                 }
             };
-            running.fetch_add(1, Ordering::SeqCst);
             let _ = child.wait();
             host.fail();
-            running.fetch_sub(1, Ordering::SeqCst);
+            counter.fetch_sub(1, Ordering::SeqCst);
         });
         let (pid, stdin, stdout, mut stderr) = spawn_rx
             .recv()
@@ -139,6 +137,7 @@ impl Host {
             callbacks: AtomicUsize::new(0),
             pid,
         });
+        running.fetch_add(1, Ordering::SeqCst);
         owner_tx
             .send(host.clone())
             .map_err(|_| Error::business("chat_start", "chat process owner exited"))?;
@@ -227,7 +226,7 @@ impl Host {
             Err(e) => json!({"jsonrpc":"2.0","id":id,"error":{"code":e.code,"message":e.message,"data":{"kind":e.kind}}}),
         })
     }
-    fn request(&self, method: &str, params: &V) -> Result<V> {
+    pub(crate) fn request(&self, method: &str, params: &V) -> Result<V> {
         let id = format!("chat{}", self.next.fetch_add(1, Ordering::SeqCst));
         let (tx, rx) = mpsc::channel();
         {

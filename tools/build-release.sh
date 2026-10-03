@@ -52,7 +52,7 @@ for abi, arch in [('arm64-v8a', 'arm64'), ('x86_64', 'amd64')]:
     assert "sdkVersion:'28'" in package and 'application-debuggable' not in package, abi
     with zipfile.ZipFile(apk) as z:
         names = set(z.namelist())
-        for binary in ('workflow-engine', 'workflow-runtime', 'workflow-loader', 'workflow_pty', 'mihomo', 'proxyguard'):
+        for binary in ('workflow-engine', 'workflow-runtime', 'workflow-loader', 'mihomo', 'proxyguard'):
             # The guardian's exact packaged name is declared in its native build script.
             if binary == 'proxyguard':
                 assert any(n.startswith(f'lib/{abi}/lib') and 'guard' in n for n in names), abi

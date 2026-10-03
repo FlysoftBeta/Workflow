@@ -6,6 +6,8 @@ The [integration report dated 2026-10-03](archive/implementation-1.0.0/reports/r
 
 The subsequent [workspace organization report](report/2026-10-03-workspace-organization.md) records the module separation, English documentation, coordination tools and targeted regression checks performed after that delivery.
 
+The [Engine/client separation report](report/2026-10-03-engine-client-separation.md) records the subsequent transfer of chat, tool distribution, terminal resources, import allocation and proxy control to Engine. Its final isolated API 28 x86_64 run passed 13 tests with zero skips, including real guest JVM/agent startup and generation restart. Real-account and physical ARM64 acceptance remain separate.
+
 ## Implemented boundaries
 
 The production Server, runtime, and loader are Rust components under `engine/`. Workspace configuration and private state live beneath `<workspace-root>/.workspace/`. The Server commits sessions, layouts, files, drafts, settings, environments, and service state. Android retains only connection profiles and workspace-delivered local configuration. Historical Kotlin writers are test fixtures, and the archived C runtime and WebView chat are outside production build inputs. The [repository cleanup report](archive/implementation-1.0.0/reports/rewrite/repository-cleanup.md) records the earlier separation; current module ownership is documented in the [implementation overview](implementation/README.md).

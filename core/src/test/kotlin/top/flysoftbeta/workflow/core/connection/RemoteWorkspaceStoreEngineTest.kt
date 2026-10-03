@@ -18,6 +18,21 @@ import top.flysoftbeta.workflow.core.store.*
 
 /** Real Kotlin client -> host Rust Engine, with isolated roots and no host process fallback. */
 class RemoteWorkspaceStoreEngineTest {
+    @Test fun engineAllocatesImportNamesAtCommitWithoutOverwritingConcurrentFile() = runBlocking<Unit> {
+        withEngine { engine ->
+            val first = engine.store.importUnique("inbox", "archive.tar.gz", 3) {
+                File(engine.root, "inbox").mkdirs()
+                File(engine.root, "inbox/archive.tar.gz").writeText("keep")
+                "new".byteInputStream()
+            }
+            assertEquals("inbox/archive (1).tar.gz", first)
+            assertEquals("keep", File(engine.root, "inbox/archive.tar.gz").readText())
+            assertEquals("new", File(engine.root, first).readText())
+            assertEquals("inbox/archive (2).tar.gz", engine.store.importUnique("inbox", "archive.tar.gz", 0) { byteArrayOf().inputStream() })
+            assertTrue(engine.uploads().isEmpty())
+        }
+    }
+
     @Test fun sizeDeclaredChunkedUploadIsAtomicAndNeverOverwrites() = runBlocking<Unit> {
         withEngine { engine ->
             val bytes = ByteArray(3 * 65_536 + 713) { (it % 251).toByte() }

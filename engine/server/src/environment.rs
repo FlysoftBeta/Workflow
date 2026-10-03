@@ -8,7 +8,7 @@ use std::{
     collections::HashSet,
     fs::{self, File},
     io::Read,
-    os::unix::{fs::PermissionsExt, process::CommandExt},
+    os::unix::process::CommandExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -23,7 +23,6 @@ pub struct Options {
     pub runtime: Option<PathBuf>,
     pub loader: Option<PathBuf>,
     pub apk: Option<PathBuf>,
-    pub native_dir: Option<PathBuf>,
     pub tools: Option<PathBuf>,
     pub image: Option<PathBuf>,
     pub image_index: Option<PathBuf>,
@@ -988,6 +987,7 @@ fn activate(opts: &Options, activation: &V) -> Result<()> {
 #[cfg(test)]
 mod launcher_tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn bundled_cli_launcher_overlays_existing_image_entry_point() {

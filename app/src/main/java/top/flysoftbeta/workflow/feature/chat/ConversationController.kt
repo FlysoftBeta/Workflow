@@ -55,7 +55,6 @@ import top.flysoftbeta.workflow.feature.chat.transcript.NativeTranscriptDocument
 import top.flysoftbeta.workflow.feature.chat.transcript.NativeTranscriptProjector
 import top.flysoftbeta.workflow.feature.chat.transcript.TranscriptProjector
 import top.flysoftbeta.workflow.platform.agent.AgentHub
-import top.flysoftbeta.workflow.platform.agent.BackendUnavailableException
 import top.flysoftbeta.workflow.platform.importer.ImportKind
 import top.flysoftbeta.workflow.platform.importer.ImportResult
 import top.flysoftbeta.workflow.platform.importer.ImportService
@@ -490,7 +489,7 @@ class ConversationController(
     private fun report(error: Throwable) {
         val process = backend?.process
         // Start failures are shown by the backend state itself ("… 未能启动" / "需要工作环境").
-        if (error is BackendUnavailableException || process is ProcessState.Failed || process is ProcessState.Exited || !available) {
+        if (process is ProcessState.Failed || process is ProcessState.Exited || !available) {
             problem = null
             return
         }

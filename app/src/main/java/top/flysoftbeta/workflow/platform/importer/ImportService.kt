@@ -26,7 +26,6 @@ import kotlinx.coroutines.withContext
 import top.flysoftbeta.workflow.app.AppGraph
 import top.flysoftbeta.workflow.core.io.FileNames
 import top.flysoftbeta.workflow.core.io.WorkspacePaths
-import top.flysoftbeta.workflow.core.store.FileOpResult
 import top.flysoftbeta.workflow.core.store.WorkspaceStore
 
 /** Where imported content comes from (the explorer's `＋` and the composer's `+`). */
@@ -58,12 +57,11 @@ sealed interface ImportResult {
  * The shared importer (product.md §7/§8): camera, gallery and device files into a workspace folder, plus
  * content dropped from other apps. One process-wide instance; the activity attaches its result launchers
  * in `onCreate` ([attach]). Content is staged in the app cache off the main thread (slow providers never
- * hold the workspace store), then committed with [WorkspaceStore.importFile] under a free name
+ * hold the workspace store), then committed with [WorkspaceStore.importUnique] under an Engine-allocated name
  * (`name (n).ext`), never overwriting.
  */
-class ImportService internal constructor(context: Context, private val storeProvider: () -> WorkspaceStore) {
+class ImportService internal constructor(context: Context, private val connectionId: () -> String? = { null }, private val storeProvider: () -> WorkspaceStore) {
     private val appContext = context.applicationContext
-    private val store: WorkspaceStore get() = storeProvider()
 
     private class Launchers(
         val camera: ActivityResultLauncher<Uri>,
@@ -71,10 +69,19 @@ class ImportService internal constructor(context: Context, private val storeProv
         val files: ActivityResultLauncher<Array<String>>,
     )
 
-    private class Pending(val request: ImportRequest, val capture: File?, val result: CompletableDeferred<ImportResult>?)
+    private class Pending(val request: ImportRequest, val capture: File?, val result: CompletableDeferred<ImportResult>?, val connection: String?, val store: WorkspaceStore?)
 
     private var launchers: Launchers? = null
     private var pending: Pending? = null
+    init {
+        AppGraph.processScope.launch(Dispatchers.IO) {
+            val cutoff = System.currentTimeMillis() - 24 * 60 * 60_000L
+            for (directory in listOf("import-staging", "captures")) {
+                File(appContext.cacheDir, directory).listFiles().orEmpty()
+                    .filter { it.isFile && it.lastModified() < cutoff }.forEach { it.delete() }
+            }
+        }
+    }
     private val orphanResults = MutableSharedFlow<Pair<ImportRequest, ImportResult>>(extraBufferCapacity = 8)
 
     /**
@@ -92,13 +99,13 @@ class ImportService internal constructor(context: Context, private val storeProv
         }
         val registered = Launchers(
             camera = registry.register("$STATE_KEY.camera", activity, ActivityResultContracts.TakePicture()) { saved ->
-                complete { request, capture -> if (saved && capture != null) importFiles(listOf(capture), request.targetDir, cameraName()) else ImportResult.Cancelled }
+                complete { request, capture, store, token -> if (saved && capture != null) importFiles(listOf(capture), request.targetDir, cameraName(), store, token) else ImportResult.Cancelled }
             },
             gallery = registry.register("$STATE_KEY.gallery", activity, ActivityResultContracts.GetMultipleContents()) { uris ->
-                complete { request, _ -> if (uris.isEmpty()) ImportResult.Cancelled else importUris(uris, request.targetDir) }
+                complete { request, _, store, token -> if (uris.isEmpty()) ImportResult.Cancelled else importUris(uris, request.targetDir, store, token) }
             },
             files = registry.register("$STATE_KEY.files", activity, ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-                complete { request, _ -> if (uris.isEmpty()) ImportResult.Cancelled else importUris(uris, request.targetDir) }
+                complete { request, _, store, token -> if (uris.isEmpty()) ImportResult.Cancelled else importUris(uris, request.targetDir, store, token) }
             },
         )
         launchers = registered
@@ -119,6 +126,8 @@ class ImportService internal constructor(context: Context, private val storeProv
             ?: return ImportResult.Failed("目标文件夹无效")
         val active = launchers ?: return ImportResult.Failed("无法打开选择器")
         pending?.result?.complete(ImportResult.Cancelled)
+        val selected = runCatching { storeProvider() }.getOrElse { return ImportResult.Failed("工作区尚未连接") }
+        val token = connectionId()
         val result = CompletableDeferred<ImportResult>()
         val request = ImportRequest(kind, directory, owner)
         try {
@@ -127,11 +136,11 @@ class ImportService internal constructor(context: Context, private val storeProv
                     val capture = withContext(Dispatchers.IO) {
                         File(appContext.cacheDir, "captures").apply { mkdirs() }.let { File(it, "${UUID.randomUUID()}.jpg") }
                     }
-                    pending = Pending(request, capture, result)
+                    pending = Pending(request, capture, result, token, selected)
                     active.camera.launch(FileProvider.getUriForFile(appContext, "${appContext.packageName}.files", capture))
                 }
-                ImportKind.GALLERY -> { pending = Pending(request, null, result); active.gallery.launch("image/*") }
-                ImportKind.FILES -> { pending = Pending(request, null, result); active.files.launch(arrayOf("*/*")) }
+                ImportKind.GALLERY -> { pending = Pending(request, null, result, token, selected); active.gallery.launch("image/*") }
+                ImportKind.FILES -> { pending = Pending(request, null, result, token, selected); active.files.launch(arrayOf("*/*")) }
             }
         } catch (_: ActivityNotFoundException) {
             pending = null
@@ -142,6 +151,11 @@ class ImportService internal constructor(context: Context, private val storeProv
 
     /** Imports content URIs (drag and drop from another app, or picker results) into [targetDir]. */
     suspend fun importUris(uris: List<Uri>, targetDir: String): ImportResult {
+        val selected = runCatching { storeProvider() }.getOrElse { return ImportResult.Failed("工作区尚未连接") }
+        return importUris(uris, targetDir, selected, connectionId())
+    }
+
+    private suspend fun importUris(uris: List<Uri>, targetDir: String, selected: WorkspaceStore, token: String?): ImportResult {
         val directory = WorkspacePaths.normalizeOrNull(targetDir) ?: return ImportResult.Failed("目标文件夹无效")
         val paths = ArrayList<String>()
         val failures = ArrayList<String>()
@@ -161,14 +175,24 @@ class ImportService internal constructor(context: Context, private val storeProv
                     val file = stagingFile()
                     try {
                         (resolver.openInputStream(uri) ?: throw IOException("无法读取")).use { input ->
-                            file.outputStream().use { input.copyTo(it, 1 shl 16) }
+                            file.outputStream().use { output ->
+                                val buffer = ByteArray(1 shl 16)
+                                var bytes = 0L
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    bytes += count
+                                    check(bytes <= MAX_IMPORT_BYTES) { "导入文件超过 512 MiB" }
+                                    output.write(buffer, 0, count)
+                                }
+                            }
                         }
                     } catch (error: Exception) {
                         file.delete(); throw error
                     }
                     file to label
                 }
-                try { paths += commit(staged.first, directory, staged.second) } finally { withContext(Dispatchers.IO) { staged.first.delete() } }
+                try { paths += commit(staged.first, directory, staged.second, selected, token) } finally { withContext(Dispatchers.IO) { staged.first.delete() } }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -179,10 +203,10 @@ class ImportService internal constructor(context: Context, private val storeProv
         else ImportResult.Imported(paths, failures)
     }
 
-    private suspend fun importFiles(files: List<File>, targetDir: String, name: String): ImportResult {
+    private suspend fun importFiles(files: List<File>, targetDir: String, name: String, selected: WorkspaceStore, token: String?): ImportResult {
         val paths = ArrayList<String>()
         try {
-            files.forEach { paths += commit(it, targetDir, name) }
+            files.forEach { paths += commit(it, targetDir, name, selected, token) }
         } catch (error: IOException) {
             return ImportResult.Failed(error.message ?: "导入失败")
         } finally {
@@ -191,35 +215,27 @@ class ImportService internal constructor(context: Context, private val storeProv
         return ImportResult.Imported(paths)
     }
 
-    /** Moves a staged file into [directory] under the first free variant of [name]. */
-    private suspend fun commit(staged: File, directory: String, name: String): String {
-        val store = kotlinx.coroutines.withTimeout(45_000) {
-            var connected: WorkspaceStore? = null
-            while (connected == null) {
-                connected = runCatching { storeProvider() }.getOrNull()
-                if (connected == null) kotlinx.coroutines.delay(100)
-            }
-            connected
-        }
-        if (directory.isNotEmpty()) store.createDirectory(directory) // "Already exists" is fine
-        val taken = store.listDirectory(directory, showHidden = true).map { it.name }.toSet()
-        for (candidate in FileNames.variants(name).filter { it !in taken }.take(MAX_ATTEMPTS)) {
-            val path = WorkspacePaths.child(directory, candidate)
-            when (val result = store.importFile(path, staged.length()) { staged.inputStream() }) {
-                FileOpResult.Done -> return path
-                is FileOpResult.Failed -> if (!result.message.startsWith("Already exists")) throw IOException(result.message)
-            }
-        }
-        throw IOException("没有可用的文件名")
+    /** Only streams bytes. Engine allocates the destination and resolves collisions atomically. */
+    private suspend fun commit(staged: File, directory: String, name: String, selected: WorkspaceStore, token: String?): String {
+        check(connectionId() == token && storeProvider() === selected) { "工作区连接已更改，请重新选择文件" }
+        val size = withContext(Dispatchers.IO) { staged.length() }
+        check(size <= MAX_IMPORT_BYTES) { "导入文件超过 512 MiB" }
+        return selected.importUnique(directory, name, size) { staged.inputStream() }
     }
 
     /** Delivers a picker result: to the waiting caller, else (after process death) to [orphaned]. */
-    private fun complete(block: suspend (ImportRequest, File?) -> ImportResult) {
+    private fun complete(block: suspend (ImportRequest, File?, WorkspaceStore, String?) -> ImportResult) {
         val current = pending ?: return
         pending = null
         AppGraph.processScope.launch(Dispatchers.Main.immediate) {
-            val result = try { block(current.request, current.capture) } catch (cancelled: CancellationException) { throw cancelled }
+            val result = try {
+                check(current.connection == connectionId()) { "工作区连接已更改，请重新选择文件" }
+                val selected = current.store ?: storeProvider()
+                check(selected === storeProvider()) { "工作区连接已更改，请重新选择文件" }
+                block(current.request, current.capture, selected, current.connection)
+            } catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: Exception) { ImportResult.Failed(error.message ?: "导入失败") }
+            withContext(Dispatchers.IO) { current.capture?.delete() }
             val waiting = current.result
             if (waiting != null && waiting.isActive) waiting.complete(result)
             else if (result !is ImportResult.Cancelled) orphanResults.emit(current.request to result)
@@ -232,13 +248,14 @@ class ImportService internal constructor(context: Context, private val storeProv
             putString("targetDir", p.request.targetDir)
             putString("owner", p.request.owner)
             putString("capture", p.capture?.path)
+            putString("connection", p.connection)
         }
     }
 
     private fun restoreState(state: Bundle): Pending? {
         val kind = state.getString("kind")?.let { name -> ImportKind.entries.firstOrNull { it.name == name } } ?: return null
         val targetDir = state.getString("targetDir") ?: return null
-        return Pending(ImportRequest(kind, targetDir, state.getString("owner")), state.getString("capture")?.let(::File), null)
+        return Pending(ImportRequest(kind, targetDir, state.getString("owner")), state.getString("capture")?.let(::File), null, state.getString("connection"), null)
     }
 
     private fun stagingFile(): File = File(appContext.cacheDir, "import-staging").apply { mkdirs() }.let { File(it, UUID.randomUUID().toString()) }
@@ -249,12 +266,12 @@ class ImportService internal constructor(context: Context, private val storeProv
 
     companion object {
         private const val STATE_KEY = "workflow.importer"
-        private const val MAX_ATTEMPTS = 50
+        private const val MAX_IMPORT_BYTES = 512L * 1024 * 1024
 
         @Volatile private var instance: ImportService? = null
 
         fun get(context: Context): ImportService = instance ?: synchronized(this) {
-            instance ?: context.applicationContext.let { app -> ImportService(app) { AppGraph.workspaceStore(app) } }.also { instance = it }
+            instance ?: context.applicationContext.let { app -> ImportService(app, { top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionManager.get(app).sessionOrNull()?.token }) { AppGraph.workspaceStore(app) } }.also { instance = it }
         }
     }
 }

@@ -178,8 +178,20 @@ impl Server {
         }
         match method {
             "chat.snapshot" | "chat.watch" | "chat.command" => {
+                if self.environment.lock().unwrap().status()["usable"] != true {
+                    environment::Environment::reconcile(&self.environment, false)?;
+                    return Err(Error::business(
+                        "environment_preparing",
+                        "chat requires a ready environment",
+                    ));
+                }
                 let weak = Arc::downgrade(self);
-                self.chat.request(&self.environment, Arc::new(move |method, params| {
+                let host = {
+                    let _execution = self.execution.lock().unwrap();
+                    if self.closed.load(Ordering::SeqCst) {
+                        return Err(Error::business("closed", "workspace stopped"));
+                    }
+                    self.chat.ensure(&self.environment, Arc::new(move |method, params| {
                     let server = weak.upgrade().ok_or_else(|| Error::business("closed", "workspace stopped"))?;
                     if server.closed.load(Ordering::SeqCst) { return Err(Error::business("closed", "workspace stopped")); }
                     if method == "hello" {
@@ -190,7 +202,9 @@ impl Server {
                         return Ok(json!({"protocol":PROTOCOL,"engineVersion":"1.0.0","workspaceRoot":w.root,"capabilities":{"workspace":true,"files":true,"documents":true,"environment":true,"processes":true,"pty":true,"services":true,"chat":true,"maxFrameBytes":MAX_FRAME,"maxBlobChunkBytes":MAX_BLOB}}));
                     }
                     server.call(method, params)
-                }), method, a)
+                }))?
+                };
+                host.request(method, a)
             }
             "workspace.snapshot" => Ok(self.workspace.lock().unwrap().snapshot()),
             "workspace.watch" => {
@@ -434,16 +448,25 @@ impl Server {
                 self.changed.notify_all();
                 Ok(json!({"revision":revision}))
             }
-            "services.executor.register" | "services.executor.retire" | "services.command" | "services.complete" => {
+            "services.executor.register"
+            | "services.executor.retire"
+            | "services.command"
+            | "services.complete" => {
                 let mut w = self.workspace.lock().unwrap();
-                if !w.writable { return Err(Error::business("read_only", "workspace is read only")); }
-                let result = local_services::call(&mut w, method, a, &mut |w, m, key, args| self.service_document(w, m, "proxy", key, args));
+                if !w.writable {
+                    return Err(Error::business("read_only", "workspace is read only"));
+                }
+                let result = local_services::call(&mut w, method, a, &mut |w, m, key, args| {
+                    self.service_document(w, m, "proxy", key, args)
+                });
                 self.changed.notify_all();
                 result
             }
             "services.report" if a["serviceId"] == "proxy" => {
                 let mut w = self.workspace.lock().unwrap();
-                let result = local_services::call(&mut w, method, a, &mut |w, m, key, args| self.service_document(w, m, "proxy", key, args));
+                let result = local_services::call(&mut w, method, a, &mut |w, m, key, args| {
+                    self.service_document(w, m, "proxy", key, args)
+                });
                 self.changed.notify_all();
                 result
             }
@@ -496,7 +519,9 @@ impl Server {
                         states.insert(id.into(), storage::read_json(&e.path())?);
                     }
                 }
-                Ok(json!({"services":states,"desired":w.state["config"]["services"],"control":{"proxy":local_services::projection(&w)?}}))
+                Ok(
+                    json!({"services":states,"desired":w.state["config"]["services"],"control":{"proxy":local_services::projection(&w)?}}),
+                )
             }
             "client.config" => {
                 let _ = storage::identifier(workspace::required(a, "clientId")?)?;
@@ -787,8 +812,11 @@ fn serve(options: environment::Options) -> Result<()> {
     }
     server.closed.store(true, Ordering::SeqCst);
     server.changed.notify_all();
-    server.chat.stop();
-    server.processes.stop_all();
+    {
+        let _execution = server.execution.lock().unwrap();
+        server.chat.stop();
+        server.processes.stop_all();
+    }
     for (_, u) in server.uploads.lock().unwrap().drain() {
         let _ = fs::remove_file(u.temp);
     }
@@ -798,7 +826,7 @@ fn options() -> Result<environment::Options> {
     let mut args = std::env::args().skip(1);
     if args.next().as_deref() != Some("serve") {
         return Err(Error::invalid(
-            "usage: workflow-engine serve --root DIR [--runtime FILE --loader FILE --apk APK --native-dir DIR | --image FILE --image-index FILE]",
+            "usage: workflow-engine serve --root DIR [--runtime FILE --loader FILE --apk APK | --image FILE --image-index FILE]",
         ));
     }
     let mut o = environment::Options::default();
@@ -815,7 +843,6 @@ fn options() -> Result<environment::Options> {
             "--runtime" => o.runtime = Some(value.into()),
             "--loader" => o.loader = Some(value.into()),
             "--apk" => o.apk = Some(value.into()),
-            "--native-dir" => o.native_dir = Some(value.into()),
             "--tools" => o.tools = Some(value.into()),
             "--image" => o.image = Some(value.into()),
             "--image-index" => o.image_index = Some(value.into()),
@@ -831,7 +858,6 @@ fn options() -> Result<environment::Options> {
         &mut o.runtime,
         &mut o.loader,
         &mut o.apk,
-        &mut o.native_dir,
         &mut o.tools,
         &mut o.image,
         &mut o.image_index,
