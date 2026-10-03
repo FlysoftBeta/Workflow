@@ -78,6 +78,36 @@ class EngineIntegrationTest {
         if (::root.isInitialized) withContext(Dispatchers.IO) { root.deleteRecursively() }
     }
 
+    @Test fun bundledCodexStartsFromLoginShellWithoutDaemonPackage() = runBlocking<Unit> {
+        ready()
+        val terminal = EngineTerminalBackend(engine).start(TerminalSpec(rows = 30, columns = 100))
+        val output = StringBuffer()
+        val reader = launch {
+            var answeredCursor = false
+            terminal.output.collect {
+                output.append(it.toString(Charsets.UTF_8))
+                if (!answeredCursor && output.contains("\u001b[6n")) {
+                    answeredCursor = true
+                    terminal.write("\u001b[1;1R".toByteArray())
+                }
+            }
+        }
+        try {
+            terminal.write("codex --no-alt-screen\n".toByteArray())
+            withTimeout(30_000) {
+                while (!output.contains("Welcome to Codex") && !output.contains("Sign in")) {
+                    assertFalse("Standalone CLI requested a daemon package", output.contains("no complete local package"))
+                    delay(50)
+                }
+            }
+            println("ENGINE_ACCEPTANCE bundled Codex interactive login screen reached through terminal shell")
+        } finally {
+            terminal.terminate(force = true)
+            withTimeout(15_000) { terminal.awaitExit() }
+            reader.cancelAndJoin()
+        }
+    }
+
     @Test fun installedEnvironmentRunsTerminalNetworkAndCodexAndReconcilesRestart() = runBlocking {
         ready()
         println("ENGINE_ACCEPTANCE verified custom environment ready")

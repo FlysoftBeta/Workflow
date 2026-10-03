@@ -218,6 +218,7 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
     fun commitEdit() {
         val current = edit ?: return
         val name = current.text.trim()
+        if (current is InlineEdit.Create && name.isEmpty()) { cancelEdit(); return }
         val parent = when (current) {
             is InlineEdit.Create -> current.parent
             is InlineEdit.Rename -> WorkspacePaths.parent(current.path)

@@ -367,3 +367,4 @@ model: 31 · adapter: 9 · transport: 4 · card: 2 · auto: 1 · reject: 1 · ne
 | cli→client message | `tool_progress` | model |  |
 | cli→client message | `tool_use_summary` | generic |  |
 | cli→client message | `user` | model |  |
+

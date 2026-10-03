@@ -219,6 +219,13 @@ class AgentReducerTest {
         assertEquals(false, limits.ordinaryUsageAllowed)
     }
 
+    @Test fun authenticatedAccountRefreshClearsPendingLogin() {
+        val pending = fold(E.LoginChanged(B, LoginFlow.DeviceCode("l1", "https://auth.example/device", "TEST-CODE")))
+        val authenticated = fold(E.AccountChanged(B, AccountState(LoginState.LOGGED_IN, "chatgpt")), from = pending)
+        assertNull(authenticated.backend(B).account.login)
+        assertEquals(LoginState.LOGGED_IN, authenticated.backend(B).account.state)
+    }
+
     @Test fun loginFlowTransitions() {
         val s = fold(
             E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT)),

@@ -8,7 +8,7 @@ use std::{
     collections::HashSet,
     fs::{self, File},
     io::Read,
-    os::unix::process::CommandExt,
+    os::unix::{fs::PermissionsExt, process::CommandExt},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -123,7 +123,9 @@ impl Environment {
                 && (e.state.get("requestedSpecHash").is_some() || e.state["active"].is_object())
                 && e.state["requestedSpecHash"] != e.requested_spec_hash()
         };
-        if changed { let _ = Self::reconcile(shared, false); }
+        if changed {
+            let _ = Self::reconcile(shared, false);
+        }
     }
     fn persist(&self) -> Result<()> {
         if self.read_only {
@@ -571,6 +573,16 @@ fn guest_command(
     if let Some(native) = &opts.native_dir {
         c.arg("--bind")
             .arg(format!("{}:/opt/workflow/bundled", native.display()));
+        // Bind over the image entry point, including already extracted generations.
+        // Chat continues to launch the native app-server executable directly.
+        let launcher = opts.root.join(".workspace/environment/launchers/codex");
+        let script = include_bytes!("../guest/codex");
+        if fs::read(&launcher).ok().as_deref() != Some(script.as_slice()) {
+            storage::atomic(&launcher, script)?;
+        }
+        fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755))?;
+        c.arg("--bind")
+            .arg(format!("{}:/usr/local/bin/codex", launcher.display()));
     }
     c.env_clear();
     c.env("PATH","/opt/toolchains/active/python/bin:/opt/toolchains/active/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").env("HOME",if user=="root"{"/root"}else{"/home/work"}).env("USER",user).env("LANG","C.UTF-8").env("TERM","xterm-256color").env("NVM_DIR","/opt/toolchains/nvm").env("UV_PYTHON_INSTALL_DIR","/opt/toolchains/uv/python").env("UV_CACHE_DIR","/opt/toolchains/uv/cache").env("TMPDIR","/tmp");
@@ -967,4 +979,37 @@ fn activate(opts: &Options, activation: &V) -> Result<()> {
     }
     crate::home_stage::cleanup(&generation);
     Ok(())
+}
+
+#[cfg(test)]
+mod launcher_tests {
+    use super::*;
+
+    #[test]
+    fn bundled_cli_launcher_overlays_existing_image_entry_point() {
+        let temp = tempfile::tempdir().unwrap();
+        let opts = Options {
+            root: temp.path().to_path_buf(),
+            runtime: Some(PathBuf::from("/bin/true")),
+            native_dir: Some(temp.path().join("native")),
+            ..Options::default()
+        };
+        let generation = temp.path().join("generation");
+        let command =
+            guest_command(&opts, &generation, "work", "/workspace", &json!({}), true).unwrap();
+        let launcher = temp.path().join(".workspace/environment/launchers/codex");
+        let binding = format!("{}:/usr/local/bin/codex", launcher.display());
+        assert!(command.get_args().any(|arg| arg == binding.as_str()));
+        assert_eq!(
+            fs::read(&launcher).unwrap(),
+            include_bytes!("../guest/codex")
+        );
+        assert_eq!(
+            fs::metadata(&launcher).unwrap().permissions().mode() & 0o777,
+            0o755
+        );
+        // Repeated process launches reuse the managed script without changing the image.
+        guest_command(&opts, &generation, "work", "/workspace", &json!({}), true).unwrap();
+        assert!(!generation.exists());
+    }
 }

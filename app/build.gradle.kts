@@ -296,7 +296,7 @@ val buildEngine = tasks.register<BuildEngineTask>("buildEngine") {
     val engine = repositoryRoot.dir("engine")
     sources.from(engine.asFileTree.matching {
         exclude("target/**", "**/target/**")
-        include("**/*.rs", "**/Cargo.toml", "Cargo.lock", "**/*.sh", "**/*.json", "**/*.S")
+        include("**/*.rs", "**/Cargo.toml", "Cargo.lock", "**/*.sh", "**/*.json", "**/*.S", "server/guest/**")
     })
     abis.set(listOf("arm64-v8a", "x86_64"))
     toolchainVersion.set(libs.versions.ndk)

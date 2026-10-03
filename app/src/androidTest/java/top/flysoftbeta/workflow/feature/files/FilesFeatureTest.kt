@@ -10,6 +10,7 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
@@ -84,6 +85,17 @@ class FilesFeatureTest {
     private fun explorer(): FilesExplorer = runtime.session(store.state.value.activeSessionId!!).explorerController() as FilesExplorer
     private fun exists(path: String) = fs.stat(path) != null
     private fun shown(text: String) = compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+
+    @Test fun blankCreationCancelsForButtonAndIme() {
+        compose.runOnIdle { explorer().beginCreate("", false) }
+        compose.onNodeWithTag("explorer:edit").performImeAction()
+        compose.runOnIdle { assertEquals(null, explorer().edit) }
+        compose.runOnIdle { explorer().beginCreate("", false) }
+        compose.onNodeWithTag("explorer:edit").performTextInput("   ")
+        compose.onNodeWithContentDescription("确定").performClick()
+        compose.runOnIdle { assertEquals(null, explorer().edit) }
+        assertTrue(!shown("名称不能为空"))
+    }
 
     @Test fun treeNestsFoldersAndHidesInternalFiles() {
         assertTrue(shown("docs"))

@@ -5,6 +5,9 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -35,6 +38,7 @@ import top.flysoftbeta.workflow.agent.model.BackendKind
 import top.flysoftbeta.workflow.agent.model.Decision
 import top.flysoftbeta.workflow.agent.model.DecisionKind
 import top.flysoftbeta.workflow.agent.model.LoginFlow
+import top.flysoftbeta.workflow.agent.model.LoginState
 import top.flysoftbeta.workflow.agent.model.LoginMethod
 import top.flysoftbeta.workflow.agent.model.ModelCatalog
 import top.flysoftbeta.workflow.agent.model.Notice
@@ -98,12 +102,17 @@ class CodexBackend(
     parentScope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
     private val newId: () -> String = { UUID.randomUUID().toString() },
+    private val loginPollMillis: Long = 2_000,
+    private val loginTimeoutMillis: Long = 15 * 60_000,
 ) : AgentBackend {
     override val kind = BackendKind.CODEX
     override val loginMethods = listOf(LoginMethod.CODEX_DEVICE_CODE, LoginMethod.CODEX_BROWSER, LoginMethod.CODEX_API_KEY)
 
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
     private val lifecycle = Mutex()
+    private val loginLock = Mutex()
+    private var pendingLogin: String? = null
+    private var loginMonitor: Job? = null
     @Volatile private var rpc: JsonRpcConnection? = null
     @Volatile private var process: AgentProcess? = null
     private var sessionScope: CoroutineScope? = null
@@ -138,6 +147,7 @@ class CodexBackend(
             val code = proc.awaitExit()
             lines.join()
             if (rpc === connection) { rpc = null; process = null }
+            loginLock.withLock { finishLogin("Codex 进程已退出，请重新登录") }
             openRequests.clear(); activeTurn.clear(); queued.clear(); queuedThread.clear()
             emit(AgentEvent.ProcessChanged(kind, ProcessState.Exited(code, lines.stderr.takeLast(4000))))
         }
@@ -161,6 +171,7 @@ class CodexBackend(
 
     override suspend fun stop() = lifecycle.withLock {
         val proc = process ?: return@withLock
+        loginLock.withLock { finishLogin("Codex 已停止，请重新登录") }
         proc.kill()
         sessionScope?.cancel()
         rpc = null; process = null
@@ -173,8 +184,18 @@ class CodexBackend(
             is JsonRpcConnection.Inbound.Notification -> {
                 val events = CodexEvents.notification(message.method, message.params, message.raw)
                 track(message.method, message.params, events)
-                events.forEach(::emit)
-                if (message.method == N.ACCOUNT_UPDATED || message.method == N.ACCOUNT_LOGIN_COMPLETED) scope.launch { runCatching { refreshAccount() } }
+                loginLock.withLock {
+                    events.forEach { event ->
+                        if (event is AgentEvent.LoginChanged && event.flow is LoginFlow.Completed) {
+                            if (event.flow.loginId == pendingLogin) {
+                                pendingLogin = null
+                                loginMonitor?.cancel()
+                                emit(event)
+                            }
+                        } else emit(event)
+                    }
+                }
+                if (message.method == N.ACCOUNT_UPDATED || (message.method == N.ACCOUNT_LOGIN_COMPLETED && message.params["success"].bool == true)) scope.launch { runCatching { refreshAccount() } }
                 if (message.method == N.THREAD_QUEUE_CHANGED) message.params["threadId"].str?.let { threadId ->
                     scope.launch {
                         runCatching { refreshQueue(threadId, connection) }.onFailure {
@@ -275,20 +296,71 @@ class CodexBackend(
         return catalog
     }
 
-    override suspend fun login(method: LoginMethod, secret: String?): LoginFlow {
-        val result = connection().request(C.ACCOUNT_LOGIN_START, CodexParams.login(method, secret))
+    override suspend fun login(method: LoginMethod, secret: String?): LoginFlow = loginLock.withLock {
+        val connection = connection()
+        val result = connection.request(C.ACCOUNT_LOGIN_START, CodexParams.login(method, secret))
         val flow = CodexEvents.loginFlow(result) ?: LoginFlow.Progress(result["loginId"].str, emptyList())
+        loginMonitor?.cancel()
+        pendingLogin = flow.loginId.takeUnless { flow is LoginFlow.Completed }
         emit(AgentEvent.LoginChanged(kind, flow))
+        pendingLogin?.let { id ->
+            loginMonitor = checkNotNull(sessionScope).launch {
+                val completed = withTimeoutOrNull(loginTimeoutMillis) {
+                    while (true) {
+                        delay(loginPollMillis)
+                        val account = try {
+                            withTimeoutOrNull(10_000) {
+                                CodexEvents.account(connection.request(C.ACCOUNT_READ, buildJsonObject { put("refreshToken", false) }))
+                            }
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { null }
+                        if (account?.state == LoginState.LOGGED_IN) {
+                            loginLock.withLock {
+                                if (pendingLogin == id && rpc === connection) {
+                                    pendingLogin = null
+                                    emit(AgentEvent.LoginChanged(kind, LoginFlow.Completed(id, true, null)))
+                                    emit(AgentEvent.AccountChanged(kind, account))
+                                }
+                            }
+                            return@withTimeoutOrNull true
+                        }
+                    }
+                }
+                if (completed == null) {
+                    loginLock.withLock {
+                        if (pendingLogin == id && rpc === connection) {
+                            pendingLogin = null
+                            emit(AgentEvent.LoginChanged(kind, LoginFlow.Completed(id, false, "登录等待超时，请重试")))
+                        }
+                    }
+                    withTimeoutOrNull(10_000) {
+                        runCatching { connection.request(C.ACCOUNT_LOGIN_CANCEL, buildJsonObject { put("loginId", id) }) }
+                    }
+                }
+            }
+        }
         if (flow is LoginFlow.Completed) runCatching { refreshAccount() }
-        return flow
+        flow
     }
 
-    override suspend fun cancelLogin(loginId: String) {
-        connection().request(C.ACCOUNT_LOGIN_CANCEL, buildJsonObject { put("loginId", loginId) })
-        emit(AgentEvent.LoginChanged(kind, LoginFlow.Completed(loginId, false, "cancelled")))
+    // Caller holds loginLock. Do not retain a waiting flow after the process disappears.
+    private fun finishLogin(error: String) {
+        loginMonitor?.cancel()
+        pendingLogin?.let { emit(AgentEvent.LoginChanged(kind, LoginFlow.Completed(it, false, error))) }
+        pendingLogin = null
     }
 
-    override suspend fun logout() {
+    override suspend fun cancelLogin(loginId: String) = loginLock.withLock {
+        // Clear local waiting state even if the server fails to answer cancellation.
+        if (pendingLogin == loginId) finishLogin("cancelled")
+        withTimeoutOrNull(10_000) {
+            connection().request(C.ACCOUNT_LOGIN_CANCEL, buildJsonObject { put("loginId", loginId) })
+        }
+        Unit
+    }
+
+    override suspend fun logout() = loginLock.withLock {
+        finishLogin("cancelled")
         connection().request(C.ACCOUNT_LOGOUT, null)
         emit(AgentEvent.LoginChanged(kind, null))
         refreshAccount()

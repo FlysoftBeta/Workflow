@@ -24,7 +24,7 @@ object AgentReducer {
         is AgentEvent.ProcessChanged -> processChanged(state, event)
         is AgentEvent.ServerInfo -> state.backend(event.backend) { it.copy(serverInfo = event.info) }
         is AgentEvent.AccountChanged -> state.backend(event.backend) {
-            it.copy(account = event.account.copy(login = event.account.login ?: it.account.login.takeIf { flow -> flow !is LoginFlow.Completed }))
+            it.copy(account = event.account.copy(login = event.account.login ?: it.account.login.takeIf { flow -> event.account.state != LoginState.LOGGED_IN && (flow !is LoginFlow.Completed || !flow.success) }))
         }
         is AgentEvent.LoginChanged -> state.backend(event.backend) {
             val loginState = when (val flow = event.flow) {

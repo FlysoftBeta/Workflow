@@ -121,3 +121,5 @@ Pickup requires a 300ms long press and haptic feedback. The source drops to 40% 
 | Terminal | A translucent Paste path overlay |
 
 Approaching within 32dp of a list or tab-row edge scrolls it automatically. Dwelling on a collapsed-region toggle for 600ms expands it. Invalid targets show a prohibited mark on the ghost. Releasing over an invalid target or pressing Back cancels and springs the ghost back to its origin. External drags receive the same destination feedback as internal ones. Release submits one layout operation, rather than a series of intermediate changes.
+
+Submitting an empty or whitespace-only name while creating a file or folder cancels the inline creation row. This applies to both the confirmation button and the keyboard Done action; it creates no resource. Empty renames remain invalid.
