@@ -37,7 +37,7 @@ class ConnectionBoundaryAcceptanceTest {
             val first = withTimeout(50_000) { manager.status.first { it is ConnectionStatus.Connected || it is ConnectionStatus.Failed } }
             assertTrue(first.toString(), first is ConnectionStatus.Connected)
             val session = manager.requireSession()
-            val root = session.root
+            val root = File(context.filesDir, "workspaces/${session.profile.id}")
             assertTrue(File(context.filesDir, "workspace-connections.json").readText().contains(id))
             val payload = ByteArray(131_073) { (it % 239).toByte() }
             assertEquals(FileOpResult.Done, session.store.createFile("binary.dat", payload))
@@ -64,7 +64,7 @@ class ConnectionBoundaryAcceptanceTest {
             assertNotEquals(session.token, reconnected.session.token)
             assertEquals("draft survives", reconnected.session.store.state.value.drafts["draft.md"]?.text)
             assertEquals(ThemeMode.DARK, reconnected.session.store.state.value.config.appearance.theme)
-            assertEquals(root, reconnected.session.root)
+            assertEquals(session.profile.id, reconnected.session.profile.id)
             manager.disconnect()
             await { !reconnected.session.scope.isActive && LocalRuntimeService.state.value.environmentCount == 0 }
             assertNull(manager.sessionOrNull())

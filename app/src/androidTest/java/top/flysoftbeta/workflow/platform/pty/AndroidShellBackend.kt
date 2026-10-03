@@ -16,13 +16,13 @@ import top.flysoftbeta.workflow.platform.service.LocalRuntimeService
 
 /**
  * [TerminalBackend] running Android's `/system/bin/sh` on the JNI PTY under the app's uid, in the
- * app-owned workspace (`filesDir/.workspace`), which is also HOME. It does not claim to be the Debian
+ * explicit throwaway fixture directory, which is also HOME. It does not claim to be the Debian
  * environment; this adapter exists only in the instrumentation APK for isolated PTY tests. Each running process
  * holds a [LocalRuntimeService] lease, so terminals outlive the activity.
  */
 class AndroidShellBackend(
     context: Context,
-    root: File = top.flysoftbeta.workflow.platform.workspace.WorkspaceLocation.root(context),
+    root: File,
 ) : TerminalBackend {
     private val appContext = context.applicationContext
     private val workspace: File by lazy { root.apply { mkdirs() }.canonicalFile }
