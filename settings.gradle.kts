@@ -24,5 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Workflow"
 // Pure Kotlin/JVM modules (no Android): see docs/architecture.md §1.
-include(":core", ":agent", ":proxy")
+include(":core", ":agent-model", ":agent", ":proxy", ":engine-chat")
+project(":engine-chat").projectDir = file("engine/chat")
 include(":app")
