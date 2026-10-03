@@ -14,17 +14,17 @@ import org.junit.*
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
-import top.flysoftbeta.workflow.agent.AgentStateStore
-import top.flysoftbeta.workflow.agent.codex.CodexBackend
-import top.flysoftbeta.workflow.agent.codex.CodexConfig
+import top.flysoftbeta.workflow.agent.model.*
+import top.flysoftbeta.workflow.agent.rpc.*
+import kotlinx.serialization.json.*
 import top.flysoftbeta.workflow.core.connection.*
 import top.flysoftbeta.workflow.core.io.WorkspacePaths
 import top.flysoftbeta.workflow.core.json.Json
 import top.flysoftbeta.workflow.core.layout.*
 import top.flysoftbeta.workflow.core.store.*
 import top.flysoftbeta.workflow.core.terminal.TerminalSpec
-import top.flysoftbeta.workflow.platform.agent.ClaudeCodeInstaller
-import top.flysoftbeta.workflow.platform.agent.GuestAgents
+import top.flysoftbeta.workflow.core.terminal.ManagedTerminalProcess
+import top.flysoftbeta.workflow.platform.agent.AgentHub
 import top.flysoftbeta.workflow.platform.agent.runGuest
 import top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionSession
 import top.flysoftbeta.workflow.platform.connection.WorkspaceNetworkReporter
@@ -50,7 +50,7 @@ class EngineIntegrationTest {
         server = withContext(Dispatchers.IO) {
             ProcessBuilder("$libs/libworkflow-engine.so", "serve", "--root", root.path,
                 "--runtime", "$libs/libworkflow-runtime.so", "--loader", "$libs/libworkflow-loader.so",
-                "--apk", context.applicationInfo.sourceDir, "--native-dir", libs)
+                "--apk", context.applicationInfo.sourceDir)
                 .apply { environment().keys.toList().filter { it.startsWith("OPENAI_") || it.startsWith("ANTHROPIC_") || it.startsWith("CODEX_") || it.startsWith("CLAUDE_") }.forEach { environment().remove(it) }; environment()["TMPDIR"] = context.cacheDir.path }
                 .start()
         }
@@ -64,7 +64,7 @@ class EngineIntegrationTest {
         store = RemoteWorkspaceStore(rpc, scope, "android-acceptance").also { it.start() }
         assertEquals(StoreStatus.READY, withTimeout(30_000) { store.awaitReady() }.status)
         val profile = WorkspaceConnectionConfig("qa", "qa", WorkspaceEndpoint.Embedded("qa"))
-        WorkspaceNetworkReporter.attach(context, WorkspaceConnectionSession("qa", profile, root, rpc, store, scope))
+        WorkspaceNetworkReporter.attach(context, WorkspaceConnectionSession("qa", profile, rpc, store, scope))
         engine = EngineController(context, scope) { store }.also { it.start() }
     }
     private suspend fun ready() {
@@ -80,7 +80,7 @@ class EngineIntegrationTest {
 
     @Test fun bundledCodexStartsFromLoginShellWithoutDaemonPackage() = runBlocking<Unit> {
         ready()
-        val terminal = EngineTerminalBackend(engine).start(TerminalSpec(rows = 30, columns = 100))
+        val terminal = createTerminal(TerminalSpec(rows = 30, columns = 100))
         val output = StringBuffer()
         val reader = launch {
             var answeredCursor = false
@@ -135,14 +135,10 @@ class EngineIntegrationTest {
         assertTrue(net.output.toString(Charsets.UTF_8).matches(Regex("[1-5][0-9]{2}")))
         println("ENGINE_ACCEPTANCE guest identity, language tools, files and HTTPS verified")
 
-        val setup = GuestAgents.codex(engine)
-        val state = AgentStateStore()
-        val codex = CodexBackend(setup.launcher, CodexConfig(setup.executable, setup.homeDir, cwd = setup.workspaceRoot, env = setup.env), state, scope)
-        try { codex.start(); assertTrue(codex.refreshModels().models.isNotEmpty()); codex.refreshAccount() }
-        finally { codex.stop() }
-        println("ENGINE_ACCEPTANCE Codex app-server, models and account RPC verified")
+        startCodexThroughChat()
+        println("ENGINE_ACCEPTANCE Engine guest JVM and Codex app-server account RPC verified")
 
-        val terminal = EngineTerminalBackend(engine).start(TerminalSpec())
+        val terminal = createTerminal(TerminalSpec())
         val output = StringBuffer()
         val reader = launch { terminal.output.collect { output.append(it.toString(Charsets.UTF_8)) } }
         terminal.write("echo PTY-\$((6*7))\n".toByteArray())
@@ -158,11 +154,13 @@ class EngineIntegrationTest {
         terminal.write("node --version\n".toByteArray())
         withTimeout(15_000) { while (!output.contains("v24.")) delay(50) }
         engine.restartEnvironment()
-        withTimeout(15_000) { terminal.awaitExit() }
-        reader.join()
+        reader.cancelAndJoin()
+        val restored = EngineTerminalBackend(engine).attach(terminal.initial.id)
+        assertTrue("Engine restarted the terminal resource in the new environment", restored.initial.generation > terminal.initial.generation)
+        assertEquals(true, WorkspaceWire.obj(rpc.request("terminal.wait", mapOf("terminalId" to terminal.initial.id, "timeoutMs" to 0)))["running"])
         val changed = runGuest(engine, listOf("/bin/bash", "-lc", "test \"\$WF_ACCEPTANCE\" = reconciled && test \"\$(cat ~/qa-marker)\" = home-kept && node --version; code=\$?; test \"\$code\" = 127"))
         assertEquals(changed.error, 0, changed.exitCode)
-        println("ENGINE_ACCEPTANCE explicit restart activated config, retained home and stopped old PTY")
+        println("ENGINE_ACCEPTANCE explicit restart activated config, retained home and restored terminal resource")
         assertEquals("shared", store.openFile("from-guest.txt").text)
         assertEquals("unsaved survives restart", store.state.value.drafts["draft.txt"]?.text)
         assertTrue(store.flush())
@@ -192,14 +190,141 @@ class EngineIntegrationTest {
         println("ENGINE_ACCEPTANCE Server restart restored session, unsaved draft, file and home")
     }
 
-    @Test fun claudeInstallsOnDemandAndRunsInsideTheEnvironment() = runBlocking {
+    private suspend fun createTerminal(spec: TerminalSpec): ManagedTerminalProcess {
+        val terminal = EngineTerminalBackend(engine).create(spec)
+        // Engine retires terminals without layout references; the fixture acts like a real panel.
+        val session = store.state.value.activeSessionId ?: store.createSession("Terminal acceptance")
+        store.applyLayout(session, LayoutOp.Open(PanelTarget.Terminal(terminal.initial.id)))
+        return terminal
+    }
+
+    private fun wire(value: Any?): JsonElement = ChatWire.json.parseToJsonElement(Json.stringify(value))
+
+    private suspend fun chatSnapshot(): ChatSnapshot = ChatWire.snapshot(wire(rpc.request("chat.snapshot", timeoutMs = 90_000)))
+
+    private suspend fun chatCommand(name: String, args: Map<String, Any?> = emptyMap()): JsonElement =
+        wire(rpc.request("chat.command", mapOf("name" to name, "args" to args), 120_000))
+
+    private suspend fun tool(id: String): Map<String, Any?> {
+        val status = WorkspaceWire.obj(rpc.request("environment.tools.status", timeoutMs = 90_000))
+        return (status["tools"] as? List<*>)?.map(WorkspaceWire::obj)?.single { it["id"] == id }
+            ?: error("Engine omitted tool $id")
+    }
+
+    /** No credentials or model turn: actual vendor initialize and account/read over Engine RPC. */
+    private suspend fun startCodexThroughChat(): ChatSnapshot {
+        val before = chatSnapshot()
+        assertTrue("Guest JVM must publish a service epoch", before.epoch.isNotBlank())
+        withTimeout(30_000) {
+            while (BackendKind.CODEX !in chatSnapshot().metadata.available) delay(100)
+        }
+        chatCommand("warmUp", mapOf("kind" to "codex"))
+        chatCommand("refreshAccount", mapOf("kind" to "codex"))
+        return withTimeout(30_000) {
+            var snapshot = chatSnapshot()
+            while (snapshot.state.backend(BackendKind.CODEX).process !is ProcessState.Ready ||
+                snapshot.state.backend(BackendKind.CODEX).account.state == LoginState.UNKNOWN) {
+                delay(100)
+                snapshot = chatSnapshot()
+            }
+            assertEquals(before.epoch, snapshot.epoch)
+            assertEquals("Fresh isolated guest has no vendor credentials", LoginState.LOGGED_OUT,
+                snapshot.state.backend(BackendKind.CODEX).account.state)
+            assertTrue(snapshot.metadata.loginMethods[BackendKind.CODEX].orEmpty().isNotEmpty())
+            assertTrue(snapshot.metadata.processEpochs[BackendKind.CODEX]?.isNotBlank() == true)
+            snapshot
+        }
+    }
+
+    @Test fun engineGuestChatPublishesStateAndNewClientReattachesToSameConversation() = runBlocking<Unit> {
         ready()
-        val installer = ClaudeCodeInstaller(engine, scope)
-        installer.install()
-        val result = withTimeout(660_000) { installer.state.first { it is ClaudeCodeInstaller.State.Installed || it is ClaudeCodeInstaller.State.Failed } }
-        assertTrue(result.toString(), result is ClaudeCodeInstaller.State.Installed)
-        val probe = runGuest(engine, listOf(ClaudeCodeInstaller.GUEST_BINARY, "--version"))
+        for (id in listOf("codex", "jre", "chat")) {
+            val measured = tool(id)
+            assertEquals("Required Engine tool $id: $measured", "ready", measured["phase"])
+            assertTrue((measured["version"] as? String).orEmpty().isNotBlank())
+        }
+        val before = chatSnapshot()
+        val connected = startCodexThroughChat()
+        val update = ChatWire.update(wire(rpc.request("chat.watch", mapOf("epoch" to before.epoch,
+            "afterRevision" to before.revision, "timeoutMs" to 1000))))
+        assertFalse("Small startup journal must remain replayable", update.resnapshot)
+        assertEquals(before.epoch, update.epoch)
+        assertTrue(update.revision > before.revision)
+        val reduced = AgentReducer.reduceAll(before.state, update.events)
+        assertTrue(reduced.backend(BackendKind.CODEX).process is ProcessState.Ready)
+        assertEquals(LoginState.LOGGED_OUT, reduced.backend(BackendKind.CODEX).account.state)
+        assertEquals(connected.metadata.processEpochs[BackendKind.CODEX], update.metadata.processEpochs[BackendKind.CODEX])
+
+        val id = "engine-owned-${UUID.randomUUID()}"
+        assertEquals(id, chatCommand("newConversation", mapOf("id" to id, "backend" to "codex")).jsonPrimitive.content)
+        chatCommand("rename", mapOf("id" to id, "title" to "Engine-owned conversation"))
+        chatCommand("flush")
+        val firstScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val secondScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val first = AgentHub(context, store, firstScope, Dispatchers.IO).also { it.start() }
+            val entry = withTimeout(30_000) { first.conversations.first { entries -> entries.any { it.id == id && it.title == "Engine-owned conversation" } }.single { it.id == id } }
+            firstScope.cancel()
+            val second = AgentHub(context, store, secondScope, Dispatchers.IO).also { it.start() }
+            val reattached = withTimeout(30_000) { second.conversations.first { entries -> entries.any { it.id == id && it.title == "Engine-owned conversation" } }.single { it.id == id } }
+            assertEquals(entry, reattached)
+            assertEquals("Engine-owned conversation", reattached.title)
+            assertEquals(connected.epoch, chatSnapshot().epoch)
+            assertEquals(1, chatSnapshot().metadata.conversations.count { it.id == id })
+        } finally { firstScope.cancel(); secondScope.cancel() }
+        println("ENGINE_ACCEPTANCE guest JVM chat, measured Codex account, event replay and disposable client reattachment verified")
+    }
+
+    @Test fun terminalAttachmentsReplaySameShellAndNoOpRestartPreservesProcess() = runBlocking<Unit> {
+        ready()
+        val terminal = createTerminal(TerminalSpec())
+        val firstOutput = StringBuffer()
+        val firstReader = launch { terminal.output.collect { firstOutput.append(it.toString(Charsets.UTF_8)) } }
+        var secondReader: Job? = null
+        try {
+            terminal.write("WF_ATTACH_KEEP=kept; echo BEFORE-\$((6*7))\n".toByteArray())
+            withTimeout(15_000) { while (!firstOutput.contains("BEFORE-42")) delay(50) }
+            firstReader.cancelAndJoin()
+            val attached = EngineTerminalBackend(engine).attach(terminal.initial.id)
+            assertEquals(terminal.initial.id, attached.initial.id)
+            assertEquals(terminal.initial.generation, attached.initial.generation)
+            val replay = StringBuffer()
+            secondReader = launch { attached.output.collect { replay.append(it.toString(Charsets.UTF_8)) } }
+            withTimeout(15_000) { while (!replay.contains("BEFORE-42")) delay(50) }
+            val before = WorkspaceWire.obj(rpc.request("environment.status"))
+            assertEquals("ready", before["phase"])
+            engine.restartEnvironment()
+            val after = WorkspaceWire.obj(rpc.request("environment.status"))
+            assertEquals(WorkspaceWire.obj(before["active"])["generation"], WorkspaceWire.obj(after["active"])["generation"])
+            val running = WorkspaceWire.obj(rpc.request("terminal.wait", mapOf("terminalId" to terminal.initial.id, "timeoutMs" to 0)))
+            assertEquals(true, running["running"])
+            val afterRestart = EngineTerminalBackend(engine).attach(terminal.initial.id)
+            assertEquals(terminal.initial.generation, afterRestart.initial.generation)
+            attached.write("printf 'AFTER-%s\\n' \"\$WF_ATTACH_KEEP\"\n".toByteArray())
+            withTimeout(15_000) { while (!replay.contains("AFTER-kept")) delay(50) }
+            println("ENGINE_ACCEPTANCE retained terminal bytes, shell state and no-op environment restart verified")
+        } finally {
+            terminal.terminate(force = true)
+            withTimeout(15_000) { terminal.awaitExit() }
+            firstReader.cancelAndJoin()
+            secondReader?.cancelAndJoin()
+        }
+    }
+
+    @Test fun claudeInstallsOnDemandAndRunsInsideTheEnvironment() = runBlocking<Unit> {
+        ready()
+        rpc.request("environment.tools.install", mapOf("toolId" to "claude", "retry" to true), 90_000)
+        val result = withTimeout(660_000) {
+            var state = tool("claude")
+            while (state["phase"] !in setOf("ready", "failed")) { delay(1000); state = tool("claude") }
+            state
+        }
+        assertEquals(result.toString(), "ready", result["phase"])
+        val binary = WorkspaceWire.string(result, "binary")
+        val version = WorkspaceWire.string(result, "version")
+        assertTrue("Engine supplied a guest tool path", binary.startsWith("/opt/workflow/tools/"))
+        val probe = runGuest(engine, listOf(binary, "--version"))
         assertEquals(probe.error, 0, probe.exitCode)
-        assertTrue(probe.output.toString(Charsets.UTF_8).contains(ClaudeCodeInstaller.VERSION))
+        assertTrue(probe.output.toString(Charsets.UTF_8).contains(version))
     }
 }
