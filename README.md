@@ -12,7 +12,15 @@ Historical reports, retired implementations and their original licenses are inde
 
 ## Build and test
 
-Use JDK 25, Rust 1.93.1, Python 3.11 or newer, and the Android toolchain versions listed in [dependencies](docs/implementation/dependencies.md). Configure the SDK locally and build the two customized images as described in [environment construction](docs/implementation/environment.md). Prebuilt executables are verified against checked-in manifests.
+The [build guide](docs/development/building.md) covers host setup, required image inputs, Debug APKs, and signed Release delivery. Use JDK 25, Rust 1.93.1, Python 3.11 or newer, and the pinned Android toolchain. After preparing the customized images, run from the repository root:
+
+```sh
+tools/with-build-lock.sh ./gradlew :app:assembleDebug
+```
+
+This builds separate `arm64` and `x86_64` APKs. The flavors select Android ABIs `arm64-v8a` and `x86_64`; they describe CPU compatibility, independent of whether Android runs on physical hardware or an emulator. Both support Android 9/API 28 and newer. For one ABI, use `:app:assembleArm64Debug` or `:app:assembleX86_64Debug`. Standard `:app:assembleRelease` also aggregates both ABIs and requires the local release key described in the build guide.
+
+For source-bound checks and Android acceptance preparation:
 
 ```sh
 tools/workflow init
@@ -20,7 +28,7 @@ tools/workflow check core
 tools/workflow check android-apk
 ```
 
-The APK check records a frozen app/test pair. Use its run directory with `tools/workflow device` for acceptance on the one shared disposable emulator. The [testing guide](docs/development/testing.md) explains suite selection, host fixtures, root gating and release verification. `device` packages target ARM64 and `emulator` packages target x86_64; minSdk remains 28.
+The APK check records a frozen x86_64 app/test pair for the default acceptance target. Use its run directory with `tools/workflow device` for acceptance on the one shared disposable emulator. The [testing guide](docs/development/testing.md) explains suite selection, host fixtures, root gating and release verification.
 
 ## Work in parallel
 

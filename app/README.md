@@ -26,11 +26,22 @@ the development design gallery and its manifest entry. Production proxy services
 test override: the proxy acceptance UI injects its own provider, and constructs its disposable
 executor in `androidTest`.
 
-Run host checks from the repository root while holding the shared build lock:
+Build from the repository root with the shared build-lock wrapper:
 
 ```sh
-flock artifacts/.gradle.lock ./gradlew :app:testEmulatorDebugUnitTest :app:lintEmulatorDebug
+tools/with-build-lock.sh ./gradlew :app:assembleDebug
 ```
+
+`assembleDebug` and `assembleRelease` each aggregate the `arm64` and `x86_64` flavors. The first
+packages Android ABI `arm64-v8a` with an arm64 environment image; the second packages ABI `x86_64`
+with an amd64 image. These names identify CPU compatibility for either physical or virtual Android
+devices. Select one explicitly with `assembleArm64Debug` or `assembleX86_64Debug`, and substitute
+`Release` for a signed release build. The [build guide](../docs/development/building.md) covers
+prerequisites, image preparation, signing, and exact output paths.
+
+Run the default x86_64 host checks with `tools/workflow check app-unit` and
+`tools/workflow check lint`. For direct Gradle checks, use
+`tools/with-build-lock.sh ./gradlew :app:testX86_64DebugUnitTest :app:lintX86_64Debug`.
 
 Instrumented tests require the documented isolated AVD wrapper. Compiling them is not device
 acceptance. The [architecture](../docs/implementation/architecture.md),
