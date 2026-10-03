@@ -12,6 +12,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import top.flysoftbeta.workflow.core.resource.ComposerAttachment
 import top.flysoftbeta.workflow.core.resource.ComposerDraft
 import top.flysoftbeta.workflow.core.resource.ComposerRevisionConflictException
@@ -43,8 +45,9 @@ class ComposerModel(
     var text by mutableStateOf(TextFieldValue(""))
         private set
     val attachments = mutableStateListOf<PendingAttachment>()
-    /** The draft revision the UI was derived from. */
-    private var revision = 0L
+    /** Full authoritative baseline: unchanged content must retain its Engine-owned revision. */
+    private var baseline = ComposerDraft(conversationId)
+    private val persistence = Mutex()
     private var saveJob: Job? = null
     var loaded by mutableStateOf(false)
         private set
@@ -114,9 +117,11 @@ class ComposerModel(
     }
 
     /** The draft as it should be stored now. */
-    private fun draft(): ComposerDraft = ComposerDraft(conversationId, revision).edit(
+    private fun draft(): ComposerDraft = baseline.edit(
         text = text.text,
-        attachments = attachments.mapNotNull { a -> a.path?.let { ComposerAttachment(it) } },
+        attachments = attachments.mapNotNull { a -> a.path?.let { path ->
+            baseline.attachments.firstOrNull { it.path == path } ?: ComposerAttachment(path)
+        } },
     )
 
     private fun scheduleSave() {
@@ -130,12 +135,14 @@ class ComposerModel(
     /** Writes the draft now; returns what is stored (the snapshot a send acknowledges). */
     suspend fun save(): ComposerDraft {
         saveJob?.takeIf { it.isActive && it != kotlin.coroutines.coroutineContext[Job] }?.cancel()
-        val next = draft()
-        return try {
-            store.editComposer(next, revision).also { revision = it.revision }
-        } catch (conflict: ComposerRevisionConflictException) {
-            // Another session edited this conversation's composer: adopt the stored version.
-            store.state.value.composer(conversationId).also(::adopt)
+        return persistence.withLock {
+            val next = draft()
+            try {
+                store.editComposer(next, baseline.revision).also { baseline = it }
+            } catch (conflict: ComposerRevisionConflictException) {
+                // Another session edited this conversation's composer: adopt the stored version.
+                store.state.value.composer(conversationId).also(::adopt)
+            }
         }
     }
 
@@ -156,13 +163,19 @@ class ComposerModel(
     fun accepted(submitted: ComposerDraft) {
         scope.launch {
             val stored = store.state.first { it.composer(conversationId).revision > submitted.revision }.composer(conversationId)
-            revision = maxOf(revision, stored.revision)
-            if (!hasContent) adopt(stored)
+            persistence.withLock {
+                if (stored.revision >= baseline.revision) {
+                    baseline = stored
+                    // The user may already be writing the next turn. Preserve that local input,
+                    // but derive its next save from the acknowledged authoritative baseline.
+                    if (text.text.isEmpty() && attachments.none { it.path != null }) adopt(stored)
+                }
+            }
         }
     }
 
     private fun adopt(draft: ComposerDraft) {
-        revision = draft.revision
+        baseline = draft
         if (draft.text != text.text) text = TextFieldValue(draft.text, TextRange(draft.text.length))
         val keep = attachments.filter { it.path == null }
         attachments.clear()

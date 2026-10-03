@@ -10,7 +10,7 @@ import top.flysoftbeta.workflow.core.resource.ComposerDraft
 import top.flysoftbeta.workflow.core.store.StateCodec
 import top.flysoftbeta.workflow.core.store.WorkspaceStore
 
-/** Durable intent prevents an RPC retry from submitting a second vendor turn. */
+/** Durable composer identity prevents client recreation or RPC retries from submitting a second vendor turn. */
 class SendLedger(
     private val read: suspend (String) -> String?,
     private val write: suspend (String, String) -> Unit,
@@ -24,12 +24,19 @@ class SendLedger(
     private val locks = Array(128) { Mutex() }
     suspend fun send(operationId: String, arguments: JsonObject, submitted: ComposerDraft, action: suspend () -> String): String {
         require(operationId.isNotBlank() && operationId.length <= 200) { "A bounded operationId is required" }
-        val key = "send-${digest(operationId)}"
+        // One durable record is the dispatch gate. Transport IDs are correlation only: a recreated
+        // client may use a different UUID for the exact same Engine-owned composer revision.
+        val identity = buildJsonObject { put("conversationId", submitted.conversationId); put("revision", submitted.revision) }
+        val key = "send-${digest(identity.toString())}"
         return locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
-            val fingerprint = digest(canonical(arguments).toString())
+            val semantic = buildJsonObject {
+                put("arguments", JsonObject(arguments.filterKeys { it != "operationId" }))
+                put("submitted", ChatWire.json.parseToJsonElement(StateCodec.encodeComposer(submitted)))
+            }
+            val fingerprint = digest(canonical(semantic).toString())
             val prior = read(key)?.let { ChatWire.json.parseToJsonElement(it).jsonObject }
             if (prior != null) {
-                check(prior["fingerprint"]?.jsonPrimitive?.content == fingerprint) { "operationId was already used for another message" }
+                check(prior["fingerprint"]?.jsonPrimitive?.content == fingerprint) { "Composer revision was already submitted with different content or settings" }
                 val accepted = prior["clientMessageId"]?.jsonPrimitive?.content
                 check(accepted != null) { "Submission outcome is ambiguous; inspect the conversation before sending a new message" }
                 acknowledge(submitted)
