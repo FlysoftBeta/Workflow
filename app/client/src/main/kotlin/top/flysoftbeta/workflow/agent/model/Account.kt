@@ -25,6 +25,11 @@ data class AccountState(
     val requiresAuth: Boolean? = null,
     val login: LoginFlow? = null,
     val raw: JsonElement? = null,
+    /**
+     * The latest account read that failed (request error or no answer in time), as a display
+     * message. Any answered read clears it, as does a new login attempt. It never changes [state].
+     */
+    val checkError: String? = null,
 )
 
 /** Login methods the UI can offer per backend. */
@@ -67,6 +72,19 @@ sealed interface LoginFlow {
     @SerialName("Completed")
     data class Completed(override val loginId: String?, val success: Boolean, val error: String?) : LoginFlow
 }
+
+/**
+ * A login attempt that is still waiting: Codex device code or browser flows, or an adapter
+ * attempt whose start request has not been answered yet (`Progress` with an attempt id and no
+ * error). Claude's id-less `Progress` frames are status output, not attempts.
+ */
+val LoginFlow?.isPending: Boolean
+    get() = this is LoginFlow.DeviceCode || this is LoginFlow.Browser ||
+        (this is LoginFlow.Progress && loginId != null && error == null)
+
+/** A successful completion reported for the current process; it is not yet backed by an account read. */
+val LoginFlow?.isConfirmedSuccess: Boolean
+    get() = this is LoginFlow.Completed && success
 
 @Serializable
 @SerialName("RateLimitWindow")

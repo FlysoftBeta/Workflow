@@ -2,8 +2,13 @@ package top.flysoftbeta.workflow.agent.codex
 
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -33,6 +38,7 @@ import top.flysoftbeta.workflow.agent.json.get
 import top.flysoftbeta.workflow.agent.json.long
 import top.flysoftbeta.workflow.agent.json.obj
 import top.flysoftbeta.workflow.agent.json.str
+import top.flysoftbeta.workflow.agent.model.AccountState
 import top.flysoftbeta.workflow.agent.model.AgentEvent
 import top.flysoftbeta.workflow.agent.model.BackendKind
 import top.flysoftbeta.workflow.agent.model.Decision
@@ -40,6 +46,7 @@ import top.flysoftbeta.workflow.agent.model.DecisionKind
 import top.flysoftbeta.workflow.agent.model.LoginFlow
 import top.flysoftbeta.workflow.agent.model.LoginState
 import top.flysoftbeta.workflow.agent.model.LoginMethod
+import top.flysoftbeta.workflow.agent.model.LoginView
 import top.flysoftbeta.workflow.agent.model.ModelCatalog
 import top.flysoftbeta.workflow.agent.model.Notice
 import top.flysoftbeta.workflow.agent.model.NoticeLevel
@@ -57,6 +64,7 @@ import top.flysoftbeta.workflow.agent.model.UserPart
 import top.flysoftbeta.workflow.agent.process.AgentProcess
 import top.flysoftbeta.workflow.agent.process.LaunchSpec
 import top.flysoftbeta.workflow.agent.process.ProcessLauncher
+import top.flysoftbeta.workflow.agent.transport.ConnectionClosedException
 import top.flysoftbeta.workflow.agent.transport.JsonLineChannel
 import top.flysoftbeta.workflow.agent.transport.JsonRpcConnection
 
@@ -104,15 +112,23 @@ class CodexBackend(
     private val newId: () -> String = { UUID.randomUUID().toString() },
     private val loginPollMillis: Long = 2_000,
     private val loginTimeoutMillis: Long = 15 * 60_000,
+    /** Longer than Codex 0.157.1's 15 s workspace-routing discovery, which an authenticated read can wait for. */
+    private val accountReadTimeoutMillis: Long = 30_000,
+    private val maxLoginPollMillis: Long = 15_000,
+    private val confirmDelaysMillis: List<Long> = listOf(0, 500, 1_000, 2_000, 4_000),
 ) : AgentBackend {
     override val kind = BackendKind.CODEX
     override val loginMethods = listOf(LoginMethod.CODEX_DEVICE_CODE, LoginMethod.CODEX_BROWSER, LoginMethod.CODEX_API_KEY)
 
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
     private val lifecycle = Mutex()
+    /** Guards [attempt] and [earlyCompletions]. Never held across a request to the server. */
     private val loginLock = Mutex()
-    private var pendingLogin: String? = null
-    private var loginMonitor: Job? = null
+    private var attempt: LoginAttempt? = null
+    private val earlyCompletions = LinkedHashMap<String, LoginFlow.Completed>()
+    private val readGate = Any()
+    private var accountRead: Deferred<AccountRead>? = null
+    private var accountReadConnection: JsonRpcConnection? = null
     @Volatile private var rpc: JsonRpcConnection? = null
     @Volatile private var process: AgentProcess? = null
     private var sessionScope: CoroutineScope? = null
@@ -147,7 +163,7 @@ class CodexBackend(
             val code = proc.awaitExit()
             lines.join()
             if (rpc === connection) { rpc = null; process = null }
-            loginLock.withLock { finishLogin("Codex 进程已退出，请重新登录") }
+            loginLock.withLock { finishLogin(connection, "Codex 进程已退出，请重新登录") }
             openRequests.clear(); activeTurn.clear(); queued.clear(); queuedThread.clear()
             emit(AgentEvent.ProcessChanged(kind, ProcessState.Exited(code, lines.stderr.takeLast(4000))))
         }
@@ -171,7 +187,7 @@ class CodexBackend(
 
     override suspend fun stop() = lifecycle.withLock {
         val proc = process ?: return@withLock
-        loginLock.withLock { finishLogin("Codex 已停止，请重新登录") }
+        loginLock.withLock { finishLogin(null, "Codex 已停止，请重新登录") }
         proc.kill()
         sessionScope?.cancel()
         rpc = null; process = null
@@ -184,18 +200,11 @@ class CodexBackend(
             is JsonRpcConnection.Inbound.Notification -> {
                 val events = CodexEvents.notification(message.method, message.params, message.raw)
                 track(message.method, message.params, events)
-                loginLock.withLock {
-                    events.forEach { event ->
-                        if (event is AgentEvent.LoginChanged && event.flow is LoginFlow.Completed) {
-                            if ((event.flow as LoginFlow.Completed).loginId == pendingLogin) {
-                                pendingLogin = null
-                                loginMonitor?.cancel()
-                                emit(event)
-                            }
-                        } else emit(event)
-                    }
+                events.forEach { event ->
+                    val flow = (event as? AgentEvent.LoginChanged)?.flow
+                    if (flow is LoginFlow.Completed) loginCompleted(connection, flow) else emit(event)
                 }
-                if (message.method == N.ACCOUNT_UPDATED || (message.method == N.ACCOUNT_LOGIN_COMPLETED && message.params["success"].bool == true)) scope.launch { runCatching { refreshAccount() } }
+                if (message.method == N.ACCOUNT_UPDATED) accountUpdated(connection, message.params)
                 if (message.method == N.THREAD_QUEUE_CHANGED) message.params["threadId"].str?.let { threadId ->
                     scope.launch {
                         runCatching { refreshQueue(threadId, connection) }.onFailure {
@@ -270,10 +279,73 @@ class CodexBackend(
 
     // ------------------------------------------------------------------ account
 
-    override suspend fun refreshAccount() {
-        val result = connection().request(C.ACCOUNT_READ, buildJsonObject { put("refreshToken", false) })
-        emit(AgentEvent.AccountChanged(kind, CodexEvents.account(result)))
+    /**
+     * Codex login state machine (docs/engine/chat.md "Codex login state machine"):
+     * STARTING (`account/login/start` in flight) → WAITING (device code / browser, account polled)
+     * → CONFIRMING (completion reported, account read with bounded retries) → finished.
+     * Only short critical sections hold [loginLock]; no request is sent while holding it.
+     */
+    private enum class Phase { STARTING, WAITING, CONFIRMING }
+
+    private class LoginAttempt(val attemptId: String, val connection: JsonRpcConnection) {
+        var vendorId: String? = null
+        var phase = Phase.STARTING
+        var job: Job? = null
+        /** Answer of [login]: the first flow, or the cancellation/failure that ended the start. */
+        val outcome = CompletableDeferred<LoginFlow>()
     }
+
+    private sealed interface AccountRead {
+        data class Answered(val account: AccountState) : AccountRead
+        data class Failed(val message: String) : AccountRead
+    }
+
+    /**
+     * Codex serializes account requests and an authenticated read can wait for its workspace-routing
+     * discovery. Abandoned reads would stay queued and delay `account/login/start` and `cancel`, so at most
+     * one `account/read` is outstanding: callers share it, and a caller's timeout never resends.
+     */
+    private suspend fun readAccount(connection: JsonRpcConnection): AccountRead {
+        val shared = synchronized(readGate) {
+            accountRead?.takeIf { it.isActive && accountReadConnection === connection }
+                ?: scope.async {
+                    try {
+                        AccountRead.Answered(CodexEvents.account(connection.request(C.ACCOUNT_READ, buildJsonObject { put("refreshToken", false) })))
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (e: Exception) { AccountRead.Failed(describe(e)) }
+                }.also { accountRead = it; accountReadConnection = connection }
+        }
+        return try {
+            withTimeoutOrNull(accountReadTimeoutMillis) { shared.await() } ?: AccountRead.Failed(ACCOUNT_READ_TIMEOUT)
+        } catch (cancelled: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            AccountRead.Failed("Codex 已停止")
+        }
+    }
+
+    /** Applies an answered read. An authenticated account also ends a pending attempt, with or without a notification. */
+    private suspend fun observeAccount(connection: JsonRpcConnection, account: AccountState) {
+        loginLock.withLock {
+            val current = attempt
+            if (account.state == LoginState.LOGGED_IN && current != null && current.connection === connection) {
+                attempt = null
+                val completed = LoginFlow.Completed(current.vendorId ?: current.attemptId, true, null)
+                if (current.phase != Phase.CONFIRMING) emit(AgentEvent.LoginChanged(kind, completed))
+                current.outcome.complete(completed)
+            }
+            emit(AgentEvent.AccountChanged(kind, account))
+        }
+    }
+
+    private suspend fun refresh(connection: JsonRpcConnection) {
+        when (val read = readAccount(connection)) {
+            is AccountRead.Answered -> observeAccount(connection, read.account)
+            is AccountRead.Failed -> emit(AgentEvent.AccountCheckFailed(kind, read.message))
+        }
+    }
+
+    /** A failed read is recorded as [AgentEvent.AccountCheckFailed]; it never changes the account state. */
+    override suspend fun refreshAccount() = refresh(connection())
 
     override suspend fun refreshRateLimits() {
         val result = connection().request(C.ACCOUNT_RATE_LIMITS_READ, null)
@@ -296,75 +368,219 @@ class CodexBackend(
         return catalog
     }
 
-    override suspend fun login(method: LoginMethod, secret: String?): LoginFlow = loginLock.withLock {
+    /**
+     * Starts a login and returns its first flow. The attempt is owned by the backend, not by the caller:
+     * it continues when the caller goes away, and [cancelLogin] with the attempt id ends a slow start.
+     * Vendor failures are returned and emitted as a failed [LoginFlow.Completed], not thrown.
+     */
+    override suspend fun login(method: LoginMethod, secret: String?): LoginFlow {
         val connection = connection()
-        val result = connection.request(C.ACCOUNT_LOGIN_START, CodexParams.login(method, secret))
+        val current = LoginAttempt(ATTEMPT_PREFIX + newId(), connection)
+        val superseded = loginLock.withLock {
+            val previous = attempt
+            previous?.job?.cancel()
+            previous?.outcome?.complete(LoginFlow.Completed(previous.vendorId ?: previous.attemptId, false, LoginView.CANCELLED))
+            earlyCompletions.clear()
+            attempt = current
+            emit(AgentEvent.LoginChanged(kind, LoginFlow.Progress(current.attemptId, emptyList())))
+            previous?.vendorId?.takeIf { previous.connection === connection }
+        }
+        superseded?.let { id -> scope.launch { cancelOnServer(connection, id) } }
+        scope.launch {
+            try { runAttempt(current, method, secret) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) { failStart(current, describe(e)) }
+        }
+        return current.outcome.await()
+    }
+
+    private suspend fun runAttempt(current: LoginAttempt, method: LoginMethod, secret: String?) {
+        val result = try {
+            current.connection.request(C.ACCOUNT_LOGIN_START, CodexParams.login(method, secret))
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (e: Exception) { return failStart(current, describe(e)) }
         val flow = CodexEvents.loginFlow(result) ?: LoginFlow.Progress(result["loginId"].str, emptyList())
-        loginMonitor?.cancel()
-        pendingLogin = flow.loginId.takeUnless { flow is LoginFlow.Completed }
-        emit(AgentEvent.LoginChanged(kind, flow))
-        pendingLogin?.let { id ->
-            loginMonitor = checkNotNull(sessionScope).launch {
-                val completed = withTimeoutOrNull(loginTimeoutMillis) {
-                    while (true) {
-                        delay(loginPollMillis)
-                        val account = try {
-                            withTimeoutOrNull(10_000) {
-                                CodexEvents.account(connection.request(C.ACCOUNT_READ, buildJsonObject { put("refreshToken", false) }))
-                            }
-                        } catch (cancelled: CancellationException) { throw cancelled }
-                        catch (_: Exception) { null }
-                        if (account?.state == LoginState.LOGGED_IN) {
-                            loginLock.withLock {
-                                if (pendingLogin == id && rpc === connection) {
-                                    pendingLogin = null
-                                    emit(AgentEvent.LoginChanged(kind, LoginFlow.Completed(id, true, null)))
-                                    emit(AgentEvent.AccountChanged(kind, account))
-                                }
-                            }
-                            return@withTimeoutOrNull true
-                        }
-                    }
-                }
-                if (completed == null) {
-                    loginLock.withLock {
-                        if (pendingLogin == id && rpc === connection) {
-                            pendingLogin = null
-                            emit(AgentEvent.LoginChanged(kind, LoginFlow.Completed(id, false, "登录等待超时，请重试")))
-                        }
-                    }
-                    withTimeoutOrNull(10_000) {
-                        runCatching { connection.request(C.ACCOUNT_LOGIN_CANCEL, buildJsonObject { put("loginId", id) }) }
-                    }
+        var readAfter = false
+        loginLock.withLock {
+            if (attempt !== current) {
+                // Cancelled or superseded while starting: release the server-side login it created.
+                flow.loginId?.takeIf { flow !is LoginFlow.Completed }?.let { id -> scope.launch { cancelOnServer(current.connection, id) } }
+                return
+            }
+            if (flow is LoginFlow.Completed) {
+                attempt = null
+                emit(AgentEvent.LoginChanged(kind, flow))
+                readAfter = true
+            } else {
+                current.vendorId = flow.loginId
+                current.phase = Phase.WAITING
+                emit(AgentEvent.LoginChanged(kind, flow))
+                val early = flow.loginId?.let(earlyCompletions::remove)
+                earlyCompletions.clear()
+                if (early != null) resolveCompletion(current, early)
+                else current.job = scope.launch { monitor(current) }
+            }
+            current.outcome.complete(flow)
+        }
+        if (readAfter) refresh(current.connection)
+    }
+
+    private suspend fun failStart(current: LoginAttempt, message: String) {
+        loginLock.withLock {
+            val failed = LoginFlow.Completed(current.attemptId, false, message)
+            if (attempt === current) {
+                attempt = null
+                emit(AgentEvent.LoginChanged(kind, failed))
+            }
+            current.outcome.complete(failed)
+        }
+    }
+
+    /** WAITING: bounded by the login deadline; afterwards the attempt fails and the server login is cancelled. */
+    private suspend fun monitor(current: LoginAttempt) {
+        if (withTimeoutOrNull(loginTimeoutMillis) { poll(current); true } != null) return
+        val expired = loginLock.withLock {
+            (attempt === current && current.phase == Phase.WAITING).also {
+                if (it) {
+                    attempt = null
+                    emit(AgentEvent.LoginChanged(kind, LoginFlow.Completed(current.vendorId, false, "登录等待超时，请重试")))
                 }
             }
         }
-        if (flow is LoginFlow.Completed) runCatching { refreshAccount() }
-        flow
+        if (expired) current.vendorId?.let { cancelOnServer(current.connection, it) }
+    }
+
+    /** One read at a time; failures back off and are reported without ending the attempt. */
+    private suspend fun poll(current: LoginAttempt) {
+        var wait = loginPollMillis
+        var reported = false
+        while (true) {
+            delay(wait)
+            if (!isCurrent(current, Phase.WAITING)) return
+            when (val read = readAccount(current.connection)) {
+                is AccountRead.Answered -> {
+                    wait = loginPollMillis
+                    if (read.account.state == LoginState.LOGGED_IN) {
+                        if (isCurrent(current, Phase.WAITING)) observeAccount(current.connection, read.account)
+                        return
+                    }
+                    // Clear a reported check failure; the reducer keeps the pending flow.
+                    if (reported && isCurrent(current, Phase.WAITING)) { reported = false; emit(AgentEvent.AccountChanged(kind, read.account)) }
+                }
+                is AccountRead.Failed -> {
+                    wait = (wait * 2).coerceAtMost(maxLoginPollMillis)
+                    if (isCurrent(current, Phase.WAITING)) { reported = true; emit(AgentEvent.AccountCheckFailed(kind, read.message)) }
+                }
+            }
+        }
+    }
+
+    private suspend fun isCurrent(current: LoginAttempt, phase: Phase) = loginLock.withLock { attempt === current && current.phase == phase }
+
+    private suspend fun loginCompleted(connection: JsonRpcConnection, completed: LoginFlow.Completed) {
+        var check = false
+        loginLock.withLock {
+            val current = attempt?.takeIf { it.connection === connection }
+            when {
+                current != null && current.vendorId != null && completed.loginId == current.vendorId && current.phase == Phase.WAITING ->
+                    resolveCompletion(current, completed)
+                // The start response has not been processed yet; keep it for that attempt.
+                current != null && current.phase == Phase.STARTING && completed.loginId != null -> {
+                    earlyCompletions[completed.loginId!!] = completed
+                    while (earlyCompletions.size > 8) earlyCompletions.remove(earlyCompletions.keys.first())
+                }
+                // Stale or unattributed: it never ends the current attempt, but credentials may have changed.
+                else -> check = completed.success || (current != null && completed.loginId == null)
+            }
+        }
+        if (check) scope.launch { refresh(connection) }
+    }
+
+    /** Caller holds [loginLock]. */
+    private fun resolveCompletion(current: LoginAttempt, completed: LoginFlow.Completed) {
+        current.job?.cancel()
+        emit(AgentEvent.LoginChanged(kind, completed))
+        if (completed.success) {
+            current.phase = Phase.CONFIRMING
+            current.job = scope.launch { confirm(current) }
+        } else {
+            attempt = null
+            // Codex can persist credentials and still report failure (workspace routing discovery):
+            // one read shows the real account, or the reason it cannot be read.
+            scope.launch { refresh(current.connection) }
+        }
+    }
+
+    /** CONFIRMING: the completion already counts. Reads only fill in the account; null or failed reads never undo it. */
+    private suspend fun confirm(current: LoginAttempt) {
+        var lastError: String? = null
+        for (wait in confirmDelaysMillis) {
+            delay(wait)
+            if (!isCurrent(current, Phase.CONFIRMING)) return
+            when (val read = readAccount(current.connection)) {
+                is AccountRead.Answered -> if (read.account.state == LoginState.LOGGED_IN) {
+                    observeAccount(current.connection, read.account)
+                    return
+                }
+                is AccountRead.Failed -> lastError = read.message
+            }
+        }
+        val unconfirmed = loginLock.withLock { (attempt === current).also { if (it) attempt = null } }
+        if (!unconfirmed) return
+        emit(AgentEvent.BackendNotice(kind, Notice(NoticeLevel.WARNING, "Codex 已报告登录成功，但暂时无法读取账户信息", code = "loginAccountUnconfirmed", detail = lastError)))
+        lastError?.let { emit(AgentEvent.AccountCheckFailed(kind, it)) }
+    }
+
+    private fun accountUpdated(connection: JsonRpcConnection, params: JsonElement?) {
+        // `authMode: null` states that credentials are gone (logout elsewhere); let the next read apply.
+        val signedOut = (params as? JsonObject)?.let { it.containsKey("authMode") && it["authMode"] is JsonNull } == true
+        scope.launch {
+            if (signedOut) loginLock.withLock { if (attempt == null) emit(AgentEvent.LoginChanged(kind, null)) }
+            refresh(connection)
+        }
+    }
+
+    private suspend fun cancelOnServer(connection: JsonRpcConnection, loginId: String) {
+        withTimeoutOrNull(10_000) {
+            runCatching { connection.request(C.ACCOUNT_LOGIN_CANCEL, buildJsonObject { put("loginId", loginId) }) }
+        }
     }
 
     // Caller holds loginLock. Do not retain a waiting flow after the process disappears.
-    private fun finishLogin(error: String) {
-        loginMonitor?.cancel()
-        pendingLogin?.let { emit(AgentEvent.LoginChanged(kind, LoginFlow.Completed(it, false, error))) }
-        pendingLogin = null
+    private fun finishLogin(connection: JsonRpcConnection?, error: String) {
+        val current = attempt?.takeIf { connection == null || it.connection === connection } ?: return
+        attempt = null
+        earlyCompletions.clear()
+        current.job?.cancel()
+        val ended = LoginFlow.Completed(current.vendorId ?: current.attemptId, false, error)
+        if (current.phase != Phase.CONFIRMING) emit(AgentEvent.LoginChanged(kind, ended))
+        current.outcome.complete(ended)
     }
 
-    override suspend fun cancelLogin(loginId: String) = loginLock.withLock {
-        // Clear local waiting state even if the server fails to answer cancellation.
-        if (pendingLogin == loginId) finishLogin("cancelled")
-        withTimeoutOrNull(10_000) {
-            connection().request(C.ACCOUNT_LOGIN_CANCEL, buildJsonObject { put("loginId", loginId) })
+    override suspend fun cancelLogin(loginId: String) {
+        // Local waiting state ends at once, even if the server never answers the cancellation.
+        val target = loginLock.withLock {
+            val current = attempt
+            if (current != null && current.phase != Phase.CONFIRMING && (loginId == current.attemptId || loginId == current.vendorId)) {
+                finishLogin(null, LoginView.CANCELLED)
+                current.vendorId?.let { current.connection to it }
+            } else rpc?.let { connection -> loginId.takeUnless { it.startsWith(ATTEMPT_PREFIX) }?.let { connection to it } }
         }
-        Unit
+        target?.let { (connection, id) -> cancelOnServer(connection, id) }
     }
 
-    override suspend fun logout() = loginLock.withLock {
-        finishLogin("cancelled")
-        connection().request(C.ACCOUNT_LOGOUT, null)
+    override suspend fun logout() {
+        val connection = connection()
+        loginLock.withLock { finishLogin(null, LoginView.CANCELLED) }
+        connection.request(C.ACCOUNT_LOGOUT, null)
         emit(AgentEvent.LoginChanged(kind, null))
-        refreshAccount()
+        refresh(connection)
     }
+
+    private fun describe(e: Throwable): String = when (e) {
+        is ConnectionClosedException -> "Codex 连接已断开"
+        else -> e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName ?: "error"
+    }.take(300)
 
     // ------------------------------------------------------------------ threads
 
@@ -597,3 +813,7 @@ class CodexBackend(
 
 @Suppress("unused")
 private val EMPTY_OBJECT = JsonObject(emptyMap())
+
+/** Local id of a login whose start request is unanswered; never sent to Codex. */
+private const val ATTEMPT_PREFIX = "attempt:"
+private const val ACCOUNT_READ_TIMEOUT = "Codex 没有及时返回账户状态"

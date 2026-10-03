@@ -65,6 +65,10 @@ sealed interface AgentEvent {
     @Serializable
     @SerialName("LoginChanged")
     data class LoginChanged(override val backend: BackendKind, val flow: LoginFlow?) : AgentEvent
+    /** An account read failed or was not answered in time; the account state itself is unchanged. */
+    @Serializable
+    @SerialName("AccountCheckFailed")
+    data class AccountCheckFailed(override val backend: BackendKind, val message: String) : AgentEvent
     @Serializable
     @SerialName("RateLimitsChanged")
     data class RateLimitsChanged(override val backend: BackendKind, val limits: RateLimitState, val merge: Boolean = false) : AgentEvent

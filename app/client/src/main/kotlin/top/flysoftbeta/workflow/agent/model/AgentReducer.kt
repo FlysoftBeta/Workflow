@@ -23,17 +23,18 @@ object AgentReducer {
     fun reduce(state: AgentState, event: AgentEvent): AgentState = when (event) {
         is AgentEvent.ProcessChanged -> processChanged(state, event)
         is AgentEvent.ServerInfo -> state.backend(event.backend) { it.copy(serverInfo = event.info) }
-        is AgentEvent.AccountChanged -> state.backend(event.backend) {
-            it.copy(account = event.account.copy(login = event.account.login ?: it.account.login.takeIf { flow -> event.account.state != LoginState.LOGGED_IN && (flow !is LoginFlow.Completed || !flow.success) }))
-        }
+        is AgentEvent.AccountChanged -> state.backend(event.backend) { it.copy(account = accountRead(it.account, event.account)) }
         is AgentEvent.LoginChanged -> state.backend(event.backend) {
             val loginState = when (val flow = event.flow) {
                 null -> it.account.state
                 is LoginFlow.Completed -> if (flow.success) LoginState.LOGGED_IN else it.account.state.takeIf { s -> s != LoginState.LOGGING_IN } ?: LoginState.LOGGED_OUT
                 else -> LoginState.LOGGING_IN
             }
-            it.copy(account = it.account.copy(login = event.flow, state = loginState))
+            // A new attempt starts without the previous attempt's check failure.
+            val checkError = if (event.flow.isPending) null else it.account.checkError
+            it.copy(account = it.account.copy(login = event.flow, state = loginState, checkError = checkError))
         }
+        is AgentEvent.AccountCheckFailed -> state.backend(event.backend) { it.copy(account = it.account.copy(checkError = event.message)) }
         is AgentEvent.RateLimitsChanged -> state.backend(event.backend) {
             val previous = it.rateLimits
             it.copy(rateLimits = if (event.merge && previous != null) mergeLimits(previous, event.limits) else event.limits)
@@ -207,8 +208,27 @@ object AgentReducer {
         return withBackend.copy(threads = withBackend.threads + (key to thread.copy(unknown = (thread.unknown + record).takeLast(MAX_UNKNOWN))))
     }
 
+    /**
+     * Folds one answered account read. Login rules (docs/engine/chat.md "Codex login state machine"):
+     * - An authenticated read always wins and ends any login flow.
+     * - After a successful completion of this process, a read that is not authenticated changes nothing:
+     *   a null or lagging read never overrides a confirmed completion.
+     * - While an attempt is pending, a logged-out read keeps LOGGING_IN and the flow.
+     * - Otherwise the read replaces the account and keeps a failure or terminal flow visible.
+     */
+    private fun accountRead(previous: AccountState, read: AccountState): AccountState = when {
+        read.state == LoginState.LOGGED_IN -> read
+        previous.login.isConfirmedSuccess -> previous.copy(checkError = null)
+        previous.login.isPending -> read.copy(state = LoginState.LOGGING_IN, login = previous.login)
+        else -> read.copy(login = read.login ?: previous.login.takeIf { !it.isConfirmedSuccess })
+    }
+
     private fun processChanged(state: AgentState, event: AgentEvent.ProcessChanged): AgentState {
-        val updated = state.backend(event.backend) { it.copy(process = event.state) }
+        val updated = state.backend(event.backend) {
+            // A confirmed completion belongs to the process that reported it; a new process reads afresh.
+            val account = if (event.state is ProcessState.Starting && it.account.login.isConfirmedSuccess) it.account.copy(login = null) else it.account
+            it.copy(process = event.state, account = account)
+        }
         val message = when (val s = event.state) {
             is ProcessState.Exited -> "Backend process exited" + (s.exitCode?.let { " ($it)" } ?: "")
             is ProcessState.Failed -> s.message
