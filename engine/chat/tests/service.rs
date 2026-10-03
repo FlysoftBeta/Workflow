@@ -565,3 +565,92 @@ fn ambiguous_install_is_not_replayed_until_environment_generation_changes() {
     assert!(p.refresh(&tools, BackendKind::Claude, None).is_err());
     assert_eq!(tools.installs.load(Ordering::SeqCst), 2);
 }
+
+#[test]
+fn large_metadata_only_changes_are_retention_charged_and_never_oversize_watch() {
+    let journal = Journal::new(4096, 80_000);
+    let before = journal.snapshot();
+    for n in 0..4 {
+        let mut value = entry();
+        value.title = Some(format!("{n}{}", "界".repeat(12_000)));
+        journal
+            .metadata(ChatMetadata {
+                conversations: vec![value],
+                ..Default::default()
+            })
+            .unwrap();
+    }
+    assert!(
+        journal
+            .watch(&before.epoch, 0, Duration::ZERO)
+            .unwrap()
+            .resnapshot
+    );
+    let mut value = entry();
+    value.preview = Some("x".repeat(1024 * 1024));
+    journal
+        .metadata(ChatMetadata {
+            conversations: vec![value],
+            ..Default::default()
+        })
+        .unwrap();
+    let now = journal.snapshot();
+    for cursor in [0, now.revision] {
+        let update = journal
+            .watch(&before.epoch, cursor, Duration::ZERO)
+            .unwrap();
+        assert!(update.resnapshot);
+        assert!(serde_json::to_vec(&update).unwrap().len() <= workflow_chat::journal::UPDATE_BYTES);
+    }
+}
+#[test]
+fn journal_counts_metadata_and_json_framing_in_batch_limit() {
+    let journal = Journal::default();
+    let initial = journal.snapshot();
+    let mut value = entry();
+    value.preview = Some("m".repeat(400_000));
+    journal
+        .metadata(ChatMetadata {
+            conversations: vec![value],
+            ..Default::default()
+        })
+        .unwrap();
+    for n in 0..3 {
+        journal
+            .event(AgentEvent::Unknown {
+                backend: BackendKind::Codex,
+                kind: n.to_string(),
+                thread_id: None,
+                raw: strict_json(
+                    serde_json::to_string(&"x".repeat(300_000))
+                        .unwrap()
+                        .as_bytes(),
+                )
+                .unwrap(),
+            })
+            .unwrap();
+    }
+    let update = journal.watch(&initial.epoch, 0, Duration::ZERO).unwrap();
+    assert!(!update.resnapshot);
+    assert_eq!(update.events.len(), 2);
+    assert!(serde_json::to_vec(&update).unwrap().len() <= workflow_chat::journal::UPDATE_BYTES);
+}
+#[test]
+fn nonpositive_index_formats_are_rejected_without_silent_upgrade() {
+    for format in [-1, 0] {
+        assert_eq!(
+            IndexDocument::decode(
+                format!("{{\"format\":{format},\"conversations\":[]}}").as_bytes()
+            )
+            .unwrap_err()
+            .kind,
+            ErrorKind::UnsupportedFormat
+        );
+        let store = Arc::new(Memory::default());
+        let body = format!("{{\"format\":{format},\"conversations\":[]}}");
+        *store.index.lock().unwrap() = Some(body.clone());
+        assert!(ConversationIndex::load(store.clone()).is_err());
+        assert_eq!(*store.index.lock().unwrap(), Some(body));
+        assert!(!store.quarantined.load(Ordering::SeqCst));
+    }
+}

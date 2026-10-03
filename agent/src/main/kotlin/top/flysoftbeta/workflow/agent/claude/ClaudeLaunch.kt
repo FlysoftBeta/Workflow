@@ -80,8 +80,8 @@ object ClaudeLaunch {
                 session.atMessageUuid?.let { args += listOf("--resume-session-at", it) }
             }
         }
-        val forbidden = setOf("--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "--permission-prompt-tool")
-        require(config.extraArgs.none { it in forbidden || it == "bypassPermissions" || it == "auto" }) { "extraArgs may not weaken permissions" }
+        val forbidden = setOf("--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "--permission-prompt-tool", "--permission-mode")
+        require(config.extraArgs.none { it.substringBefore('=') in forbidden || it == "bypassPermissions" || it == "auto" }) { "extraArgs may not weaken permissions" }
         args += config.extraArgs
         return args
     }

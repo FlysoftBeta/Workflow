@@ -100,14 +100,7 @@ pub enum CommandValue {
     Composer(ComposerDraft),
     Config(ConfigOutcome),
 }
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum ConfigOutcome {
-    Updated { config: ClientConfig },
-    Conflict { revision: u64 },
-    Blocked { problem: String },
-    Failed { message: String },
-}
+pub type ConfigOutcome = workflow_environment::config::ConfigOutcome<AgentConfig, TerminalConfig>;
 #[derive(Clone)]
 pub struct Workspace {
     pub root: PathBuf,
@@ -819,35 +812,17 @@ impl Workspace {
         patch: ConfigPatch,
         expected_revision: u64,
     ) -> Result<ConfigOutcome> {
-        if expected_revision != self.revision {
-            return Ok(ConfigOutcome::Conflict {
-                revision: self.revision,
-            });
+        let change = workflow_environment::config::update(
+            &self.store,
+            &self.state.config,
+            self.revision,
+            expected_revision,
+            patch,
+        )?;
+        if change.reloaded {
+            self.reload_config();
         }
-        let previous = self.state.config.clone();
-        self.reload_config();
-        if let Some(problem) = &self.state.config_problem {
-            return Ok(ConfigOutcome::Blocked {
-                problem: problem.clone(),
-            });
-        }
-        if self.state.config != previous {
-            return Ok(ConfigOutcome::Conflict {
-                revision: self
-                    .revision
-                    .checked_add(1)
-                    .ok_or_else(|| Error::business("overflow", "revision overflow"))?,
-            });
-        }
-        let mut input = self.state.config.clone();
-        match input.patch(patch) {
-            Ok(()) => {
-                self.store.write(CONFIG, &input)?;
-                self.reload_config();
-                Ok(ConfigOutcome::Updated { config: input })
-            }
-            Err(e) => Ok(ConfigOutcome::Failed { message: e.message }),
-        }
+        Ok(change.outcome)
     }
 }
 fn file_resource(r: ResourceRef) -> filework::ResourceRef {

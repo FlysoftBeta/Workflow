@@ -98,6 +98,12 @@ impl IndexDocument {
                 "conversation index format is newer than 1",
             ));
         }
+        if p.format != 1 {
+            return Err(ChatError::new(
+                ErrorKind::UnsupportedFormat,
+                "conversation index format must be 1",
+            ));
+        }
         let mut conversations = Vec::<IndexEntry>::new();
         for raw in p.conversations {
             if let Ok(candidate) =

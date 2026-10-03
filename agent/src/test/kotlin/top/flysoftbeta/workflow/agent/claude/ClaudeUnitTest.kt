@@ -115,7 +115,7 @@ class ClaudeUnitTest {
         assertFalse(env.containsKey("CLAUDECODE"))
         assertEquals("app-token", env["CLAUDE_CODE_OAUTH_TOKEN"])
         assertEquals("1", env["DISABLE_AUTOUPDATER"])
-        for (bad in listOf("--dangerously-skip-permissions", "bypassPermissions", "auto")) {
+        for (bad in listOf("--dangerously-skip-permissions", "--dangerously-skip-permissions=true", "--permission-mode=auto", "--permission-mode", "--permission-prompt-tool=custom", "bypassPermissions", "auto")) {
             try { ClaudeLaunch.argv(config.copy(extraArgs = listOf(bad)), ClaudeSession.New("s"), null, null, null); fail(bad) } catch (_: IllegalArgumentException) {}
         }
         assertEquals("/home/work/.claude-app/projects/-workspace/s1.jsonl", ClaudeLaunch.transcriptPath("/home/work/.claude-app", "/workspace", "s1"))

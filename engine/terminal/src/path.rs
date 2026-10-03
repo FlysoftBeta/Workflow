@@ -157,28 +157,115 @@ pub fn candidates(cwd: &str, text: &str) -> Vec<(String, Option<u32>, Option<u32
     if text.is_empty() || text.len() > 4096 || text.chars().any(char::is_control) {
         return out;
     }
-    let path = text.trim().trim_matches(|c| c == '\'' || c == '"');
-    let path = path.strip_prefix("file://").unwrap_or(path);
-    if let Ok(candidate) = resolve_workspace_path(cwd, path) {
-        out.push((candidate, None, None));
+    let input = text.trim().trim_matches(|c| c == '\'' || c == '"');
+    let mut fragment = None;
+    let path = if let Some(uri) = input.strip_prefix("file://") {
+        let Some((authority, rest)) = uri.split_once('/') else {
+            return out;
+        };
+        if !authority.is_empty() && !authority.eq_ignore_ascii_case("localhost") {
+            return out;
+        }
+        let (uri_path, suffix) = rest
+            .split_once('#')
+            .map_or((rest, None), |(p, f)| (p, Some(f)));
+        if uri_path.contains('?') {
+            return out;
+        }
+        fragment = suffix.and_then(hash_position);
+        let Some(decoded) = percent_decode(uri_path) else {
+            return out;
+        };
+        format!("/{decoded}")
+    } else {
+        // A non-file URI belongs to the URL handler, never to a workspace filename.
+        if input.contains("://") {
+            return out;
+        }
+        input.to_owned()
+    };
+    if let Ok(candidate) = resolve_workspace_path(cwd, &path) {
+        let (line, column) = fragment.map_or((None, None), |(l, c)| (Some(l), c));
+        out.push((candidate, line, column));
     }
-    let number = |s: &str| s.parse::<u32>().ok().filter(|n| *n > 0).map(|n| n - 1);
-    if let Some((head, last)) = path.rsplit_once(':') {
-        if let Some(last) = number(last) {
-            let (file, line, column) = if let Some((file, line)) = head
-                .rsplit_once(':')
-                .and_then(|(f, n)| number(n).map(|n| (f, n)))
-            {
-                (file, line, Some(last))
-            } else {
-                (head, last, None)
-            };
+    if fragment.is_none() {
+        if let Some((file, line, column)) = source_suffix(&path) {
             if let Ok(candidate) = resolve_workspace_path(cwd, file) {
                 out.push((candidate, Some(line), column));
             }
         }
     }
     out
+}
+fn coordinate(text: &str) -> Option<u32> {
+    text.trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|n| *n > 0)
+        .map(|n| n - 1)
+}
+fn hash_position(text: &str) -> Option<(u32, Option<u32>)> {
+    let text = text.strip_prefix('L')?;
+    let (line, column) = text
+        .split_once('C')
+        .map_or((text, None), |(l, c)| (l, Some(c)));
+    let column = match column {
+        Some(value) => Some(coordinate(value)?),
+        None => None,
+    };
+    Some((coordinate(line)?, column))
+}
+fn source_suffix(path: &str) -> Option<(&str, u32, Option<u32>)> {
+    if let Some((file, suffix)) = path.rsplit_once('#') {
+        if let Some((line, column)) = hash_position(suffix) {
+            return Some((file, line, column));
+        }
+    }
+    if let Some(prefix) = path.strip_suffix(')') {
+        if let Some((file, position)) = prefix.rsplit_once('(') {
+            if let Some((line, column)) = position.split_once(',') {
+                return Some((file, coordinate(line)?, Some(coordinate(column)?)));
+            }
+            return Some((file, coordinate(position)?, None));
+        }
+    }
+    let (head, last) = path.rsplit_once(':')?;
+    let last = coordinate(last)?;
+    if let Some((file, line)) = head
+        .rsplit_once(':')
+        .and_then(|(f, n)| coordinate(n).map(|n| (f, n)))
+    {
+        Some((file, line, Some(last)))
+    } else {
+        Some((head, last, None))
+    }
+}
+fn percent_decode(text: &str) -> Option<String> {
+    let input = text.as_bytes();
+    let mut bytes = Vec::with_capacity(input.len());
+    let mut i = 0;
+    while i < input.len() {
+        if input[i] == b'%' {
+            let a = (*input.get(i + 1)? as char).to_digit(16)?;
+            let b = (*input.get(i + 2)? as char).to_digit(16)?;
+            let decoded = (a * 16 + b) as u8;
+            // Escaped separators must not change path-component or authority boundaries.
+            if matches!(decoded, b'/' | b'\\' | 0) {
+                return None;
+            }
+            bytes.push(decoded);
+            i += 3;
+        } else {
+            bytes.push(input[i]);
+            i += 1;
+        }
+    }
+    let text = String::from_utf8(bytes).ok()?;
+    if text.chars().any(char::is_control) {
+        None
+    } else {
+        Some(text)
+    }
 }
 
 #[cfg(test)]
@@ -203,5 +290,62 @@ mod resolution_tests {
         assert_eq!(candidates("/workspace", "x:0").len(), 1);
         assert!(candidates("/workspace", "../../outside:5").is_empty());
         assert!(candidates("/workspace", "bad\u{1b}[0m").is_empty());
+    }
+}
+
+#[cfg(test)]
+mod uri_tests {
+    use super::*;
+    #[test]
+    fn local_file_uris_decode_unicode_spaces_and_keep_source_positions() {
+        assert_eq!(
+            candidates(
+                "/workspace/elsewhere",
+                "file://localhost/workspace/src/a%20b.rs:3:2"
+            )
+            .last()
+            .unwrap(),
+            &("src/a b.rs".into(), Some(2), Some(1))
+        );
+        assert_eq!(
+            candidates("/workspace", "file:///workspace/%E4%B8%AD.rs#L3C2"),
+            vec![("中.rs".into(), Some(2), Some(1))]
+        );
+        assert_eq!(
+            candidates("/workspace", "file://LOCALHOST/workspace/a%2Bb.rs")[0].0,
+            "a+b.rs"
+        );
+        assert_eq!(
+            candidates("/workspace/src", "file:///workspace/main.rs")[0].0,
+            "main.rs"
+        );
+        assert_eq!(
+            candidates("/workspace/src", "foo.rs(3, 2)").last().unwrap(),
+            &("src/foo.rs".into(), Some(2), Some(1))
+        );
+        assert_eq!(
+            candidates("/workspace/src", "foo.rs(3)").last().unwrap(),
+            &("src/foo.rs".into(), Some(2), None)
+        );
+    }
+    #[test]
+    fn uri_authority_utf8_and_encoded_boundaries_fail_closed() {
+        for path in [
+            "file://remote/workspace/foo",
+            "file://user@localhost/workspace/foo",
+            "file://localhost:80/workspace/foo",
+            "file://localhost",
+            "file:///workspace/%",
+            "file:///workspace/%zz",
+            "file:///workspace/%ff",
+            "file:///workspace/%00",
+            "file:///workspace/%2fsecret",
+            "file:///workspace/%5csecret",
+            "file:///workspace/%2e%2e/outside",
+            "file://%2flocalhost/workspace/foo",
+            "https://example.test/workspace/foo",
+        ] {
+            assert!(candidates("/workspace", path).is_empty(), "{path}");
+        }
     }
 }
