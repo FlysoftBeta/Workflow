@@ -23,9 +23,9 @@ if [[ ! -f artifacts/signing/Workflow-release.p12 ]]; then
 fi
 mkdir -p -- "$output"
 # Keep both build and immutable copies under the same lock; image-profile builds share output paths.
-./gradlew :app:assembleDeviceRelease :app:assembleEmulatorRelease \
+./gradlew :app:assembleRelease \
   > "$output/build.log" 2>&1
-for spec in device:arm64-v8a emulator:x86_64; do
+for spec in arm64:arm64-v8a x86_64:x86_64; do
   flavor=${spec%%:*}
   abi=${spec#*:}
   apk="$output/Workflow-$version-$abi-release.apk"

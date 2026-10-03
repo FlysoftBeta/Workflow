@@ -306,8 +306,8 @@ val buildEngine = tasks.register<BuildEngineTask>("buildEngine") {
     outputDirectory.set(layout.buildDirectory.dir("generated/engine-jni"))
 }
 
-/** Flavor → Debian architecture of its image (docs/environment.md §7.1). */
-val flavorArchitectures = mapOf("device" to "arm64", "emulator" to "amd64")
+/** ABI flavor → Debian architecture of its customized image. */
+val flavorArchitectures = mapOf("arm64" to "arm64", "x86_64" to "amd64")
 val environmentImages = flavorArchitectures.mapValues { (flavor, arch) ->
     tasks.register<PrepareEnvironmentImageTask>("prepare${flavor.replaceFirstChar(Char::titlecase)}EnvironmentImage") {
         group = "build setup"
@@ -345,15 +345,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // One APK per ABI because each carries its own environment image (docs/environment.md §7.1): jniLibs ABI
+    // One APK per ABI because each carries its own environment image: jniLibs ABI
     // splits cannot split assets. Same applicationId, so either flavor updates an installed app in place.
     flavorDimensions += "abi"
     productFlavors {
-        create("device") {
+        create("arm64") {
             dimension = "abi"
             ndk { abiFilters += "arm64-v8a" }
         }
-        create("emulator") {
+        create("x86_64") {
             dimension = "abi"
             ndk { abiFilters += "x86_64" }
         }
@@ -461,17 +461,17 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-// Unflavored names (README, other workstreams' scripts) run the emulator flavor: x86_64 emulators are the
-// default test target. The tablet uses the device flavor explicitly (installDeviceDebug, connectedDeviceDebugAndroidTest).
+// Unqualified test/install aliases select x86_64 for the current AVD matrix. ABI names describe
+// executable compatibility, not whether Android runs on physical or virtual hardware.
 mapOf(
-    "testDebugUnitTest" to "testEmulatorDebugUnitTest",
-    "connectedDebugAndroidTest" to "connectedEmulatorDebugAndroidTest",
-    "installDebug" to "installEmulatorDebug",
-    "lintDebug" to "lintEmulatorDebug",
+    "testDebugUnitTest" to "testX86_64DebugUnitTest",
+    "connectedDebugAndroidTest" to "connectedX86_64DebugAndroidTest",
+    "installDebug" to "installX86_64Debug",
+    "lintDebug" to "lintX86_64Debug",
 ).forEach { (alias, target) ->
     tasks.register(alias) {
         group = "verification"
-        description = "Alias of $target (emulator flavor)."
+        description = "Alias of $target (x86_64 ABI)."
         dependsOn(target)
     }
 }

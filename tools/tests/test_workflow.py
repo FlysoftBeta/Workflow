@@ -156,8 +156,8 @@ class WorktreeTests(unittest.TestCase):
         self.assertEqual("coordinator\n", (self.root / "a/file").read_text())
 
     def test_apk_snapshot_is_frozen_and_tampering_is_rejected(self):
-        app = "app/build/outputs/apk/emulator/debug/app-emulator-debug.apk"
-        test = "app/build/outputs/apk/androidTest/emulator/debug/app-emulator-debug-androidTest.apk"
+        app = "app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk"
+        test = "app/build/outputs/apk/androidTest/x86_64/debug/app-x86_64-debug-androidTest.apk"
         (self.root / ".gitignore").write_text((self.root / ".gitignore").read_text() + "**/build/\n")
         code = f"from pathlib import Path; paths={[app,test]!r}; [(Path(p).parent.mkdir(parents=True, exist_ok=True),Path(p).write_bytes(b'APK')) for p in paths]"
         self.catalog["suites"]["apk"] = {"command": [sys.executable, "-c", code], "heavy": True, "apkSnapshot": True}
