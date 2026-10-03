@@ -96,7 +96,7 @@ private class CallbackOutput(private val writer: FrameWriter) : OutputStream() {
         for (i in offset until offset + length) write(bytes[i].toInt() and 255)
     }
     companion object {
-        val CALLBACKS = setOf("hello", "workspace.snapshot", "workspace.watch", "workspace.command", "documents.read", "documents.write", "documents.quarantine", "files.read", "environment.tools.status")
+        val CALLBACKS = setOf("hello", "workspace.snapshot", "workspace.watch", "workspace.command", "documents.read", "documents.write", "documents.quarantine", "files.read", "environment.tools.status", "environment.tools.install")
     }
 }
 

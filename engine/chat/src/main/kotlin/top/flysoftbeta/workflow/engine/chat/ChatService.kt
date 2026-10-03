@@ -3,6 +3,8 @@ package top.flysoftbeta.workflow.engine.chat
 import java.io.File
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import top.flysoftbeta.workflow.agent.SendMode
 import top.flysoftbeta.workflow.agent.model.*
@@ -21,6 +23,9 @@ class ChatService(private val rpc: WorkspaceRpc, private val scope: CoroutineSco
     private val ledger = SendLedger(rpc, store)
     @Volatile private var closed = false
     private val installed = mutableSetOf<BackendKind>()
+    private val toolsGate = Mutex()
+    private val demanded = mutableSetOf<BackendKind>()
+    private var claudeInstallRequested = false
 
     suspend fun start() {
         store.start()
@@ -32,6 +37,12 @@ class ChatService(private val rpc: WorkspaceRpc, private val scope: CoroutineSco
         publishMetadata()
         scope.launch {
             combine(hub.conversations, hub.available, store.state) { _, _, _ -> Unit }.collect { publishMetadata() }
+        }
+        scope.launch {
+            store.state.map { it.config.agent.backend }.distinctUntilChanged().collect {
+                try { refreshTools() } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* A selected tool's measured failure remains visible until explicit retry. */ }
+            }
         }
         scope.launch {
             while (isActive) {
@@ -48,12 +59,23 @@ class ChatService(private val rpc: WorkspaceRpc, private val scope: CoroutineSco
         permissions = hub.permissions(),
         defaultBackend = hub.defaultBackend(),
     ))
-    private suspend fun refreshTools() {
-        if (closed) return
-        val status = WorkspaceRpc.obj(rpc.request("environment.tools.status"))
-        val tools = (status["tools"] as? List<*>)?.map { WorkspaceRpc.obj(it) }.orEmpty()
+    private suspend fun refreshTools(required: BackendKind? = null) = toolsGate.withLock {
+        if (closed) return@withLock
+        required?.let(demanded::add)
+        var status = WorkspaceRpc.obj(rpc.request("environment.tools.status"))
+        if (closed) return@withLock
+        fun tools() = (status["tools"] as? List<*>)?.map { WorkspaceRpc.obj(it) }.orEmpty()
+        val claude = tools().firstOrNull { it["id"] == BackendKind.CLAUDE.id }
+        val needsClaude = hub.defaultBackend() == BackendKind.CLAUDE || BackendKind.CLAUDE in demanded
+        if (needsClaude && claude?.get("phase") == "not_installed" && !claudeInstallRequested) {
+            // Mark before dispatch: an ambiguous callback failure must not create an install storm.
+            // Failed installs remain failed; only the explicit tools retry action may retry them.
+            claudeInstallRequested = true
+            status = WorkspaceRpc.obj(rpc.request("environment.tools.install", mapOf("toolId" to "claude", "retry" to false)))
+        }
+        val tools = tools()
         for (kind in BackendKind.entries) {
-            if (closed) return
+            if (closed) return@withLock
             val tool = tools.firstOrNull { it["id"] == kind.id }
             val ready = tool?.get("phase") == "ready"
             if (ready && kind !in installed) {
@@ -105,11 +127,22 @@ class ChatService(private val rpc: WorkspaceRpc, private val scope: CoroutineSco
         fun kind(field: String = "kind") = backend(a.string(field))
         var result: JsonElement = JsonNull
         when (name) {
-            "newConversation" -> result = JsonPrimitive(hub.newConversation(a.stringOrNull("backend")?.let(::backend), a.stringOrNull("id") ?: java.util.UUID.randomUUID().toString()))
-            "ensureConversation" -> result = ChatWire.encode(hub.ensureConversation(id()))
-            "open" -> hub.open(id())
+            "newConversation" -> {
+                val created = hub.newConversation(a.stringOrNull("backend")?.let(::backend), a.stringOrNull("id") ?: java.util.UUID.randomUUID().toString())
+                refreshTools(hub.entry(created)?.backend)
+                result = JsonPrimitive(created)
+            }
+            "ensureConversation" -> {
+                val entry = hub.ensureConversation(id())
+                refreshTools(entry.backend)
+                result = ChatWire.encode(entry)
+            }
+            "open" -> {
+                refreshTools(hub.ensureConversation(id()).backend)
+                hub.open(id())
+            }
             "loadEarlier" -> hub.loadEarlier(id())
-            "setBackend" -> hub.setBackend(id(), kind())
+            "setBackend" -> { hub.setBackend(id(), kind()); refreshTools(kind()) }
             "send" -> {
                 val submitted = StateCodec.decodeComposer(a.getValue("submitted").toString())
                 val attachments = a["attachments"]?.jsonArray.orEmpty().map { it.jsonObject.let { v -> ComposerAttachment(v.string("path"), v.stringOrNull("mimeType")) } }
@@ -143,7 +176,7 @@ class ChatService(private val rpc: WorkspaceRpc, private val scope: CoroutineSco
             "cancelLogin" -> hub.cancelLogin(kind(), a.string("loginId"))
             "logout" -> hub.logout(kind())
             "refreshAccount" -> hub.refreshAccount(kind())
-            "warmUp" -> hub.connect(kind())
+            "warmUp" -> { refreshTools(kind()); hub.connect(kind()) }
             "flush" -> hub.flush()
             else -> throw IllegalArgumentException("Unknown chat command: $name")
         }
