@@ -30,7 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import top.flysoftbeta.workflow.agent.model.LoginState
+import top.flysoftbeta.workflow.agent.model.LoginView
 import top.flysoftbeta.workflow.agent.model.ProcessState
 import top.flysoftbeta.workflow.app.panel.PanelFrame
 import top.flysoftbeta.workflow.app.panel.PanelPlacement
@@ -51,7 +51,8 @@ internal fun ConversationContent(c: ConversationController, frame: PanelFrame, m
     val entry = c.entry
     val backend = c.backend
     val turns = c.thread?.turns.orEmpty()
-    val loggedOut = backend?.account?.state == LoginState.LOGGED_OUT
+    // Includes a running login and an unreadable account, so the login surface stays until sign-in.
+    val loggedOut = LoginView.needsLogin(backend?.account)
     val process = backend?.process
     val narrow = frame.placement == PanelPlacement.AUX
     LaunchedEffect(entry?.backend, c.available) {

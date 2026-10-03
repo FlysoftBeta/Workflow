@@ -33,6 +33,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -54,7 +58,10 @@ import top.flysoftbeta.workflow.agent.model.BackendKind
 import top.flysoftbeta.workflow.agent.model.ConversationEntry
 import top.flysoftbeta.workflow.agent.model.LoginFlow
 import top.flysoftbeta.workflow.agent.model.LoginMethod
+import top.flysoftbeta.workflow.agent.model.LoginPhase
 import top.flysoftbeta.workflow.agent.model.LoginState
+import top.flysoftbeta.workflow.agent.model.LoginView
+import top.flysoftbeta.workflow.agent.model.isPending
 import top.flysoftbeta.workflow.agent.model.ProcessState
 import top.flysoftbeta.workflow.ui.design.CompositeMenu
 import top.flysoftbeta.workflow.ui.design.InlineError
@@ -94,7 +101,7 @@ internal fun StartPane(c: ConversationController, modifier: Modifier) {
         val account = c.backend?.account
         when {
             entry.backend !in available -> NeedsEnvironmentBody(c, available)
-            account?.state == LoginState.LOGGED_OUT || account?.state == LoginState.LOGGING_IN && account.login != null -> LoginBody(c)
+            LoginView.needsLogin(account) -> LoginBody(c)
             c.backend?.process is ProcessState.Failed -> InlineError(
                 "${ChatText.backendName(entry.backend)} 未能启动", Modifier.widthIn(max = 480.dp),
                 listOf(TextAction("重试") { c.retryBackend() }),
@@ -143,12 +150,18 @@ internal fun LoginPane(c: ConversationController, modifier: Modifier) {
     }
 }
 
-/** Compact prompt above the composer when an existing conversation's backend is logged out. */
+/** Compact prompt above the composer while an existing conversation's backend needs sign-in; it stays during a login. */
 @Composable
 internal fun LoginPrompt(c: ConversationController, modifier: Modifier) {
     var open by remember { mutableStateOf(false) }
     val name = ChatText.backendName(c.entry?.backend ?: return)
-    InlineError("$name 未登录", modifier, listOf(TextAction("登录") { open = true }))
+    val account = c.backend?.account ?: return
+    val message = when (val phase = LoginView.phase(account)) {
+        is LoginPhase.Starting, is LoginPhase.Waiting, is LoginPhase.Terminal -> "正在登录 $name"
+        is LoginPhase.Idle -> if (account.state == LoginState.UNKNOWN && phase.failure == null) "无法确认 $name 登录状态" else "$name 未登录"
+        else -> "$name 未登录"
+    }
+    InlineError(message, modifier, listOf(TextAction(if (account.login.isPending) "继续" else "登录") { open = true }))
     if (open) {
         AlertDialog(
             onDismissRequest = { open = false },
@@ -158,65 +171,104 @@ internal fun LoginPrompt(c: ConversationController, modifier: Modifier) {
     }
 }
 
-/** Login states inline (docs/ux/README.md §6 "居中 [登录 Codex]"): device code first, browser and API key as alternatives. */
+/**
+ * Login phases inline (docs/ux/conversations.md "Signing in"): starting, waiting for the browser with
+ * cancel, failure with Retry, and an unreadable account with Check again. Device code is the primary method.
+ */
 @Composable
 private fun LoginBody(c: ConversationController) {
     val entry = c.entry ?: return
     val kind = entry.backend
     val name = ChatText.backendName(kind)
     val colors = WorkflowTheme.colors
-    val flow = c.backend?.account?.login
+    val account = c.backend?.account ?: return
+    val phase = LoginView.phase(account)
     var apiKey by remember { mutableStateOf<String?>(null) }
     val context = c.context.appContext
     val chatConfiguration by c.hub.configuration.collectAsState()
     fun open(url: String) = runCatching {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
+    // Returning from the browser re-reads the account a bounded number of times.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle, c) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) c.recheckAfterResume() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     Column(Modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        when (flow) {
-            is LoginFlow.DeviceCode -> {
-                Text("在浏览器中打开下面的链接，并输入代码", style = WorkflowTheme.text.body, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        flow.verificationUrl, Modifier.weight(1f, fill = false).clip(WorkflowShapes.sm).clickable { open(flow.verificationUrl) }.padding(4.dp),
-                        style = WorkflowTheme.text.body, color = colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                    WfIconButton(Sym.OpenInNew, "打开链接", { open(flow.verificationUrl) })
+        c.loginProblem?.let { problem ->
+            InlineError("登录操作没有完成", Modifier.fillMaxWidth(), listOf(TextAction("重新检查") { c.recheckAccount() }))
+            Detail(problem)
+            Spacer(Modifier.height(8.dp))
+        }
+        when (phase) {
+            is LoginPhase.Starting -> Busy("正在开始登录…") { c.cancelLogin(phase.attemptId) }
+            is LoginPhase.Waiting -> when (val flow = phase.flow) {
+                is LoginFlow.DeviceCode -> {
+                    Text("在浏览器中打开下面的链接，并输入代码", style = WorkflowTheme.text.body, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            flow.verificationUrl, Modifier.weight(1f, fill = false).clip(WorkflowShapes.sm).clickable { open(flow.verificationUrl) }.padding(4.dp),
+                            style = WorkflowTheme.text.body, color = colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        WfIconButton(Sym.OpenInNew, "打开链接", { open(flow.verificationUrl) })
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(flow.userCode, style = WorkflowTheme.text.mono.copy(fontSize = 26.sp, lineHeight = 32.sp, letterSpacing = 2.sp), color = colors.onSurface)
+                        WfIconButton(Sym.ContentCopy, "复制代码", { c.copy(flow.userCode) })
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Busy("等待确认…") { flow.loginId?.let(c::cancelLogin) }
+                    CheckNote(phase.checkError)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(flow.userCode, style = WorkflowTheme.text.mono.copy(fontSize = 26.sp, lineHeight = 32.sp, letterSpacing = 2.sp), color = colors.onSurface)
-                    WfIconButton(Sym.ContentCopy, "复制代码", { c.copy(flow.userCode) })
+                is LoginFlow.Browser -> {
+                    Button(onClick = { open(flow.authUrl) }) { Text("在浏览器中继续") }
+                    Spacer(Modifier.height(8.dp))
+                    Busy("等待确认…") { flow.loginId?.let(c::cancelLogin) }
+                    CheckNote(phase.checkError)
                 }
-                Spacer(Modifier.height(8.dp))
-                Waiting { flow.loginId?.let(c::cancelLogin) }
+                else -> Unit
             }
-            is LoginFlow.Browser -> {
-                Button(onClick = { open(flow.authUrl) }) { Text("在浏览器中继续") }
-                Spacer(Modifier.height(8.dp))
-                Waiting { flow.loginId?.let(c::cancelLogin) }
-            }
-            is LoginFlow.Terminal -> {
+            is LoginPhase.Terminal -> {
                 Text("在终端中运行下面的命令完成登录", style = WorkflowTheme.text.body, color = colors.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(flow.argv.joinToString(" "), style = WorkflowTheme.text.mono, color = colors.onSurface)
-                    WfIconButton(Sym.ContentCopy, "复制命令", { c.copy(flow.argv.joinToString(" ")) })
+                    Text(phase.flow.argv.joinToString(" "), style = WorkflowTheme.text.mono, color = colors.onSurface)
+                    WfIconButton(Sym.ContentCopy, "复制命令", { c.copy(phase.flow.argv.joinToString(" ")) })
                 }
+                TextButton(onClick = c::recheckAccount) { Text("我已完成登录") }
             }
-            else -> {
-                val failed = (flow as? LoginFlow.Completed)?.takeIf { !it.success && it.error != "cancelled" }?.error
-                    ?: (flow as? LoginFlow.Progress)?.error
-                if (failed != null) {
-                    InlineError("登录没有完成", Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(8.dp))
-                }
+            LoginPhase.SignedIn -> Unit
+            LoginPhase.Checking, is LoginPhase.Idle -> {
                 val methods = chatConfiguration.loginMethods[kind].orEmpty()
                 val primary = methods.firstOrNull()
+                val ready = c.backend?.process is ProcessState.Ready
+                val idle = phase as? LoginPhase.Idle
+                when {
+                    idle?.failure != null -> {
+                        val retry = c.lastLoginMethod ?: primary
+                        InlineError("登录没有完成", Modifier.fillMaxWidth(), listOfNotNull(
+                            retry?.takeIf { ready && !c.loginStarting }?.let { method -> TextAction("重试") { c.login(method) } },
+                            TextAction("重新检查") { c.recheckAccount() },
+                        ))
+                        Detail(idle.failure)
+                        Detail(idle.checkError?.let { "账户状态：$it" })
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    idle?.checkError != null -> {
+                        InlineError("无法读取 $name 账户状态", Modifier.fillMaxWidth(), listOf(TextAction("重试") { c.recheckAccount() }))
+                        Detail(idle.checkError)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
                 var more by remember { mutableStateOf(false) }
-                if (apiKey == null) {
-                    Button(onClick = { primary?.let { c.login(it) } }, enabled = primary != null && c.backend?.process is ProcessState.Ready) { Text("登录 $name") }
+                if (c.loginStarting) {
+                    Busy("正在开始登录…", onCancel = null)
+                } else if (apiKey == null) {
+                    Button(onClick = { primary?.let { c.login(it) } }, enabled = primary != null && ready) { Text("登录 $name") }
                     Box {
-                        TextButton(onClick = { more = true }) { Text("其他方式") }
+                        TextButton(onClick = { more = true }, enabled = ready) { Text("其他方式") }
                         CompositeMenu(
                             expanded = more, onDismissRequest = { more = false },
                             anchorPosition = MenuAnchorPosition.Below,
@@ -227,7 +279,7 @@ private fun LoginBody(c: ConversationController) {
                             })),
                         )
                     }
-                    InlineLoading(c.backend?.process !is ProcessState.Ready)
+                    InlineLoading(!ready || phase is LoginPhase.Checking)
                 } else {
                     OutlinedTextField(
                         value = apiKey ?: "", onValueChange = { apiKey = it }, singleLine = true,
@@ -242,7 +294,7 @@ private fun LoginBody(c: ConversationController) {
                             val method = methods.first { it == LoginMethod.CODEX_API_KEY || it == LoginMethod.CLAUDE_API_KEY }
                             c.login(method, apiKey)
                             apiKey = null
-                        }, enabled = !apiKey.isNullOrBlank()) { Text("登录") }
+                        }, enabled = !apiKey.isNullOrBlank() && ready) { Text("登录") }
                     }
                 }
             }
@@ -250,14 +302,31 @@ private fun LoginBody(c: ConversationController) {
     }
 }
 
+/** A secondary line under a login error or waiting row; vendor text is shown verbatim, never credentials. */
 @Composable
-private fun Waiting(onCancel: () -> Unit) {
+private fun Detail(text: String?) {
+    if (text.isNullOrBlank()) return
+    Text(text, Modifier.fillMaxWidth().padding(top = 4.dp), style = WorkflowTheme.text.caption, color = WorkflowTheme.colors.onSurfaceVariant, textAlign = TextAlign.Center)
+}
+
+/** A failing background account check while waiting; the attempt continues. */
+@Composable
+private fun CheckNote(checkError: String?) {
+    checkError ?: return
+    Detail("暂时无法确认登录状态，正在重试：$checkError")
+}
+
+/** A running login step with an indicator and, when the step can be cancelled, a Cancel action. */
+@Composable
+private fun Busy(label: String, onCancel: (() -> Unit)?) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         InlineLoading(true)
         Spacer(Modifier.width(8.dp))
-        Text("等待确认…", style = WorkflowTheme.text.label, color = WorkflowTheme.colors.onSurfaceVariant)
-        Spacer(Modifier.width(8.dp))
-        TextButton(onClick = onCancel) { Text("取消") }
+        Text(label, style = WorkflowTheme.text.label, color = WorkflowTheme.colors.onSurfaceVariant)
+        if (onCancel != null) {
+            Spacer(Modifier.width(8.dp))
+            TextButton(onClick = onCancel) { Text("取消") }
+        }
     }
 }
 

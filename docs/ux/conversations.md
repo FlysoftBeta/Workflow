@@ -57,6 +57,22 @@ The send control is a 36dp visual circle within the minimum standalone touch tar
 
 Queued messages appear as removable chips above the input. Pending approvals remain visually distinct from the composer's send action.
 
+## Signing in
+
+A new conversation shows sign-in below the backend choice when the selected backend is not signed in. An existing conversation shows a compact prompt above the composer that opens the same content in a dialog. The prompt reads Signing in to Codex while an attempt runs, so the dialog and its device code stay available until sign-in completes. Phases come from the shared `LoginView` projection described in the [Codex login state machine](../engine/chat.md#codex-login-state-machine).
+
+| Phase | Presentation |
+| --- | --- |
+| Checking | Nothing besides a small loading indicator; the account has not been read yet |
+| Idle | A filled Sign in button for the primary method (device code for Codex) and Other methods. The button is disabled until the backend is ready |
+| Starting | Starting sign-in… with a loading indicator and Cancel, from the tap until the device code or browser link arrives |
+| Waiting | The verification link and large monospaced code, or Continue in browser, followed by Waiting for confirmation… with Cancel. If background checks fail, a caption says the state cannot be confirmed yet and retries, with the reason |
+| Failed | Sign-in did not complete, with the reason underneath, Retry for the last method and Check again |
+| Account unreadable | Cannot read the account, with the reason and Retry, above the sign-in buttons |
+| Signed in | The sign-in content disappears and the composer becomes available |
+
+Sign-in moves to Signed in as soon as Codex reports success or an account read finds credentials. A later empty or failed read does not undo it. Cancelling is immediate, even when Codex answers slowly, and is never shown as a failure. Returning to the app while sign-in content is visible re-reads the account after 0, 2 and 5 seconds, so a completion that arrived while the browser was in front still appears. Errors that come from the Engine connection rather than Codex appear above the sign-in content with Check again. Reasons are vendor text and never include credentials.
+
 ## Model and reasoning selection
 
 The model chip opens a popover anchored above it, 320dp wide, with `xl` corners, highest-container fill, and elevation 3. Its 36dp header names the current model and reasoning level, includes a full-list chevron, and shows a speed control only when supported. The slider has a 24dp track, a 4×44dp bar handle, and 6dp gaps between model segments. Micro labels identify the segments; if space is insufficient, only the selected model's label remains.
