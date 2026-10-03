@@ -28,7 +28,6 @@ sealed interface ConnectionStatus {
 data class WorkspaceConnectionSession(
     val token: String,
     val profile: WorkspaceConnectionConfig,
-    val root: File,
     val rpc: WorkspaceRpc,
     val store: RemoteWorkspaceStore,
     val scope: CoroutineScope,
@@ -108,7 +107,6 @@ class WorkspaceConnectionManager private constructor(context: Context) {
                 configured.value = profiles
                 loadLocalConfig(normalized.id)
                 LocalRuntimeService.retainEnvironment(app, token).getOrThrow()
-                val root = File(app.filesDir, "workspaces/${profile.id}")
                 val transport = bootstrapper.connect(normalized)
                 sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
                 rpc = WorkspaceRpc(transport, sessionScope)
@@ -116,7 +114,7 @@ class WorkspaceConnectionManager private constructor(context: Context) {
                 store = connectedStore
                 val ready = withTimeout(45_000) { connectedStore.awaitReady() }
                 check(ready.status == StoreStatus.READY) { ready.failure ?: (transport as? EmbeddedWorkspaceTransport)?.diagnostic()?.ifBlank { null } ?: "工作区未能启动" }
-                val session = WorkspaceConnectionSession(token, normalized, root, rpc, connectedStore, sessionScope)
+                val session = WorkspaceConnectionSession(token, normalized, rpc, connectedStore, sessionScope)
                 refreshLocalConfig(session)
                 check(session.rpc.failure.value == null && session.store.state.value.status == StoreStatus.READY) { "工作区连接已断开" }
                 WorkspaceNetworkReporter.attach(app, session)

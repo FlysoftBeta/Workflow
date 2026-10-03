@@ -10,7 +10,6 @@ import top.flysoftbeta.workflow.core.store.WorkspaceStore
 import top.flysoftbeta.workflow.platform.agent.AgentHub
 import top.flysoftbeta.workflow.platform.agent.ClaudeCodeInstaller
 import top.flysoftbeta.workflow.platform.engine.EngineController
-import java.io.File
 import java.time.ZoneId
 
 /**
@@ -34,8 +33,6 @@ object AppGraph {
     @Volatile private var hub: AgentHub? = null
     @Volatile private var engine: EngineController? = null
     @Volatile private var claude: ClaudeCodeInstaller? = null
-
-    fun workspaceRoot(context: Context): File = top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionManager.get(context).requireSession().root
 
     /** The zone used for timeline buckets ("今天 / 昨天 / 本周 / 更早"). */
     fun zone(): ZoneId = ZoneId.systemDefault()

@@ -136,7 +136,7 @@ class WorkbenchEngineAcceptanceTest {
         // Test-only external actor, outside app commands, to exercise the true on-disk conflict boundary.
         compose.runOnUiThread { editor.editorView!!.setSelection(0, 0); editor.editorView!!.commitText("Draft ") }
         compose.waitUntil(10_000) { store.state.value.drafts[path] != null }
-        File(manager.requireSession().root, path).writeText("External version\n")
+        File(File(compose.activity.filesDir, "workspaces/${manager.requireSession().profile.id}"), path).writeText("External version\n")
         runBlocking { store.runMaintenance() }
         compose.waitUntil(10_000) { shown("磁盘版本已更改") }
         assertTrue(runBlocking { store.saveFile(path) } is SaveResult.Conflict)
