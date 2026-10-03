@@ -113,8 +113,7 @@ class TerminalTouchAcceptanceTest {
         assertTrue("thumb tracks the finger 1:1 (fraction $middle)", abs(middle - 0.5) < 0.03)
         // The keyboard closes under the finger: the page grows and remaps, but the drag continues.
         val shrunk = height(page)
-        onMain { host.activity.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(page.windowToken, 0) }
-        await("keyboard closed mid-drag") { height(page) > shrunk }
+        closeKeyboard(host, shrunk)
         SystemClock.sleep(300)
         finger.move(track.copy(y = track.y - 40), steps = 16)
         await("thumb reached the first rows") { value(page) < max(page) * 0.02 }
@@ -200,9 +199,7 @@ class TerminalTouchAcceptanceTest {
         openKeyboard(host)
         Finger(page, cellPoint(page, events, 8.5, 1.5)).apply { SystemClock.sleep(700); up() }
         await("selection with keyboard open") { events.selection.get() == "line" }
-        val withKeyboard = height(page)
-        onMain { host.activity.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(page.windowToken, 0) }
-        await("keyboard closed") { height(page) > withKeyboard }
+        closeKeyboard(host, height(page))
         SystemClock.sleep(500)
         assertEquals("line", events.selection.get())
         assertEquals("true", js(page, "Array.from(document.querySelectorAll('.workflow-selection-handle')).every(x => !x.hidden)"))
@@ -223,6 +220,13 @@ class TerminalTouchAcceptanceTest {
             assertTrue("teardrop handle drawn at $screen", probe.hasColor(screenshot, screen, color))
         }
         assertNotNull("platform Copy item", probe.toolbarItem(page.context.getString(android.R.string.copy)))
+    }
+
+    /** Asks the IME to hide until the adjustResize window grows back; a single request can race the IME. */
+    private fun closeKeyboard(host: Host, withKeyboard: Int) = await("soft keyboard closed") {
+        onMain { host.activity.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(host.page.windowToken, 0) }
+        SystemClock.sleep(300)
+        height(host.page) > withKeyboard
     }
 
     /** The page reports its fitted size asynchronously; wait until it stops changing. */
