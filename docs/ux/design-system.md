@@ -100,3 +100,5 @@ Tabs expose the tab role and announce selected and unsaved states. Splitters are
 | Ctrl+N / Ctrl+Shift+N | New file / New conversation |
 
 Composer Enter behavior and the prohibition on Enter approving requests are specified in [Conversations](conversations.md). Keyboard availability only adds shortcuts; it never removes touch actions.
+
+Elevated menus reserve 12dp of transparent space around their surfaces inside popup and scroll bounds. This keeps shadows from ending at a hard viewport edge; the same allowance applies to list menus, nested menus, and model popovers.

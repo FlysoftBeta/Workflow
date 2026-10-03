@@ -206,8 +206,9 @@ private fun PermissionChip(c: ConversationController) {
         CompositeMenu(
             expanded = open, onDismissRequest = { open = false }, anchorPosition = MenuAnchorPosition.Above,
             groups = listOf(MenuGroup("permissions", PermissionPreset.entries.map { preset ->
-                MenuEntry.Action(preset.name, ChatText.permissionLabel(preset) + " · " + ChatText.permissionDescription(preset),
-                    if (preset == c.permissions) Sym.Check else null) { c.setPermissionPreset(preset) }
+                MenuEntry.Action(preset.name, ChatText.permissionLabel(preset),
+                    if (preset == c.permissions) Sym.Check else null,
+                    supportingText = ChatText.permissionDescription(preset)) { c.setPermissionPreset(preset) }
             })),
         )
     }

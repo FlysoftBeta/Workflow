@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.dp
 import top.flysoftbeta.workflow.ui.design.icons.Sym
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
 
+// Keep elevated surfaces inside the popup and scroll viewport, including their shadows.
+internal val MenuShadowPadding = 12.dp
+
 /** One entry of a [CompositeMenu]. Every entry carries an 18dp icon (docs/ui.md §2.2). */
 @Immutable
 sealed interface MenuEntry {
@@ -62,6 +65,7 @@ sealed interface MenuEntry {
         val destructive: Boolean = false,
         /** Shown right-aligned only while a hardware keyboard is attached, e.g. "Ctrl+S". */
         val shortcut: String? = null,
+        val supportingText: String? = null,
         val onClick: () -> Unit,
     ) : MenuEntry
 
@@ -134,7 +138,7 @@ private fun MenuGroups(groups: List<MenuGroup>, style: MenuGroupStyle, showShort
     val content: @Composable (MenuGroup) -> Unit = { group ->
         group.entries.forEach { entry -> MenuEntryRow(entry, showShortcuts, dismiss) }
     }
-    Column(Modifier.widthIn(min = 180.dp, max = 320.dp).verticalScroll(rememberScrollState())) {
+    Column(Modifier.widthIn(min = 180.dp, max = 320.dp).verticalScroll(rememberScrollState()).padding(MenuShadowPadding)) {
         when (style) {
             MenuGroupStyle.Segmented -> visible.forEachIndexed { index, group ->
                 DropdownMenuGroup(
@@ -198,10 +202,13 @@ private fun MenuEntryRow(entry: MenuEntry, showShortcuts: Boolean, dismiss: () -
                 Spacer(Modifier.size(dimens.iconSmall))
             }
             Spacer(Modifier.width(12.dp))
-            Text(
-                entry.label, Modifier.weight(1f), style = WorkflowTheme.text.body, color = color,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                Text(entry.label, style = WorkflowTheme.text.body, color = color,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                (entry as? MenuEntry.Action)?.supportingText?.let { description ->
+                    Text(description, style = WorkflowTheme.text.caption, color = colors.onSurfaceVariant)
+                }
+            }
             when {
                 entry is MenuEntry.Submenu -> SymbolIcon(Sym.ChevronRight, null, size = dimens.iconSmall, tint = iconColor)
                 entry is MenuEntry.Action && showShortcuts && entry.shortcut != null -> Text(

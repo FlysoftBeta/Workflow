@@ -4,11 +4,11 @@ Launcher and service panels use the same [design system](design-system.md) as Wo
 
 ## Launcher and Apps
 
-Launcher uses a `surface` background with a 40dp corner row and no title, slogan, or Continue working card. Its grid is top-aligned and horizontally centered. Tiles are 88×92dp with a 56dp icon and caption. Columns use a nominal 104dp pitch, with at most ten columns and a maximum grid width of 976dp. Available width determines the actual column count.
+Launcher uses a `surface` background with a 40dp corner row and no title, slogan, or Continue working card. The Session control has a transparent background and a 48dp touch target. Its grid is top-aligned and horizontally centered. Tiles are 88×92dp with a 56dp icon and caption. Columns use a nominal 104dp pitch, with at most ten columns and a maximum grid width of 976dp. Available width determines the actual column count.
 
 Built-in glyphs sit on primary-container tiles. A name collision with a third-party app adds the Workflow qualifier, such as Workflow Settings. Pending agent decisions add an 8dp dot to Workbench. Third-party app icons display as supplied by the installed app.
 
-The long-press menu is anchored to the tile and includes icons. It offers Open, then Open in separate Session for Proxy or Settings, or New Session for Workbench. Third-party entries also offer App info and Remove from Apps. Built-in Apps remain reorderable but cannot be removed. After a long press, movement beyond touch slop starts reordering: the dragged tile scales to 1.08 with a shadow and other tiles spring aside.
+The long-press menu is anchored to the tile and includes icons. It offers Open, then Open in separate Session for Proxy or Settings, or New Session for Workbench. Third-party entries also offer App info and Remove from Apps. Built-in Apps remain reorderable but cannot be removed. After a long press, movement beyond touch slop starts reordering: the dragged tile scales to 1.08 with a subtle shadow around the icon only and other tiles spring aside.
 
 Add app opens a 560dp-wide sheet with a maximum height of 80% at window widths of at least 600dp; narrower windows use full screen. A 40dp search field sits above 44dp rows containing a 32dp icon, app name, and checkbox. Changes apply immediately, and Done is at the top right. Package names are absent. Only duplicate names receive a caption identifying their source.
 

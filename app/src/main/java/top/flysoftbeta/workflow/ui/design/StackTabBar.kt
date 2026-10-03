@@ -455,14 +455,13 @@ fun SessionChip(label: String, onClick: () -> Unit, onLongClick: () -> Unit, mod
             .heightIn(min = WorkflowTheme.dimens.iconButtonTouch)
             .widthIn(min = 64.dp, max = 120.dp)
             .clip(WorkflowShapes.sm)
-            .background(WorkflowTheme.colors.surfaceContainerHigh)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = androidx.compose.material3.ripple(),
                 onClick = onClick,
                 onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onLongClick() },
             )
-            .padding(start = 8.dp, end = 2.dp),
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

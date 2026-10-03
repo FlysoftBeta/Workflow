@@ -68,6 +68,7 @@ fun ItemListMenu(
     DropdownMenuPopup(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
+        modifier = Modifier.padding(MenuShadowPadding),
         popupPositionProvider = MenuDefaults.rememberDropdownMenuPopupPositionProvider(anchorPosition),
     ) {
         DropdownMenuGroup(

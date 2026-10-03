@@ -236,6 +236,7 @@ fun ModelEffortPopover(
     DropdownMenuPopup(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
+        modifier = Modifier.padding(MenuShadowPadding),
         popupPositionProvider = MenuDefaults.rememberDropdownMenuPopupPositionProvider(MenuAnchorPosition.Above),
     ) {
         ModelEffortPanel(models, selection, onSelectionChange, onOpenModelList, speedActive, onSpeedToggle)

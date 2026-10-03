@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +33,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -58,6 +61,8 @@ import top.flysoftbeta.workflow.ui.design.dnd.DRAG_PICKUP_MILLIS
 import top.flysoftbeta.workflow.ui.design.dnd.DndGeometry
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowShapes
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
+
+private val LocalAppTileDragging = staticCompositionLocalOf { false }
 
 /** Launcher tile geometry (docs/ui.md §3.1). */
 object AppGridMetrics {
@@ -98,7 +103,7 @@ fun AppGridCell(
             .padding(top = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box {
+        Box(Modifier.shadow(if (LocalAppTileDragging.current) 3.dp else 0.dp, WorkflowShapes.lg, clip = false)) {
             icon()
             if (badge) Box(Modifier.align(Alignment.TopEnd).offset(2.dp, (-2).dp).size(8.dp).background(WorkflowTheme.colors.tertiary, CircleShape))
         }
@@ -183,7 +188,6 @@ fun <T> ReorderableAppGrid(
                             .zIndex(if (dragging) 1f else 0f)
                             .graphicsLayer {
                                 scaleX = lift; scaleY = lift
-                                shadowElevation = if (dragging) 6.dp.toPx() else 0f
                                 shape = WorkflowShapes.md
                                 clip = false
                             }
@@ -240,7 +244,9 @@ fun <T> ReorderableAppGrid(
                                     }
                                 }
                             },
-                    ) { cell(item) }
+                    ) {
+                        CompositionLocalProvider(LocalAppTileDragging provides dragging) { cell(item) }
+                    }
                 }
             }
             if (trailing != null) {

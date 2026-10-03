@@ -44,7 +44,7 @@ The composer is a high-container card with `xl` corners and an 8dp outer margin,
 
 Add opens an anchored menu with Camera, Photos, Device files, then Workspace files. The workspace option opens a tree sheet with checkboxes and an Add (n) action. Its camera, photo, and device-file behavior is shared with explorer upload.
 
-The attachment strip appears only when needed and is 56dp high. Images use 56×56dp thumbnails; files use 40dp chips with names at most 160dp wide. A 20dp close control sits at the upper right. Uploading adds a progress ring; failure adds an error border and Retry. The permission chip reports the current access mode and opens its mode menu. Full access uses warning color.
+The attachment strip appears only when needed and is 56dp high. Images use 56×56dp thumbnails; files use 40dp chips with names at most 160dp wide. A 20dp close control sits at the upper right. Uploading adds a progress ring; failure adds an error border and Retry. The permission chip reports the current access mode and opens its mode menu. Each mode has a separate wrapping description below its title, so the complete permission behavior remains readable on narrow screens. Full access uses warning color.
 
 The send control is a 36dp visual circle within the minimum standalone touch target. It changes shape between Send and Stop using Expressive motion.
 
