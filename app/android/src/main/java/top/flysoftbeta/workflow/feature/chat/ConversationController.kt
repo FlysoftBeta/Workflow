@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -29,6 +30,7 @@ import top.flysoftbeta.workflow.agent.model.BackendStatus
 import top.flysoftbeta.workflow.agent.model.ConversationEntry
 import top.flysoftbeta.workflow.agent.model.LoginMethod
 import top.flysoftbeta.workflow.agent.model.LoginState
+import top.flysoftbeta.workflow.agent.model.LoginView
 import top.flysoftbeta.workflow.agent.model.MessagePhase
 import top.flysoftbeta.workflow.agent.model.PendingRequest
 import top.flysoftbeta.workflow.agent.model.PermissionPreset
@@ -388,9 +390,69 @@ class ConversationController(
 
     fun setBackend(kind: BackendKind) = launchCatching { hub.setBackend(conversationId, kind) }
 
-    fun login(method: LoginMethod, secret: String? = null) = launchCatching { hub.login(entry?.backend ?: return@launchCatching, method, secret) }
+    /** The login command is in flight; the Engine's `Progress` flow may not have arrived yet. */
+    var loginStarting by mutableStateOf(false)
+        private set
+    /** A login, cancel or account check command that failed before the Engine recorded a flow. */
+    var loginProblem by mutableStateOf<String?>(null)
+        private set
+    /** The method of the last interactive attempt, offered again by Retry. Secrets are never kept. */
+    var lastLoginMethod by mutableStateOf<LoginMethod?>(null)
+        private set
+    private var recheckJob: Job? = null
 
-    fun cancelLogin(loginId: String) = launchCatching { hub.cancelLogin(entry?.backend ?: return@launchCatching, loginId) }
+    /** Vendor failures arrive as a failed flow; only Engine or transport failures land in [loginProblem]. */
+    fun login(method: LoginMethod, secret: String? = null) {
+        val kind = entry?.backend ?: return
+        if (loginStarting) return
+        loginStarting = true
+        loginProblem = null
+        if (secret == null) lastLoginMethod = method
+        context.scope.launch {
+            try { hub.login(kind, method, secret) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { loginProblem = error.message ?: "无法开始登录" }
+            finally { loginStarting = false }
+        }
+    }
+
+    fun cancelLogin(loginId: String) {
+        val kind = entry?.backend ?: return
+        context.scope.launch {
+            try { hub.cancelLogin(kind, loginId) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { loginProblem = error.message ?: "无法取消登录" }
+        }
+    }
+
+    /** Reads the account again; a failed read is shown from the account state, not here. */
+    fun recheckAccount() {
+        val kind = entry?.backend ?: return
+        loginProblem = null
+        context.scope.launch {
+            try { hub.refreshAccount(kind) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { loginProblem = error.message ?: "无法检查账户状态" }
+        }
+    }
+
+    /**
+     * The app returned to the foreground while a login surface is visible (for example from the browser):
+     * re-read the account a bounded number of times instead of relying on a notification alone.
+     */
+    fun recheckAfterResume() {
+        val kind = entry?.backend ?: return
+        if (recheckJob?.isActive == true || !LoginView.shouldRecheck(backend?.account)) return
+        recheckJob = context.scope.launch {
+            for (wait in LoginView.RESUME_RECHECK_DELAYS_MS) {
+                delay(wait)
+                if (!LoginView.shouldRecheck(backend?.account)) return@launch
+                try { hub.refreshAccount(kind) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* The watch recovers the projection; the next re-read retries. */ }
+            }
+        }
+    }
 
     fun retryBackend() {
         problem = null

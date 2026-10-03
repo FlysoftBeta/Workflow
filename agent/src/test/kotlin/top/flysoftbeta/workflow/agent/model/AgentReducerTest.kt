@@ -238,4 +238,58 @@ class AgentReducerTest {
         assertEquals(LoginState.LOGGED_IN, done.backend(B).account.state)
         assertNull(done.backend(B).account.login)
     }
+
+    private val device = LoginFlow.DeviceCode("l1", "https://auth.example/device", "TEST-CODE")
+    private fun AgentState.account() = backend(B).account
+
+    @Test fun nullReadAfterSuccessfulCompletionDoesNotResetLogin() {
+        val completed = fold(E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT)), E.LoginChanged(B, device), E.LoginChanged(B, LoginFlow.Completed("l1", true, null)))
+        val lagging = fold(E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT, requiresAuth = true)), from = completed)
+        assertEquals(LoginState.LOGGED_IN, lagging.account().state)
+        assertEquals(LoginFlow.Completed("l1", true, null), lagging.account().login)
+        val read = fold(E.AccountChanged(B, AccountState(LoginState.LOGGED_IN, "chatgpt", email = "tester@example.test")), from = lagging)
+        assertEquals("tester@example.test", read.account().email)
+        assertNull(read.account().login)
+    }
+
+    @Test fun completionBeforeOrAfterThePollConvergesToLoggedIn() {
+        val pending = fold(E.LoginChanged(B, device))
+        val notificationFirst = fold(E.LoginChanged(B, LoginFlow.Completed("l1", true, null)), E.AccountChanged(B, AccountState(LoginState.LOGGED_IN, "chatgpt")), from = pending)
+        val pollFirst = fold(E.AccountChanged(B, AccountState(LoginState.LOGGED_IN, "chatgpt")), E.LoginChanged(B, LoginFlow.Completed("l1", true, null)), from = pending)
+        assertEquals(LoginState.LOGGED_IN, notificationFirst.account().state)
+        assertEquals(LoginState.LOGGED_IN, pollFirst.account().state)
+    }
+
+    @Test fun loggedOutReadWhilePendingKeepsTheAttempt() {
+        val s = fold(E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT)), E.LoginChanged(B, device), E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT)))
+        assertEquals(LoginState.LOGGING_IN, s.account().state)
+        assertEquals(device, s.account().login)
+        val starting = fold(E.LoginChanged(B, LoginFlow.Progress("attempt:1", emptyList())), E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT)))
+        assertEquals(LoginState.LOGGING_IN, starting.account().state)
+    }
+
+    @Test fun checkFailureIsSeparateFromAccountState() {
+        val failed = fold(E.AccountCheckFailed(B, "workspace routing discovery timed out"))
+        assertEquals(LoginState.UNKNOWN, failed.account().state)
+        assertEquals("workspace routing discovery timed out", failed.account().checkError)
+        assertNull(fold(E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT)), from = failed).account().checkError)
+        assertNull(fold(E.LoginChanged(B, device), from = failed).account().checkError)
+        val waiting = fold(E.LoginChanged(B, device), E.AccountCheckFailed(B, "slow"))
+        assertEquals(LoginState.LOGGING_IN, waiting.account().state)
+        assertEquals("slow", waiting.account().checkError)
+    }
+
+    @Test fun failedLoginStaysVisibleAfterLoggedOutRead() {
+        val s = fold(E.LoginChanged(B, device), E.LoginChanged(B, LoginFlow.Completed("l1", false, "workspace routing discovery failed")),
+            E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT)))
+        assertEquals(LoginState.LOGGED_OUT, s.account().state)
+        assertEquals("workspace routing discovery failed", (s.account().login as LoginFlow.Completed).error)
+    }
+
+    @Test fun newProcessReadsAccountAfresh() {
+        val confirmed = fold(E.LoginChanged(B, device), E.LoginChanged(B, LoginFlow.Completed("l1", true, null)))
+        val restarted = fold(E.ProcessChanged(B, ProcessState.Starting), E.AccountChanged(B, AccountState(LoginState.LOGGED_OUT)), from = confirmed)
+        assertNull(restarted.account().login)
+        assertEquals(LoginState.LOGGED_OUT, restarted.account().state)
+    }
 }

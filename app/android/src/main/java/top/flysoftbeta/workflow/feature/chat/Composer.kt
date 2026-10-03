@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import top.flysoftbeta.workflow.agent.SendMode
 import top.flysoftbeta.workflow.agent.model.LoginState
+import top.flysoftbeta.workflow.agent.model.LoginView
 import top.flysoftbeta.workflow.agent.model.PermissionPreset
 import top.flysoftbeta.workflow.agent.model.ProcessState
 import top.flysoftbeta.workflow.agent.model.SliderPosition
@@ -140,7 +141,7 @@ private fun placeholder(c: ConversationController): String = when {
 internal fun backendReady(c: ConversationController): Boolean {
     val backend = c.backend ?: return false
     if (!c.available || c.reviewerBlocked) return false
-    if (backend.account.state == LoginState.LOGGED_OUT || backend.account.state == LoginState.LOGGING_IN) return false
+    if (backend.account.state == LoginState.LOGGED_OUT || backend.account.state == LoginState.LOGGING_IN || LoginView.needsLogin(backend.account)) return false
     return backend.process is ProcessState.Ready && c.selection != null
 }
 
