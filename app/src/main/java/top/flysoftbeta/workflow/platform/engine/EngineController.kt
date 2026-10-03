@@ -3,7 +3,6 @@ package top.flysoftbeta.workflow.platform.engine
 import android.content.Context
 import java.io.File
 import java.io.IOException
-import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -29,11 +28,6 @@ sealed interface EnvironmentHealth {
     }
 }
 class EnvironmentUnavailableException(val health: EnvironmentHealth, message: String) : IOException(message)
-interface EnvironmentRestartListener {
-    suspend fun beforeRestart() {}
-    suspend fun afterRestart() {}
-}
-
 /** Read-only health projection and commands; generation/lifecycle/IO are entirely server-owned. */
 class EngineController(context: Context, val scope: CoroutineScope, private val store: () -> WorkspaceStore) {
     val appContext = context.applicationContext
@@ -46,7 +40,6 @@ class EngineController(context: Context, val scope: CoroutineScope, private val 
         private set
     private var job: Job? = null
     private var lastLog = ""
-    private val listeners = CopyOnWriteArrayList<EnvironmentRestartListener>()
     private val restartLock = Mutex()
 
     @Synchronized fun start() {
@@ -91,16 +84,13 @@ class EngineController(context: Context, val scope: CoroutineScope, private val 
         try { rpc.request("environment.reconcile", mapOf("retry" to true)); refresh() }
         catch (e: Exception) { if (e is CancellationException) throw e; mutable.value = EnvironmentHealth.Failed("retry", e.message ?: "重试失败", null, health.value.usable) }
     } }
-    fun addRestartListener(listener: EnvironmentRestartListener) { listeners += listener }
     suspend fun restartEnvironment() = restartLock.withLock {
         try {
-            listeners.forEach { it.beforeRestart() }
             rpc.request("environment.restart", timeoutMs = 60_000)
         } finally {
-            // A failed activation still leaves the prior environment usable. Restore its adapters too.
+            // Engine decides whether activation and resource restoration are necessary.
             if (currentCoroutineContext().isActive) {
                 refresh()
-                if (health.value.usable) listeners.forEach { it.afterRestart() }
             }
         }
         Unit

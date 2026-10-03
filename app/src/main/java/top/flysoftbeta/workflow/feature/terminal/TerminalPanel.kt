@@ -82,7 +82,6 @@ class TerminalPanelProvider internal constructor(private val hostFactory: () -> 
     private val host by lazy(hostFactory)
 
     override fun create(panel: Panel, context: PanelContext): PanelController {
-        host.observe(context.store)
         return TerminalController((panel.target as PanelTarget.Terminal).terminalId, host, context)
     }
 
@@ -97,7 +96,7 @@ internal class TerminalController(
     private val appContext = context.appContext
     private val wrapper = MutableContextWrapper(appContext)
     private var view: TerminalWebView? = null
-    private var session by mutableStateOf(host.session(terminalId))
+    private var session by mutableStateOf<TerminalSession?>(host.attach(terminalId))
     /** The terminal this panel shows (null while unknown, e.g. after the process was recreated). */
     internal val terminalSession: TerminalSession? get() = session
     private var title by mutableStateOf<String?>(null)
@@ -109,7 +108,7 @@ internal class TerminalController(
     private var selection by mutableStateOf<Pair<String, IntOffset>?>(null)
     /** End offset of the output already written to the page, and the session generation it belongs to. */
     private var rendered = -1L
-    private var renderedGeneration = -1
+    private var renderedGeneration = -1L
 
     init {
         observeSession()
@@ -142,7 +141,7 @@ internal class TerminalController(
     )
 
     override val resourceMenu: List<MenuEntry> get() = listOf(
-        MenuEntry.Action("clear", "清屏", Sym.ClearAll) { view?.clearScreen(); session?.clearScrollback(); rendered = session?.scrollback?.endOffset ?: rendered },
+        MenuEntry.Action("clear", "清屏", Sym.ClearAll) { session?.clearScrollback() },
         MenuEntry.Action("rename", "重命名", Sym.Edit) { context.layout(LayoutOp.Focus(context.panelId)); renaming = true },
         MenuEntry.Action("restart", "重启", Sym.RestartAlt) { restart() },
         MenuEntry.Toggle("pinKeys", "常驻特殊键行", pinnedKeys) { pinned ->
@@ -152,11 +151,9 @@ internal class TerminalController(
     )
 
     private fun restart() {
-        val restarted = host.restart(terminalId, force = true)
+        val restarted = host.restart(terminalId)
         lastSize?.let { (rows, columns) -> restarted.resize(rows, columns) }
         if (restarted !== session) { session = restarted; observeSession() }
-        rendered = -1
-        view?.reset("")
     }
 
     // ---- Output --------------------------------------------------------------------------------------
@@ -165,9 +162,8 @@ internal class TerminalController(
     private fun pump() {
         val page = view?.takeIf { it.isReady } ?: return
         val current = session ?: return
-        val generation = current.generation.value
-        if (generation != renderedGeneration) { rendered = -1; renderedGeneration = generation }
-        val slice = current.scrollback.since(if (rendered < 0) Long.MIN_VALUE else rendered)
+        val (generation, slice) = current.outputSince(rendered, renderedGeneration)
+        renderedGeneration = generation
         if (slice.reset || rendered < 0) page.reset(slice.text) else page.write(slice.text)
         rendered = slice.endOffset
     }
@@ -396,7 +392,7 @@ internal class TerminalController(
             text = { OutlinedTextField(value, { value = it.take(80) }, singleLine = true) },
             confirmButton = {
                 TextButton(onClick = {
-                    session?.customTitle?.value = value.trim().ifEmpty { null }
+                    session?.rename(value.trim().ifEmpty { null })
                     renaming = false
                 }) { Text("确定") }
             },
