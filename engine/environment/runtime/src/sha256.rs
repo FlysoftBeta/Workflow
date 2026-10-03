@@ -1,167 +1,144 @@
 //! Streaming SHA-256 for the image format digest contract.
-//! Platform ABI specialization of the frozen runtime, ported to Rust.
-//! These are maintained Rust sources; the build does not compile or execute the C reference.
+//! Shared runtime logic; target ABI differences are selected explicitly with cfg.
 unsafe extern "C" {
     unsafe fn snprintf(
-        __buf: *mut ::core::ffi::c_char,
-        __size: size_t,
-        __fmt: *const ::core::ffi::c_char,
+        _: *mut ::core::ffi::c_char,
+        _: usize,
+        _: *const ::core::ffi::c_char,
         ...
-    ) -> ::core::ffi::c_int;
+    ) -> i32;
     unsafe fn memcpy(
         _: *mut ::core::ffi::c_void,
         _: *const ::core::ffi::c_void,
-        _: size_t,
+        _: usize,
     ) -> *mut ::core::ffi::c_void;
 }
-pub type size_t = usize;
-pub type uint8_t = u8;
-pub type uint32_t = u32;
-pub type uint64_t = u64;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct eng_sha256 {
-    pub h: [uint32_t; 8],
-    pub len: uint64_t,
-    pub buf: [uint8_t; 64],
-    pub n: size_t,
+    pub h: [u32; 8],
+    pub len: u64,
+    pub buf: [u8; 64],
+    pub n: usize,
 }
-static mut K: [uint32_t; 64] = [
-    0x428a2f98 as uint32_t,
-    0x71374491 as uint32_t,
-    0xb5c0fbcf as uint32_t,
-    0xe9b5dba5 as uint32_t,
-    0x3956c25b as uint32_t,
-    0x59f111f1 as uint32_t,
-    0x923f82a4 as uint32_t,
-    0xab1c5ed5 as uint32_t,
-    0xd807aa98 as uint32_t,
-    0x12835b01 as uint32_t,
-    0x243185be as uint32_t,
-    0x550c7dc3 as uint32_t,
-    0x72be5d74 as uint32_t,
-    0x80deb1fe as uint32_t,
-    0x9bdc06a7 as uint32_t,
-    0xc19bf174 as uint32_t,
-    0xe49b69c1 as uint32_t,
-    0xefbe4786 as uint32_t,
-    0xfc19dc6 as uint32_t,
-    0x240ca1cc as uint32_t,
-    0x2de92c6f as uint32_t,
-    0x4a7484aa as uint32_t,
-    0x5cb0a9dc as uint32_t,
-    0x76f988da as uint32_t,
-    0x983e5152 as uint32_t,
-    0xa831c66d as uint32_t,
-    0xb00327c8 as uint32_t,
-    0xbf597fc7 as uint32_t,
-    0xc6e00bf3 as uint32_t,
-    0xd5a79147 as uint32_t,
-    0x6ca6351 as uint32_t,
-    0x14292967 as uint32_t,
-    0x27b70a85 as uint32_t,
-    0x2e1b2138 as uint32_t,
-    0x4d2c6dfc as uint32_t,
-    0x53380d13 as uint32_t,
-    0x650a7354 as uint32_t,
-    0x766a0abb as uint32_t,
-    0x81c2c92e as uint32_t,
-    0x92722c85 as uint32_t,
-    0xa2bfe8a1 as uint32_t,
-    0xa81a664b as uint32_t,
-    0xc24b8b70 as uint32_t,
-    0xc76c51a3 as uint32_t,
-    0xd192e819 as uint32_t,
-    0xd6990624 as uint32_t,
-    0xf40e3585 as uint32_t,
-    0x106aa070 as uint32_t,
-    0x19a4c116 as uint32_t,
-    0x1e376c08 as uint32_t,
-    0x2748774c as uint32_t,
-    0x34b0bcb5 as uint32_t,
-    0x391c0cb3 as uint32_t,
-    0x4ed8aa4a as uint32_t,
-    0x5b9cca4f as uint32_t,
-    0x682e6ff3 as uint32_t,
-    0x748f82ee as uint32_t,
-    0x78a5636f as uint32_t,
-    0x84c87814 as uint32_t,
-    0x8cc70208 as uint32_t,
-    0x90befffa as uint32_t,
-    0xa4506ceb as uint32_t,
-    0xbef9a3f7 as uint32_t,
-    0xc67178f2 as uint32_t,
+static mut K: [u32; 64] = [
+    0x428a2f98 as u32,
+    0x71374491 as u32,
+    0xb5c0fbcf as u32,
+    0xe9b5dba5 as u32,
+    0x3956c25b as u32,
+    0x59f111f1 as u32,
+    0x923f82a4 as u32,
+    0xab1c5ed5 as u32,
+    0xd807aa98 as u32,
+    0x12835b01 as u32,
+    0x243185be as u32,
+    0x550c7dc3 as u32,
+    0x72be5d74 as u32,
+    0x80deb1fe as u32,
+    0x9bdc06a7 as u32,
+    0xc19bf174 as u32,
+    0xe49b69c1 as u32,
+    0xefbe4786 as u32,
+    0xfc19dc6 as u32,
+    0x240ca1cc as u32,
+    0x2de92c6f as u32,
+    0x4a7484aa as u32,
+    0x5cb0a9dc as u32,
+    0x76f988da as u32,
+    0x983e5152 as u32,
+    0xa831c66d as u32,
+    0xb00327c8 as u32,
+    0xbf597fc7 as u32,
+    0xc6e00bf3 as u32,
+    0xd5a79147 as u32,
+    0x6ca6351 as u32,
+    0x14292967 as u32,
+    0x27b70a85 as u32,
+    0x2e1b2138 as u32,
+    0x4d2c6dfc as u32,
+    0x53380d13 as u32,
+    0x650a7354 as u32,
+    0x766a0abb as u32,
+    0x81c2c92e as u32,
+    0x92722c85 as u32,
+    0xa2bfe8a1 as u32,
+    0xa81a664b as u32,
+    0xc24b8b70 as u32,
+    0xc76c51a3 as u32,
+    0xd192e819 as u32,
+    0xd6990624 as u32,
+    0xf40e3585 as u32,
+    0x106aa070 as u32,
+    0x19a4c116 as u32,
+    0x1e376c08 as u32,
+    0x2748774c as u32,
+    0x34b0bcb5 as u32,
+    0x391c0cb3 as u32,
+    0x4ed8aa4a as u32,
+    0x5b9cca4f as u32,
+    0x682e6ff3 as u32,
+    0x748f82ee as u32,
+    0x78a5636f as u32,
+    0x84c87814 as u32,
+    0x8cc70208 as u32,
+    0x90befffa as u32,
+    0xa4506ceb as u32,
+    0xbef9a3f7 as u32,
+    0xc67178f2 as u32,
 ];
-unsafe extern "C" fn block(mut c: *mut eng_sha256, mut p: *const uint8_t) {
-    let mut w: [uint32_t; 64] = [0; 64];
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 16 as ::core::ffi::c_int {
-        w[i as usize] = (*p.offset((4 as ::core::ffi::c_int * i) as isize) as uint32_t)
-            << 24 as ::core::ffi::c_int
-            | (*p.offset((4 as ::core::ffi::c_int * i + 1 as ::core::ffi::c_int) as isize)
-                as uint32_t)
-                << 16 as ::core::ffi::c_int
-            | (*p.offset((4 as ::core::ffi::c_int * i + 2 as ::core::ffi::c_int) as isize)
-                as uint32_t)
-                << 8 as ::core::ffi::c_int
-            | *p.offset((4 as ::core::ffi::c_int * i + 3 as ::core::ffi::c_int) as isize)
-                as uint32_t;
+unsafe extern "C" fn block(mut c: *mut eng_sha256, mut p: *const u8) {
+    let mut w: [u32; 64] = [0; 64];
+    let mut i: i32 = 0 as i32;
+    while i < 16 as i32 {
+        w[i as usize] = (*p.offset((4 as i32 * i) as isize) as u32) << 24 as i32
+            | (*p.offset((4 as i32 * i + 1 as i32) as isize) as u32) << 16 as i32
+            | (*p.offset((4 as i32 * i + 2 as i32) as isize) as u32) << 8 as i32
+            | *p.offset((4 as i32 * i + 3 as i32) as isize) as u32;
         i += 1;
     }
-    let mut i_0: ::core::ffi::c_int = 16 as ::core::ffi::c_int;
-    while i_0 < 64 as ::core::ffi::c_int {
-        let mut s0: uint32_t = (w[(i_0 - 15 as ::core::ffi::c_int) as usize]
-            >> 7 as ::core::ffi::c_int
-            | w[(i_0 - 15 as ::core::ffi::c_int) as usize]
-                << 32 as ::core::ffi::c_int - 7 as ::core::ffi::c_int)
-            ^ (w[(i_0 - 15 as ::core::ffi::c_int) as usize] >> 18 as ::core::ffi::c_int
-                | w[(i_0 - 15 as ::core::ffi::c_int) as usize]
-                    << 32 as ::core::ffi::c_int - 18 as ::core::ffi::c_int)
-            ^ w[(i_0 - 15 as ::core::ffi::c_int) as usize] >> 3 as ::core::ffi::c_int;
-        let mut s1: uint32_t = (w[(i_0 - 2 as ::core::ffi::c_int) as usize]
-            >> 17 as ::core::ffi::c_int
-            | w[(i_0 - 2 as ::core::ffi::c_int) as usize]
-                << 32 as ::core::ffi::c_int - 17 as ::core::ffi::c_int)
-            ^ (w[(i_0 - 2 as ::core::ffi::c_int) as usize] >> 19 as ::core::ffi::c_int
-                | w[(i_0 - 2 as ::core::ffi::c_int) as usize]
-                    << 32 as ::core::ffi::c_int - 19 as ::core::ffi::c_int)
-            ^ w[(i_0 - 2 as ::core::ffi::c_int) as usize] >> 10 as ::core::ffi::c_int;
-        w[i_0 as usize] = w[(i_0 - 16 as ::core::ffi::c_int) as usize]
+    let mut i_0: i32 = 16 as i32;
+    while i_0 < 64 as i32 {
+        let mut s0: u32 = (w[(i_0 - 15 as i32) as usize] >> 7 as i32
+            | w[(i_0 - 15 as i32) as usize] << 32 as i32 - 7 as i32)
+            ^ (w[(i_0 - 15 as i32) as usize] >> 18 as i32
+                | w[(i_0 - 15 as i32) as usize] << 32 as i32 - 18 as i32)
+            ^ w[(i_0 - 15 as i32) as usize] >> 3 as i32;
+        let mut s1: u32 = (w[(i_0 - 2 as i32) as usize] >> 17 as i32
+            | w[(i_0 - 2 as i32) as usize] << 32 as i32 - 17 as i32)
+            ^ (w[(i_0 - 2 as i32) as usize] >> 19 as i32
+                | w[(i_0 - 2 as i32) as usize] << 32 as i32 - 19 as i32)
+            ^ w[(i_0 - 2 as i32) as usize] >> 10 as i32;
+        w[i_0 as usize] = w[(i_0 - 16 as i32) as usize]
             .wrapping_add(s0)
-            .wrapping_add(w[(i_0 - 7 as ::core::ffi::c_int) as usize])
+            .wrapping_add(w[(i_0 - 7 as i32) as usize])
             .wrapping_add(s1);
         i_0 += 1;
     }
-    let mut a: uint32_t = (*c).h[0usize];
-    let mut b: uint32_t = (*c).h[1usize];
-    let mut cc: uint32_t = (*c).h[2usize];
-    let mut d: uint32_t = (*c).h[3usize];
-    let mut e: uint32_t = (*c).h[4usize];
-    let mut f: uint32_t = (*c).h[5usize];
-    let mut g: uint32_t = (*c).h[6usize];
-    let mut h: uint32_t = (*c).h[7usize];
-    let mut i_1: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_1 < 64 as ::core::ffi::c_int {
-        let mut S1: uint32_t = (e >> 6 as ::core::ffi::c_int
-            | e << 32 as ::core::ffi::c_int - 6 as ::core::ffi::c_int)
-            ^ (e >> 11 as ::core::ffi::c_int
-                | e << 32 as ::core::ffi::c_int - 11 as ::core::ffi::c_int)
-            ^ (e >> 25 as ::core::ffi::c_int
-                | e << 32 as ::core::ffi::c_int - 25 as ::core::ffi::c_int);
-        let mut ch: uint32_t = e & f ^ !e & g;
-        let mut t1: uint32_t = h
+    let mut a: u32 = (*c).h[0usize];
+    let mut b: u32 = (*c).h[1usize];
+    let mut cc: u32 = (*c).h[2usize];
+    let mut d: u32 = (*c).h[3usize];
+    let mut e: u32 = (*c).h[4usize];
+    let mut f: u32 = (*c).h[5usize];
+    let mut g: u32 = (*c).h[6usize];
+    let mut h: u32 = (*c).h[7usize];
+    let mut i_1: i32 = 0 as i32;
+    while i_1 < 64 as i32 {
+        let mut S1: u32 = (e >> 6 as i32 | e << 32 as i32 - 6 as i32)
+            ^ (e >> 11 as i32 | e << 32 as i32 - 11 as i32)
+            ^ (e >> 25 as i32 | e << 32 as i32 - 25 as i32);
+        let mut ch: u32 = e & f ^ !e & g;
+        let mut t1: u32 = h
             .wrapping_add(S1)
             .wrapping_add(ch)
             .wrapping_add(K[i_1 as usize])
             .wrapping_add(w[i_1 as usize]);
-        let mut S0: uint32_t = (a >> 2 as ::core::ffi::c_int
-            | a << 32 as ::core::ffi::c_int - 2 as ::core::ffi::c_int)
-            ^ (a >> 13 as ::core::ffi::c_int
-                | a << 32 as ::core::ffi::c_int - 13 as ::core::ffi::c_int)
-            ^ (a >> 22 as ::core::ffi::c_int
-                | a << 32 as ::core::ffi::c_int - 22 as ::core::ffi::c_int);
-        let mut mj: uint32_t = a & b ^ a & cc ^ b & cc;
-        let mut t2: uint32_t = S0.wrapping_add(mj);
+        let mut S0: u32 = (a >> 2 as i32 | a << 32 as i32 - 2 as i32)
+            ^ (a >> 13 as i32 | a << 32 as i32 - 13 as i32)
+            ^ (a >> 22 as i32 | a << 32 as i32 - 22 as i32);
+        let mut mj: u32 = a & b ^ a & cc ^ b & cc;
+        let mut t2: u32 = S0.wrapping_add(mj);
         h = g;
         g = f;
         f = e;
@@ -183,60 +160,59 @@ unsafe extern "C" fn block(mut c: *mut eng_sha256, mut p: *const uint8_t) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eng_sha256_init(mut c: *mut eng_sha256) {
-    static mut H0: [uint32_t; 8] = [
-        0x6a09e667 as uint32_t,
-        0xbb67ae85 as uint32_t,
-        0x3c6ef372 as uint32_t,
-        0xa54ff53a as uint32_t,
-        0x510e527f as uint32_t,
-        0x9b05688c as uint32_t,
-        0x1f83d9ab as uint32_t,
-        0x5be0cd19 as uint32_t,
+    static mut H0: [u32; 8] = [
+        0x6a09e667 as u32,
+        0xbb67ae85 as u32,
+        0x3c6ef372 as u32,
+        0xa54ff53a as u32,
+        0x510e527f as u32,
+        0x9b05688c as u32,
+        0x1f83d9ab as u32,
+        0x5be0cd19 as u32,
     ];
     memcpy(
-        &raw mut (*c).h as *mut uint32_t as *mut ::core::ffi::c_void,
-        &raw const H0 as *const uint32_t as *const ::core::ffi::c_void,
-        ::core::mem::size_of::<[uint32_t; 8]>(),
+        &raw mut (*c).h as *mut u32 as *mut ::core::ffi::c_void,
+        &raw const H0 as *const u32 as *const ::core::ffi::c_void,
+        ::core::mem::size_of::<[u32; 8]>(),
     );
-    (*c).len = 0 as uint64_t;
-    (*c).n = 0 as size_t;
+    (*c).len = 0 as u64;
+    (*c).n = 0 as usize;
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eng_sha256_update(
     mut c: *mut eng_sha256,
     mut data: *const ::core::ffi::c_void,
-    mut n: size_t,
+    mut n: usize,
 ) {
-    let mut p: *const uint8_t = data as *const uint8_t;
-    (*c).len =
-        ((*c).len as ::core::ffi::c_ulong).wrapping_add(n as ::core::ffi::c_ulong) as uint64_t;
+    let mut p: *const u8 = data as *const u8;
+    (*c).len = ((*c).len as u64).wrapping_add(n as u64) as u64;
     if (*c).n != 0 {
-        let mut take: size_t = if (64 as size_t).wrapping_sub((*c).n) < n {
-            (64 as size_t).wrapping_sub((*c).n)
+        let mut take: usize = if (64 as usize).wrapping_sub((*c).n) < n {
+            (64 as usize).wrapping_sub((*c).n)
         } else {
             n
         };
         memcpy(
-            (&raw mut (*c).buf as *mut uint8_t).offset((*c).n as isize) as *mut ::core::ffi::c_void,
+            (&raw mut (*c).buf as *mut u8).offset((*c).n as isize) as *mut ::core::ffi::c_void,
             p as *const ::core::ffi::c_void,
             take,
         );
         (*c).n = (*c).n.wrapping_add(take);
         p = p.offset(take as isize);
         n = n.wrapping_sub(take);
-        if (*c).n == 64 as size_t {
-            block(c, &raw mut (*c).buf as *mut uint8_t);
-            (*c).n = 0 as size_t;
+        if (*c).n == 64 as usize {
+            block(c, &raw mut (*c).buf as *mut u8);
+            (*c).n = 0 as usize;
         }
     }
-    while n >= 64 as size_t {
+    while n >= 64 as usize {
         block(c, p);
-        p = p.offset(64 as ::core::ffi::c_int as isize);
-        n = n.wrapping_sub(64 as size_t);
+        p = p.offset(64 as i32 as isize);
+        n = n.wrapping_sub(64 as usize);
     }
     if n != 0 {
         memcpy(
-            &raw mut (*c).buf as *mut uint8_t as *mut ::core::ffi::c_void,
+            &raw mut (*c).buf as *mut u8 as *mut ::core::ffi::c_void,
             p as *const ::core::ffi::c_void,
             n,
         );
@@ -244,48 +220,45 @@ pub unsafe extern "C" fn eng_sha256_update(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn eng_sha256_final(mut c: *mut eng_sha256, mut out: *mut uint8_t) {
-    let mut bits: uint64_t = (*c).len.wrapping_mul(8 as uint64_t);
-    let mut pad: uint8_t = 0x80 as uint8_t;
-    eng_sha256_update(c, &raw mut pad as *const ::core::ffi::c_void, 1 as size_t);
-    let mut z: uint8_t = 0 as uint8_t;
-    while (*c).n != 56 as size_t {
-        eng_sha256_update(c, &raw mut z as *const ::core::ffi::c_void, 1 as size_t);
+pub unsafe extern "C" fn eng_sha256_final(mut c: *mut eng_sha256, mut out: *mut u8) {
+    let mut bits: u64 = (*c).len.wrapping_mul(8 as u64);
+    let mut pad: u8 = 0x80 as u8;
+    eng_sha256_update(c, &raw mut pad as *const ::core::ffi::c_void, 1 as usize);
+    let mut z: u8 = 0 as u8;
+    while (*c).n != 56 as usize {
+        eng_sha256_update(c, &raw mut z as *const ::core::ffi::c_void, 1 as usize);
     }
-    let mut lb: [uint8_t; 8] = [0; 8];
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 8 as ::core::ffi::c_int {
-        lb[i as usize] =
-            (bits >> 56 as ::core::ffi::c_int - 8 as ::core::ffi::c_int * i) as uint8_t;
+    let mut lb: [u8; 8] = [0; 8];
+    let mut i: i32 = 0 as i32;
+    while i < 8 as i32 {
+        lb[i as usize] = (bits >> 56 as i32 - 8 as i32 * i) as u8;
         i += 1;
     }
     eng_sha256_update(
         c,
-        &raw mut lb as *mut uint8_t as *const ::core::ffi::c_void,
-        8 as size_t,
+        &raw mut lb as *mut u8 as *const ::core::ffi::c_void,
+        8 as usize,
     );
-    let mut i_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i_0 < 8 as ::core::ffi::c_int {
-        *out.offset((4 as ::core::ffi::c_int * i_0) as isize) =
-            ((*c).h[i_0 as usize] >> 24 as ::core::ffi::c_int) as uint8_t;
-        *out.offset((4 as ::core::ffi::c_int * i_0 + 1 as ::core::ffi::c_int) as isize) =
-            ((*c).h[i_0 as usize] >> 16 as ::core::ffi::c_int) as uint8_t;
-        *out.offset((4 as ::core::ffi::c_int * i_0 + 2 as ::core::ffi::c_int) as isize) =
-            ((*c).h[i_0 as usize] >> 8 as ::core::ffi::c_int) as uint8_t;
-        *out.offset((4 as ::core::ffi::c_int * i_0 + 3 as ::core::ffi::c_int) as isize) =
-            (*c).h[i_0 as usize] as uint8_t;
+    let mut i_0: i32 = 0 as i32;
+    while i_0 < 8 as i32 {
+        *out.offset((4 as i32 * i_0) as isize) = ((*c).h[i_0 as usize] >> 24 as i32) as u8;
+        *out.offset((4 as i32 * i_0 + 1 as i32) as isize) =
+            ((*c).h[i_0 as usize] >> 16 as i32) as u8;
+        *out.offset((4 as i32 * i_0 + 2 as i32) as isize) =
+            ((*c).h[i_0 as usize] >> 8 as i32) as u8;
+        *out.offset((4 as i32 * i_0 + 3 as i32) as isize) = (*c).h[i_0 as usize] as u8;
         i_0 += 1;
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn eng_sha256_hex(mut d: *const uint8_t, mut out: *mut ::core::ffi::c_char) {
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 32 as ::core::ffi::c_int {
+pub unsafe extern "C" fn eng_sha256_hex(mut d: *const u8, mut out: *mut ::core::ffi::c_char) {
+    let mut i: i32 = 0 as i32;
+    while i < 32 as i32 {
         snprintf(
-            out.offset((2 as ::core::ffi::c_int * i) as isize),
-            3 as size_t,
+            out.offset((2 as i32 * i) as isize),
+            3 as usize,
             b"%02x\0".as_ptr() as *const ::core::ffi::c_char,
-            *d.offset(i as isize) as ::core::ffi::c_int,
+            *d.offset(i as isize) as i32,
         );
         i += 1;
     }

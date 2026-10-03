@@ -1,32 +1,18 @@
 //! Bounded strict JSON parser used by image metadata validation.
-//! Platform ABI specialization of the frozen runtime, ported to Rust.
-//! These are maintained Rust sources; the build does not compile or execute the C reference.
+//! Shared runtime logic; target ABI differences are selected explicitly with cfg.
 unsafe extern "C" {
-    unsafe fn malloc(__byte_count: size_t) -> *mut ::core::ffi::c_void;
-    unsafe fn calloc(__item_count: size_t, __item_size: size_t) -> *mut ::core::ffi::c_void;
-    unsafe fn free(__ptr: *mut ::core::ffi::c_void);
-    unsafe fn strtod(
-        __s: *const ::core::ffi::c_char,
-        __end_ptr: *mut *mut ::core::ffi::c_char,
-    ) -> ::core::ffi::c_double;
-    unsafe fn memcmp(
-        __lhs: *const ::core::ffi::c_void,
-        __rhs: *const ::core::ffi::c_void,
-        __n: size_t,
-    ) -> ::core::ffi::c_int;
-    unsafe fn strchr(
-        __s: *const ::core::ffi::c_char,
-        __ch: ::core::ffi::c_int,
-    ) -> *mut ::core::ffi::c_char;
-    unsafe fn strcmp(
-        __lhs: *const ::core::ffi::c_char,
-        __rhs: *const ::core::ffi::c_char,
-    ) -> ::core::ffi::c_int;
+    unsafe fn strtod(_: *const ::core::ffi::c_char, _: *mut *mut ::core::ffi::c_char) -> f64;
+    unsafe fn malloc(_: usize) -> *mut ::core::ffi::c_void;
+    unsafe fn calloc(_: usize, _: usize) -> *mut ::core::ffi::c_void;
+    unsafe fn free(_: *mut ::core::ffi::c_void);
+    unsafe fn memcmp(_: *const ::core::ffi::c_void, _: *const ::core::ffi::c_void, _: usize)
+    -> i32;
+    unsafe fn strcmp(_: *const ::core::ffi::c_char, _: *const ::core::ffi::c_char) -> i32;
+    unsafe fn strchr(_: *const ::core::ffi::c_char, _: i32) -> *mut ::core::ffi::c_char;
 }
-pub type size_t = usize;
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct eng_jtype(pub ::core::ffi::c_uint);
+pub struct eng_jtype(pub u32);
 impl eng_jtype {
     pub const ENG_J_NULL: Self = Self(0);
     pub const ENG_J_BOOL: Self = Self(1);
@@ -41,8 +27,8 @@ pub struct eng_json {
     pub t: eng_jtype,
     pub key: *mut ::core::ffi::c_char,
     pub s: *mut ::core::ffi::c_char,
-    pub n: ::core::ffi::c_double,
-    pub b: ::core::ffi::c_int,
+    pub n: f64,
+    pub b: i32,
     pub child: *mut eng_json,
     pub next: *mut eng_json,
 }
@@ -51,121 +37,95 @@ pub struct eng_json {
 pub struct rd {
     pub p: *const ::core::ffi::c_char,
     pub end: *const ::core::ffi::c_char,
-    pub depth: ::core::ffi::c_int,
+    pub depth: i32,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 unsafe extern "C" fn ws(mut r: *mut rd) {
     while (*r).p < (*r).end
-        && (*(*r).p as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
-            || *(*r).p as ::core::ffi::c_int == '\t' as ::core::ffi::c_int
-            || *(*r).p as ::core::ffi::c_int == '\n' as ::core::ffi::c_int
-            || *(*r).p as ::core::ffi::c_int == '\r' as ::core::ffi::c_int)
+        && (*(*r).p as i32 == ' ' as i32
+            || *(*r).p as i32 == '\t' as i32
+            || *(*r).p as i32 == '\n' as i32
+            || *(*r).p as i32 == '\r' as i32)
     {
         (*r).p = (*r).p.offset(1);
     }
 }
 unsafe extern "C" fn node(mut t: eng_jtype) -> *mut eng_json {
     let mut n: *mut eng_json =
-        calloc(1 as size_t, ::core::mem::size_of::<eng_json>()) as *mut eng_json;
+        calloc(1 as usize, ::core::mem::size_of::<eng_json>()) as *mut eng_json;
     if !n.is_null() {
         (*n).t = t;
     }
     return n;
 }
-unsafe extern "C" fn put_utf8(
-    mut o: *mut *mut ::core::ffi::c_char,
-    mut cp: ::core::ffi::c_uint,
-) -> ::core::ffi::c_int {
+unsafe extern "C" fn put_utf8(mut o: *mut *mut ::core::ffi::c_char, mut cp: u32) -> i32 {
     let mut q: *mut ::core::ffi::c_char = *o;
-    if cp < 0x80 as ::core::ffi::c_uint {
+    if cp < 0x80 as u32 {
         let c2rust_fresh11 = q;
         q = q.offset(1);
         *c2rust_fresh11 = cp as ::core::ffi::c_char;
-    } else if cp < 0x800 as ::core::ffi::c_uint {
+    } else if cp < 0x800 as u32 {
         let c2rust_fresh12 = q;
         q = q.offset(1);
-        *c2rust_fresh12 =
-            (0xc0 as ::core::ffi::c_uint | cp >> 6 as ::core::ffi::c_int) as ::core::ffi::c_char;
+        *c2rust_fresh12 = (0xc0 as u32 | cp >> 6 as i32) as ::core::ffi::c_char;
         let c2rust_fresh13 = q;
         q = q.offset(1);
-        *c2rust_fresh13 =
-            (0x80 as ::core::ffi::c_uint | cp & 0x3f as ::core::ffi::c_uint) as ::core::ffi::c_char;
-    } else if cp < 0x10000 as ::core::ffi::c_int as ::core::ffi::c_uint {
+        *c2rust_fresh13 = (0x80 as u32 | cp & 0x3f as u32) as ::core::ffi::c_char;
+    } else if cp < 0x10000 as i32 as u32 {
         let c2rust_fresh14 = q;
         q = q.offset(1);
-        *c2rust_fresh14 =
-            (0xe0 as ::core::ffi::c_uint | cp >> 12 as ::core::ffi::c_int) as ::core::ffi::c_char;
+        *c2rust_fresh14 = (0xe0 as u32 | cp >> 12 as i32) as ::core::ffi::c_char;
         let c2rust_fresh15 = q;
         q = q.offset(1);
-        *c2rust_fresh15 = (0x80 as ::core::ffi::c_uint
-            | cp >> 6 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_uint)
-            as ::core::ffi::c_char;
+        *c2rust_fresh15 = (0x80 as u32 | cp >> 6 as i32 & 0x3f as u32) as ::core::ffi::c_char;
         let c2rust_fresh16 = q;
         q = q.offset(1);
-        *c2rust_fresh16 =
-            (0x80 as ::core::ffi::c_uint | cp & 0x3f as ::core::ffi::c_uint) as ::core::ffi::c_char;
+        *c2rust_fresh16 = (0x80 as u32 | cp & 0x3f as u32) as ::core::ffi::c_char;
     } else {
         let c2rust_fresh17 = q;
         q = q.offset(1);
-        *c2rust_fresh17 =
-            (0xf0 as ::core::ffi::c_uint | cp >> 18 as ::core::ffi::c_int) as ::core::ffi::c_char;
+        *c2rust_fresh17 = (0xf0 as u32 | cp >> 18 as i32) as ::core::ffi::c_char;
         let c2rust_fresh18 = q;
         q = q.offset(1);
-        *c2rust_fresh18 = (0x80 as ::core::ffi::c_uint
-            | cp >> 12 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_uint)
-            as ::core::ffi::c_char;
+        *c2rust_fresh18 = (0x80 as u32 | cp >> 12 as i32 & 0x3f as u32) as ::core::ffi::c_char;
         let c2rust_fresh19 = q;
         q = q.offset(1);
-        *c2rust_fresh19 = (0x80 as ::core::ffi::c_uint
-            | cp >> 6 as ::core::ffi::c_int & 0x3f as ::core::ffi::c_uint)
-            as ::core::ffi::c_char;
+        *c2rust_fresh19 = (0x80 as u32 | cp >> 6 as i32 & 0x3f as u32) as ::core::ffi::c_char;
         let c2rust_fresh20 = q;
         q = q.offset(1);
-        *c2rust_fresh20 =
-            (0x80 as ::core::ffi::c_uint | cp & 0x3f as ::core::ffi::c_uint) as ::core::ffi::c_char;
+        *c2rust_fresh20 = (0x80 as u32 | cp & 0x3f as u32) as ::core::ffi::c_char;
     }
     *o = q;
-    return 0 as ::core::ffi::c_int;
+    return 0 as i32;
 }
-unsafe extern "C" fn hex4(
-    mut p: *const ::core::ffi::c_char,
-    mut v: *mut ::core::ffi::c_uint,
-) -> ::core::ffi::c_int {
-    *v = 0 as ::core::ffi::c_uint;
-    let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-    while i < 4 as ::core::ffi::c_int {
+unsafe extern "C" fn hex4(mut p: *const ::core::ffi::c_char, mut v: *mut u32) -> i32 {
+    *v = 0 as u32;
+    let mut i: i32 = 0 as i32;
+    while i < 4 as i32 {
         let mut c: ::core::ffi::c_char = *p.offset(i as isize);
-        *v <<= 4 as ::core::ffi::c_int;
-        if c as ::core::ffi::c_int >= '0' as ::core::ffi::c_int
-            && c as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
-        {
-            *v |= (c as ::core::ffi::c_int - '0' as ::core::ffi::c_int) as ::core::ffi::c_uint;
-        } else if c as ::core::ffi::c_int >= 'a' as ::core::ffi::c_int
-            && c as ::core::ffi::c_int <= 'f' as ::core::ffi::c_int
-        {
-            *v |= (c as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 10 as ::core::ffi::c_int)
-                as ::core::ffi::c_uint;
-        } else if c as ::core::ffi::c_int >= 'A' as ::core::ffi::c_int
-            && c as ::core::ffi::c_int <= 'F' as ::core::ffi::c_int
-        {
-            *v |= (c as ::core::ffi::c_int - 'A' as ::core::ffi::c_int + 10 as ::core::ffi::c_int)
-                as ::core::ffi::c_uint;
+        *v <<= 4 as i32;
+        if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
+            *v |= (c as i32 - '0' as i32) as u32;
+        } else if c as i32 >= 'a' as i32 && c as i32 <= 'f' as i32 {
+            *v |= (c as i32 - 'a' as i32 + 10 as i32) as u32;
+        } else if c as i32 >= 'A' as i32 && c as i32 <= 'F' as i32 {
+            *v |= (c as i32 - 'A' as i32 + 10 as i32) as u32;
         } else {
-            return -1 as ::core::ffi::c_int;
+            return -1 as i32;
         }
         i += 1;
     }
-    return 0 as ::core::ffi::c_int;
+    return 0 as i32;
 }
 unsafe extern "C" fn str(mut r: *mut rd) -> *mut ::core::ffi::c_char {
-    if (*r).p >= (*r).end || *(*r).p as ::core::ffi::c_int != '"' as ::core::ffi::c_int {
+    if (*r).p >= (*r).end || *(*r).p as i32 != '"' as i32 {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     (*r).p = (*r).p.offset(1);
     let mut s: *const ::core::ffi::c_char = (*r).p;
-    let mut cap: size_t = 0 as size_t;
-    while (*r).p < (*r).end && *(*r).p as ::core::ffi::c_int != '"' as ::core::ffi::c_int {
-        if *(*r).p as ::core::ffi::c_int == '\\' as ::core::ffi::c_int {
+    let mut cap: usize = 0 as usize;
+    while (*r).p < (*r).end && *(*r).p as i32 != '"' as i32 {
+        if *(*r).p as i32 == '\\' as i32 {
             (*r).p = (*r).p.offset(1);
         }
         (*r).p = (*r).p.offset(1);
@@ -175,25 +135,25 @@ unsafe extern "C" fn str(mut r: *mut rd) -> *mut ::core::ffi::c_char {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut out: *mut ::core::ffi::c_char =
-        malloc(cap.wrapping_mul(4 as size_t).wrapping_add(1 as size_t)) as *mut ::core::ffi::c_char;
+        malloc(cap.wrapping_mul(4 as usize).wrapping_add(1 as usize)) as *mut ::core::ffi::c_char;
     let mut o: *mut ::core::ffi::c_char = out;
     if out.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
     let mut q: *const ::core::ffi::c_char = s;
     while q < (*r).p {
-        let mut c: ::core::ffi::c_uchar = *q as ::core::ffi::c_uchar;
-        if (c as ::core::ffi::c_int) < 0x20 as ::core::ffi::c_int {
+        let mut c: u8 = *q as u8;
+        if (c as i32) < 0x20 as i32 {
             free(out as *mut ::core::ffi::c_void);
             return ::core::ptr::null_mut::<::core::ffi::c_char>();
         }
-        if c as ::core::ffi::c_int != '\\' as ::core::ffi::c_int {
+        if c as i32 != '\\' as i32 {
             let c2rust_fresh2 = o;
             o = o.offset(1);
             *c2rust_fresh2 = c as ::core::ffi::c_char;
         } else {
             q = q.offset(1);
-            match *q as ::core::ffi::c_int {
+            match *q as i32 {
                 34 => {
                     let c2rust_fresh3 = o;
                     o = o.offset(1);
@@ -235,36 +195,31 @@ unsafe extern "C" fn str(mut r: *mut rd) -> *mut ::core::ffi::c_char {
                     *c2rust_fresh10 = '\t' as ::core::ffi::c_char;
                 }
                 117 => {
-                    let mut cp: ::core::ffi::c_uint = 0;
+                    let mut cp: u32 = 0;
                     if (*r).p.offset_from(q) < 5isize
-                        || hex4(q.offset(1 as ::core::ffi::c_int as isize), &raw mut cp) != 0
+                        || hex4(q.offset(1 as i32 as isize), &raw mut cp) != 0
                     {
                         free(out as *mut ::core::ffi::c_void);
                         return ::core::ptr::null_mut::<::core::ffi::c_char>();
                     }
-                    q = q.offset(4 as ::core::ffi::c_int as isize);
-                    if cp >= 0xd800 as ::core::ffi::c_uint && cp < 0xdc00 as ::core::ffi::c_uint {
-                        let mut lo: ::core::ffi::c_uint = 0;
+                    q = q.offset(4 as i32 as isize);
+                    if cp >= 0xd800 as u32 && cp < 0xdc00 as u32 {
+                        let mut lo: u32 = 0;
                         if (*r).p.offset_from(q) < 7isize
-                            || *q.offset(1isize) as ::core::ffi::c_int != '\\' as ::core::ffi::c_int
-                            || *q.offset(2isize) as ::core::ffi::c_int != 'u' as ::core::ffi::c_int
-                            || hex4(q.offset(3 as ::core::ffi::c_int as isize), &raw mut lo) != 0
-                            || lo < 0xdc00 as ::core::ffi::c_uint
-                            || lo > 0xdfff as ::core::ffi::c_uint
+                            || *q.offset(1isize) as i32 != '\\' as i32
+                            || *q.offset(2isize) as i32 != 'u' as i32
+                            || hex4(q.offset(3 as i32 as isize), &raw mut lo) != 0
+                            || lo < 0xdc00 as u32
+                            || lo > 0xdfff as u32
                         {
                             free(out as *mut ::core::ffi::c_void);
                             return ::core::ptr::null_mut::<::core::ffi::c_char>();
                         }
-                        cp = (0x10000 as ::core::ffi::c_int as ::core::ffi::c_uint)
-                            .wrapping_add(
-                                cp.wrapping_sub(0xd800 as ::core::ffi::c_uint)
-                                    << 10 as ::core::ffi::c_int,
-                            )
-                            .wrapping_add(lo.wrapping_sub(0xdc00 as ::core::ffi::c_uint));
-                        q = q.offset(6 as ::core::ffi::c_int as isize);
-                    } else if cp >= 0xdc00 as ::core::ffi::c_uint
-                        && cp < 0xe000 as ::core::ffi::c_uint
-                    {
+                        cp = (0x10000 as i32 as u32)
+                            .wrapping_add(cp.wrapping_sub(0xd800 as u32) << 10 as i32)
+                            .wrapping_add(lo.wrapping_sub(0xdc00 as u32));
+                        q = q.offset(6 as i32 as isize);
+                    } else if cp >= 0xdc00 as u32 && cp < 0xe000 as u32 {
                         free(out as *mut ::core::ffi::c_void);
                         return ::core::ptr::null_mut::<::core::ffi::c_char>();
                     }
@@ -282,17 +237,17 @@ unsafe extern "C" fn str(mut r: *mut rd) -> *mut ::core::ffi::c_char {
     (*r).p = (*r).p.offset(1);
     return out;
 }
-unsafe extern "C" fn container(mut r: *mut rd, mut obj: ::core::ffi::c_int) -> *mut eng_json {
+unsafe extern "C" fn container(mut r: *mut rd, mut obj: i32) -> *mut eng_json {
     (*r).depth += 1;
-    if (*r).depth > 64 as ::core::ffi::c_int {
+    if (*r).depth > 64 as i32 {
         return ::core::ptr::null_mut::<eng_json>();
     }
     let mut n: *mut eng_json = node(eng_jtype(
         (if obj != 0 {
-            eng_jtype::ENG_J_OBJ.0 as ::core::ffi::c_int
+            eng_jtype::ENG_J_OBJ.0 as i32
         } else {
-            eng_jtype::ENG_J_ARR.0 as ::core::ffi::c_int
-        }) as ::core::ffi::c_uint,
+            eng_jtype::ENG_J_ARR.0 as i32
+        }) as u32,
     ));
     let mut last: *mut eng_json = ::core::ptr::null_mut::<eng_json>();
     if n.is_null() {
@@ -300,14 +255,7 @@ unsafe extern "C" fn container(mut r: *mut rd, mut obj: ::core::ffi::c_int) -> *
     }
     (*r).p = (*r).p.offset(1);
     ws(r);
-    if (*r).p < (*r).end
-        && *(*r).p as ::core::ffi::c_int
-            == if obj != 0 {
-                '}' as ::core::ffi::c_int
-            } else {
-                ']' as ::core::ffi::c_int
-            }
-    {
+    if (*r).p < (*r).end && *(*r).p as i32 == if obj != 0 { '}' as i32 } else { ']' as i32 } {
         (*r).p = (*r).p.offset(1);
         (*r).depth -= 1;
         return n;
@@ -322,8 +270,7 @@ unsafe extern "C" fn container(mut r: *mut rd, mut obj: ::core::ffi::c_int) -> *
                     break '_bad;
                 }
                 ws(r);
-                if (*r).p >= (*r).end || *(*r).p as ::core::ffi::c_int != ':' as ::core::ffi::c_int
-                {
+                if (*r).p >= (*r).end || *(*r).p as i32 != ':' as i32 {
                     free(key as *mut ::core::ffi::c_void);
                     break '_bad;
                 } else {
@@ -343,16 +290,11 @@ unsafe extern "C" fn container(mut r: *mut rd, mut obj: ::core::ffi::c_int) -> *
                 }
                 last = v;
                 ws(r);
-                if (*r).p < (*r).end && *(*r).p as ::core::ffi::c_int == ',' as ::core::ffi::c_int {
+                if (*r).p < (*r).end && *(*r).p as i32 == ',' as i32 {
                     (*r).p = (*r).p.offset(1);
                 } else {
                     if !((*r).p < (*r).end
-                        && *(*r).p as ::core::ffi::c_int
-                            == if obj != 0 {
-                                '}' as ::core::ffi::c_int
-                            } else {
-                                ']' as ::core::ffi::c_int
-                            })
+                        && *(*r).p as i32 == if obj != 0 { '}' as i32 } else { ']' as i32 })
                     {
                         break '_bad;
                     }
@@ -373,13 +315,13 @@ unsafe extern "C" fn value(mut r: *mut rd) -> *mut eng_json {
         return ::core::ptr::null_mut::<eng_json>();
     }
     let mut c: ::core::ffi::c_char = *(*r).p;
-    if c as ::core::ffi::c_int == '{' as ::core::ffi::c_int {
-        return container(r, 1 as ::core::ffi::c_int);
+    if c as i32 == '{' as i32 {
+        return container(r, 1 as i32);
     }
-    if c as ::core::ffi::c_int == '[' as ::core::ffi::c_int {
-        return container(r, 0 as ::core::ffi::c_int);
+    if c as i32 == '[' as i32 {
+        return container(r, 0 as i32);
     }
-    if c as ::core::ffi::c_int == '"' as ::core::ffi::c_int {
+    if c as i32 == '"' as i32 {
         let mut s: *mut ::core::ffi::c_char = str(r);
         if s.is_null() {
             return ::core::ptr::null_mut::<eng_json>();
@@ -396,13 +338,13 @@ unsafe extern "C" fn value(mut r: *mut rd) -> *mut eng_json {
         && memcmp(
             (*r).p as *const ::core::ffi::c_void,
             b"true\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-            4 as size_t,
+            4 as usize,
         ) == 0
     {
-        (*r).p = (*r).p.offset(4 as ::core::ffi::c_int as isize);
+        (*r).p = (*r).p.offset(4 as i32 as isize);
         let mut n_0: *mut eng_json = node(eng_jtype::ENG_J_BOOL);
         if !n_0.is_null() {
-            (*n_0).b = 1 as ::core::ffi::c_int;
+            (*n_0).b = 1 as i32;
         }
         return n_0;
     }
@@ -410,33 +352,30 @@ unsafe extern "C" fn value(mut r: *mut rd) -> *mut eng_json {
         && memcmp(
             (*r).p as *const ::core::ffi::c_void,
             b"false\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-            5 as size_t,
+            5 as usize,
         ) == 0
     {
-        (*r).p = (*r).p.offset(5 as ::core::ffi::c_int as isize);
+        (*r).p = (*r).p.offset(5 as i32 as isize);
         return node(eng_jtype::ENG_J_BOOL);
     }
     if (*r).end.offset_from((*r).p) >= 4isize
         && memcmp(
             (*r).p as *const ::core::ffi::c_void,
             b"null\0".as_ptr() as *const ::core::ffi::c_char as *const ::core::ffi::c_void,
-            4 as size_t,
+            4 as usize,
         ) == 0
     {
-        (*r).p = (*r).p.offset(4 as ::core::ffi::c_int as isize);
+        (*r).p = (*r).p.offset(4 as i32 as isize);
         return node(eng_jtype::ENG_J_NULL);
     }
-    if c as ::core::ffi::c_int == '-' as ::core::ffi::c_int
-        || c as ::core::ffi::c_int >= '0' as ::core::ffi::c_int
-            && c as ::core::ffi::c_int <= '9' as ::core::ffi::c_int
-    {
+    if c as i32 == '-' as i32 || c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         let mut buf: [::core::ffi::c_char; 64] = [0; 64];
-        let mut k: size_t = 0 as size_t;
+        let mut k: usize = 0 as usize;
         while (*r).p < (*r).end
             && k < ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(1usize)
             && !strchr(
                 b"-+.eE0123456789\0".as_ptr() as *const ::core::ffi::c_char,
-                *(*r).p as ::core::ffi::c_int,
+                *(*r).p as i32,
             )
             .is_null()
         {
@@ -448,9 +387,8 @@ unsafe extern "C" fn value(mut r: *mut rd) -> *mut eng_json {
         }
         buf[k] = 0 as ::core::ffi::c_char;
         let mut e: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-        let mut d: ::core::ffi::c_double =
-            strtod(&raw mut buf as *mut ::core::ffi::c_char, &raw mut e);
-        if *e as ::core::ffi::c_int != 0 || k == 0 {
+        let mut d: f64 = strtod(&raw mut buf as *mut ::core::ffi::c_char, &raw mut e);
+        if *e as i32 != 0 || k == 0 {
             return ::core::ptr::null_mut::<eng_json>();
         }
         let mut n_1: *mut eng_json = node(eng_jtype::ENG_J_NUM);
@@ -464,12 +402,12 @@ unsafe extern "C" fn value(mut r: *mut rd) -> *mut eng_json {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eng_json_parse(
     mut text: *const ::core::ffi::c_char,
-    mut len: size_t,
+    mut len: usize,
 ) -> *mut eng_json {
     let mut r: rd = rd {
         p: text,
         end: text.offset(len as isize),
-        depth: 0 as ::core::ffi::c_int,
+        depth: 0 as i32,
     };
     let mut v: *mut eng_json = value(&raw mut r);
     if v.is_null() {
@@ -526,15 +464,12 @@ pub unsafe extern "C" fn eng_json_str(
 pub unsafe extern "C" fn eng_json_int(
     mut obj: *const eng_json,
     mut key: *const ::core::ffi::c_char,
-    mut out: *mut ::core::ffi::c_longlong,
-) -> ::core::ffi::c_int {
+    mut out: *mut i64,
+) -> i32 {
     let mut v: *const eng_json = eng_json_get(obj, key);
-    if v.is_null()
-        || (*v).t.0 != eng_jtype::ENG_J_NUM.0
-        || (*v).n != (*v).n as ::core::ffi::c_longlong as ::core::ffi::c_double
-    {
-        return -1 as ::core::ffi::c_int;
+    if v.is_null() || (*v).t.0 != eng_jtype::ENG_J_NUM.0 || (*v).n != (*v).n as i64 as f64 {
+        return -1 as i32;
     }
-    *out = (*v).n as ::core::ffi::c_longlong;
-    return 0 as ::core::ffi::c_int;
+    *out = (*v).n as i64;
+    return 0 as i32;
 }
