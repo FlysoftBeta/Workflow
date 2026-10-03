@@ -1,5 +1,8 @@
 package top.flysoftbeta.workflow.agent.model
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+
 import kotlinx.serialization.json.JsonElement
 import top.flysoftbeta.workflow.agent.json.encode
 
@@ -8,12 +11,15 @@ import top.flysoftbeta.workflow.agent.json.encode
  * (Codex: int or string; Claude: `request_id` string) and is echoed back verbatim. Server request
  * ids share the numeric space with our own request ids, so they live in their own map.
  */
+@Serializable
+@SerialName("RequestKey")
 data class RequestKey(val backend: BackendKind, val rawId: JsonElement) {
     /** Stable text form, e.g. `codex:0` or `claude:"c071…"`. */
     val text: String get() = "${backend.id}:${rawId.encode()}"
     override fun toString(): String = text
 }
 
+@Serializable
 enum class DecisionKind {
     /** Allow this one action. */
     ALLOW_ONCE,
@@ -33,6 +39,8 @@ enum class DecisionKind {
  * value sent back (e.g. Codex `{"acceptWithExecpolicyAmendment":{…}}`); the adapter never
  * synthesises decisions the server did not allow.
  */
+@Serializable
+@SerialName("Decision")
 data class Decision(
     val id: String,
     val kind: DecisionKind,
@@ -43,8 +51,12 @@ data class Decision(
     val persistent: Boolean get() = kind == DecisionKind.ALLOW_PERSISTENT || kind == DecisionKind.ALLOW_SESSION
 }
 
+@Serializable
+@SerialName("QuestionOption")
 data class QuestionOption(val label: String, val description: String? = null, val preview: String? = null)
 
+@Serializable
+@SerialName("Question")
 data class Question(
     /** Answer key (Codex question id; Claude question text). */
     val id: String,
@@ -56,7 +68,10 @@ data class Question(
     val secret: Boolean = false,
 )
 
+@Serializable
 sealed interface RequestKind {
+    @Serializable
+    @SerialName("CommandApproval")
     data class CommandApproval(
         val command: String?,
         val cwd: String?,
@@ -66,6 +81,8 @@ sealed interface RequestKind {
         val networkHost: String? = null,
     ) : RequestKind
 
+    @Serializable
+    @SerialName("FileChangeApproval")
     data class FileChangeApproval(
         val reason: String?,
         /** Directory the agent wants write access to for the rest of the session (Codex `grantRoot`). */
@@ -74,9 +91,13 @@ sealed interface RequestKind {
     ) : RequestKind
 
     /** Codex `item/permissions/requestApproval`: extra filesystem/network permissions. */
+    @Serializable
+    @SerialName("PermissionsApproval")
     data class PermissionsApproval(val reason: String?, val cwd: String?, val permissions: JsonElement) : RequestKind
 
     /** Claude `can_use_tool` for an ordinary tool. */
+    @Serializable
+    @SerialName("ToolApproval")
     data class ToolApproval(
         val tool: String,
         val displayName: String?,
@@ -97,12 +118,18 @@ sealed interface RequestKind {
     ) : RequestKind
 
     /** Codex `item/tool/requestUserInput` / Claude `AskUserQuestion`. */
+    @Serializable
+    @SerialName("UserInput")
     data class UserInput(val questions: List<Question>, val autoResolutionMs: Long? = null) : RequestKind
 
     /** Claude `ExitPlanMode`: approve a markdown plan. */
+    @Serializable
+    @SerialName("PlanApproval")
     data class PlanApproval(val plan: String) : RequestKind
 
     /** MCP elicitation (form or URL). */
+    @Serializable
+    @SerialName("Elicitation")
     data class Elicitation(
         val server: String?,
         val message: String,
@@ -113,12 +140,17 @@ sealed interface RequestKind {
     ) : RequestKind
 
     /** Claude `request_user_dialog` of a kind we did not declare: must not be answered. */
+    @Serializable
+    @SerialName("UserDialog")
     data class UserDialog(val dialogKind: String, val payload: JsonElement?) : RequestKind
 
     /** Any request method this model does not know. */
+    @Serializable
+    @SerialName("Unknown")
     data class Unknown(val method: String, val params: JsonElement?) : RequestKind
 }
 
+@Serializable
 enum class RequestStatus {
     PENDING,
     /** The user answered; the answer was written to the process. */
@@ -136,6 +168,8 @@ enum class RequestStatus {
     val isOpen: Boolean get() = this == PENDING
 }
 
+@Serializable
+@SerialName("PendingRequest")
 data class PendingRequest(
     val key: RequestKey,
     val method: String,

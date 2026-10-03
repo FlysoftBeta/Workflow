@@ -1,5 +1,8 @@
 package top.flysoftbeta.workflow.agent.model
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +16,8 @@ import kotlinx.coroutines.flow.update
  * [id] is app-owned and stable (it is the Working Resource id of the conversation); the backend
  * thread id may be null until the backend has created the thread.
  */
+@Serializable
+@SerialName("ConversationEntry")
 data class ConversationEntry(
     val id: String,
     val backend: BackendKind,

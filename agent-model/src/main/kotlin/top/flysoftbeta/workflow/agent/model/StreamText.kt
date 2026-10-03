@@ -8,6 +8,7 @@ package top.flysoftbeta.workflow.agent.model
  * every [COMPACT_EVERY] appends and materialised (and cached) on the first [toString] call.
  * Equality is by content.
  */
+@kotlinx.serialization.Serializable(with = StreamTextSerializer::class)
 class StreamText private constructor(
     private val previous: StreamText?,
     private val chunk: String,
@@ -54,4 +55,10 @@ class StreamText private constructor(
         val EMPTY = StreamText(null, "", 0, 0)
         fun of(text: String?): StreamText = if (text.isNullOrEmpty()) EMPTY else StreamText(null, text, text.length, 0)
     }
+}
+
+object StreamTextSerializer : kotlinx.serialization.KSerializer<StreamText> {
+    override val descriptor = kotlinx.serialization.descriptors.PrimitiveSerialDescriptor("StreamText", kotlinx.serialization.descriptors.PrimitiveKind.STRING)
+    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: StreamText) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): StreamText = StreamText.of(decoder.decodeString())
 }

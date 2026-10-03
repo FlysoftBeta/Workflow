@@ -1,26 +1,48 @@
 package top.flysoftbeta.workflow.agent.model
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+
 import kotlinx.serialization.json.JsonElement
 
 /** Backend thread identity: Codex `thread.id`, Claude `session_id`. */
+@Serializable
+@SerialName("ThreadKey")
 data class ThreadKey(val backend: BackendKind, val id: String) {
     override fun toString(): String = "${backend.id}:$id"
 }
 
+@Serializable
 sealed interface ProcessState {
+    @Serializable
+    @SerialName("Stopped")
     data object Stopped : ProcessState
+    @Serializable
+    @SerialName("Starting")
     data object Starting : ProcessState
     /** Handshake finished; requests may be sent. */
+    @Serializable
+    @SerialName("Ready")
     data object Ready : ProcessState
+    @Serializable
+    @SerialName("Exited")
     data class Exited(val exitCode: Int?, val stderrTail: String = "") : ProcessState
+    @Serializable
+    @SerialName("Failed")
     data class Failed(val message: String, val stderrTail: String = "") : ProcessState
 }
 
+@Serializable
+@SerialName("McpServerStatus")
 data class McpServerStatus(val name: String, val status: String, val error: String? = null)
 
 /** Something the backend sent that this model does not interpret; kept for the generic console. */
+@Serializable
+@SerialName("UnknownRecord")
 data class UnknownRecord(val kind: String, val threadId: String?, val raw: JsonElement)
 
+@Serializable
+@SerialName("BackendStatus")
 data class BackendStatus(
     val backend: BackendKind,
     val process: ProcessState = ProcessState.Stopped,
@@ -36,6 +58,7 @@ data class BackendStatus(
     val unknown: List<UnknownRecord> = emptyList(),
 )
 
+@Serializable
 enum class RunState {
     NOT_LOADED,
     IDLE,
@@ -50,6 +73,8 @@ enum class RunState {
  * Effective thread settings as last reported by the backend. [raw] holds the verbatim payload
  * (Codex `threadSettings`, Claude `system/init`).
  */
+@Serializable
+@SerialName("ThreadSettings")
 data class ThreadSettings(
     val model: String? = null,
     val effort: String? = null,
@@ -61,6 +86,8 @@ data class ThreadSettings(
     val raw: JsonElement? = null,
 )
 
+@Serializable
+@SerialName("TokenUsage")
 data class TokenUsage(
     val inputTokens: Long = 0,
     val cachedInputTokens: Long = 0,
@@ -72,6 +99,7 @@ data class TokenUsage(
     val raw: JsonElement? = null,
 )
 
+@Serializable
 enum class TurnStatus {
     /** Submitted locally, not yet started by the backend. */
     QUEUED,
@@ -86,10 +114,16 @@ enum class TurnStatus {
     val isFinal: Boolean get() = this != QUEUED && this != RUNNING
 }
 
+@Serializable
+@SerialName("TurnError")
 data class TurnError(val message: String, val code: String? = null, val detail: String? = null, val raw: JsonElement? = null)
 
+@Serializable
+@SerialName("TurnPlan")
 data class TurnPlan(val steps: List<PlanStep>, val explanation: String? = null)
 
+@Serializable
+@SerialName("Turn")
 data class Turn(
     /** Backend turn id (Codex `turn.id`); for Claude and for not-yet-bound local turns the client message id. */
     val id: String,
@@ -116,6 +150,8 @@ data class Turn(
         get() = items.lastOrNull { it is AgentMessageItem && it.phase == MessagePhase.FINAL } as? AgentMessageItem
 }
 
+@Serializable
+@SerialName("ThreadState")
 data class ThreadState(
     val key: ThreadKey,
     val title: String? = null,
@@ -144,6 +180,8 @@ data class ThreadState(
     val queuedTurns: List<Turn> get() = turns.filter { it.status == TurnStatus.QUEUED }
 }
 
+@Serializable
+@SerialName("AgentState")
 data class AgentState(
     val backends: Map<BackendKind, BackendStatus> = emptyMap(),
     val threads: Map<ThreadKey, ThreadState> = emptyMap(),

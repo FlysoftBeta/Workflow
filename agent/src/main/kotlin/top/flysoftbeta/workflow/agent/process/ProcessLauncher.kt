@@ -34,7 +34,7 @@ interface AgentProcess {
     fun kill(force: Boolean = false)
 }
 
-/** Port implemented by the platform (`:app/platform`), the Engine. Production agents always use its guest process channel. */
+/** Engine-only launch port. Production adapters run in the Engine guest, never in the Android client. */
 fun interface ProcessLauncher {
     suspend fun launch(spec: LaunchSpec): AgentProcess
 }

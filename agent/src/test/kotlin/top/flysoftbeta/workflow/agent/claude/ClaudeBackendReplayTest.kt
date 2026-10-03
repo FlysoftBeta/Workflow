@@ -214,7 +214,7 @@ class ClaudeBackendReplayTest {
         store.await(what = "failed turn") { it.t(noauth).turn(turn)?.status == TurnStatus.FAILED }
         val failed = store.state.value.t(noauth).turn(turn)!!
         assertEquals("api_error", failed.error!!.code)
-        assertEquals("Not logged in · Please run /login", failed.error.message)
+        assertEquals("Not logged in · Please run /login", failed.error!!.message)
         assertEquals("authentication_failed", failed.items.filterIsInstance<NoticeItem>().single().notice.code)
         assertTrue(failed.items.none { it is AgentMessageItem })
     }

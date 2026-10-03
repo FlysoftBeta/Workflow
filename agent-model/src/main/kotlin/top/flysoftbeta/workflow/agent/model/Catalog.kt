@@ -1,13 +1,20 @@
 package top.flysoftbeta.workflow.agent.model
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+
 import kotlinx.serialization.json.JsonElement
 
+@Serializable
+@SerialName("EffortOption")
 data class EffortOption(val id: String, val description: String? = null)
 
 /**
  * A selectable model. [efforts] are the reasoning-effort detents this model supports (empty when
  * the model has no effort control). [defaultEffort] is the backend's default for this model.
  */
+@Serializable
+@SerialName("ModelOption")
 data class ModelOption(
     val id: String,
     val displayName: String,
@@ -27,11 +34,17 @@ data class ModelOption(
 )
 
 /** One segment of the model/effort slider: a model and its effort detents. */
+@Serializable
+@SerialName("SliderSegment")
 data class SliderSegment(val model: ModelOption, val detents: List<String>, val defaultDetent: Int)
 
 /** A position on the slider. [effort] is null for models without effort control. */
+@Serializable
+@SerialName("SliderPosition")
 data class SliderPosition(val model: String, val effort: String?)
 
+@Serializable
+@SerialName("ModelCatalog")
 data class ModelCatalog(
     val backend: BackendKind,
     val models: List<ModelOption>,
