@@ -27,7 +27,7 @@ import top.flysoftbeta.workflow.proxy.runtime.SuRootShell
 
 /**
  * Process-scoped owner of the Mihomo kernel, reached through `AppGraph.proxy` (docs/proxy.md).
- * All behaviour lives in [ProxyRuntime] (`:proxy`); this class only supplies the Android ports:
+ * Engine commands own business intent; [ProxyRuntime] supplies the local executor mechanics:
  * `su` for root, the packaged guardian/kernel in nativeLibraryDir, ConnectivityManager for VPN detection
  * and the foreground-service lease that keeps the process alive while the kernel runs.
  *
@@ -67,7 +67,7 @@ class ProxyService private constructor(
             val runtime = ProxyRuntime(ProxyFiles(directory(context)), kernel(context), guardian(context), ports(context))
             session.scope.coroutineContext[Job]?.invokeOnCompletion { runtime.closeOwnedChannel() }
             session.scope.launch { session.rpc.failure.filterNotNull().first(); runtime.closeOwnedChannel() }
-            return ProxyService(session.token, runtime, WorkspaceProxyApi(runtime, EngineProxyWorkspace(session.rpc, session.store::readBytes), session.scope))
+            return ProxyService(session.token, runtime, WorkspaceProxyApi(runtime, EngineProxyWorkspace(session.rpc, session.token, session.store::readBytes), session.scope))
         }
 
         internal fun ports(context: Context, rootShell: RootShell = SuRootShell(), launcher: GuardianLauncher = SuGuardianLauncher()) =

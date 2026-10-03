@@ -1,0 +1,39 @@
+# Workflow 代理配置（Mihomo）。应用不会改写此文件；直接编辑即可，重新启动后生效。
+# 创建此文件不会启动内核。启动需要 Root。
+mixed-port: 17890
+allow-lan: false
+bind-address: "127.0.0.1"
+mode: rule
+log-level: info
+# 应用通过此本机接口切换模式与节点；secret 保护以 Root 运行的内核，请勿删除。
+external-controller: 127.0.0.1:19090
+secret: "@SECRET@"
+tun:
+  # 改为 true 后以 TUN 接管本机流量。
+  enable: false
+  device: workflow-tun
+  stack: mixed
+  auto-route: true
+  auto-detect-interface: true
+  dns-hijack:
+    - any:53
+  # 与其他 Mihomo/CMFA 的默认值（表 2022、规则 9000、标记 0x2023/0x2024）错开，请勿改回默认值。
+  iproute2-table-index: 9500
+  iproute2-rule-index: 9500
+  auto-redirect: false
+  auto-redirect-input-mark: 0x10000000
+  auto-redirect-output-mark: 0x20000000
+  # 仅代理部分应用：
+  # include-package:
+  #   - top.flysoftbeta.workflow
+dns:
+  enable: true
+  ipv6: true
+  enhanced-mode: redir-host
+  nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+proxies: []
+proxy-groups: []
+rules:
+  - MATCH,DIRECT

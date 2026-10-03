@@ -13,25 +13,52 @@ import top.flysoftbeta.workflow.proxy.runtime.ProxyWorkspace
 /** Canonical files + CAS metadata are Engine-owned; Android sees only documents and acknowledged reports. */
 internal class EngineProxyWorkspace(
     private val rpc: WorkspaceRpc,
+    private val executorId: String = java.util.UUID.randomUUID().toString(),
     private val readFile: suspend (String, Int) -> ByteArray,
 ) : ProxyWorkspace {
     private val documents = WorkspaceDocuments(rpc)
+    private val registration = Mutex()
+    private var epoch: String? = null
+    private suspend fun lease(): String = registration.withLock {
+        epoch ?: WorkspaceRpc.obj(rpc.request("services.executor.register", mapOf("serviceId" to "proxy", "executorId" to executorId)))
+            .let { it["epoch"] as? String ?: error("Engine omitted executor epoch") }.also { epoch = it }
+    }
+    private suspend fun control(name: String, args: Map<String, Any?> = emptyMap()): Map<String, Any?> =
+        WorkspaceRpc.obj(rpc.request("services.command", mapOf("serviceId" to "proxy", "epoch" to lease(), "name" to name, "args" to args)))
+    private fun config(value: Any?): ProxyWorkspace.Config = WorkspaceRpc.obj(value).let {
+        ProxyWorkspace.Config(it["text"] as? String, (it["revision"] as? Number)?.toLong() ?: error("Engine omitted config revision"))
+    }
+    override suspend fun ensureConfig(): ProxyWorkspace.Config = config(control("ensureConfig")["config"])
+    override suspend fun command(name: String, args: Map<String, Any?>): ProxyWorkspace.Ticket {
+        val value = WorkspaceRpc.obj(control(name, args)["operation"])
+        return ProxyWorkspace.Ticket(value["id"] as? String ?: error("Engine omitted operation ID"),
+            value["name"] as? String ?: error("Engine omitted operation name"), WorkspaceRpc.obj(value["args"]), value["config"]?.let(::config))
+    }
+    override suspend fun complete(ticket: ProxyWorkspace.Ticket, success: Boolean, measured: ProxyState) {
+        val report = proxyReport(measured)
+        val response = WorkspaceRpc.obj(rpc.request("services.complete", mapOf("serviceId" to "proxy", "epoch" to lease(), "operationId" to ticket.id, "success" to success, "state" to report)))
+        acknowledge(response, report)
+    }
+    suspend fun retire() { epoch?.let { rpc.request("services.executor.retire", mapOf("serviceId" to "proxy", "epoch" to it)) } }
+    private fun acknowledge(response: Map<String, Any?>, report: Map<String, Any?>) {
+        check(response["serviceId"] == "proxy" && response["state"] == Json.parse(Json.stringify(report))) { "工作区未确认代理实测状态" }
+    }
     private val logs = Mutex()
     private var lastLog: String? = null
 
     override suspend fun readConfig() = documents.read(NAMESPACE, "config.yaml").let { ProxyWorkspace.Config(it.text, it.revision) }
-    override suspend fun writeConfig(text: String, expectedRevision: Long) = documents.write(NAMESPACE, "config.yaml", text, expectedRevision)
+    override suspend fun writeConfig(text: String, expectedRevision: Long) { control("importConfig", mapOf("text" to text, "expectedRevision" to expectedRevision)) }
     override suspend fun readAsset(path: String): ByteArray =
         readFile("${top.flysoftbeta.workflow.core.io.WorkspacePaths.PROXY}/$path", top.flysoftbeta.workflow.proxy.config.LocalProxyConfig.MAX_CONFIG_BYTES)
     override suspend fun report(measured: ProxyState) {
         val report = proxyReport(measured)
-        val response = WorkspaceRpc.obj(rpc.request("services.report", mapOf("serviceId" to "proxy", "state" to report)))
-        check(response["serviceId"] == "proxy" && response["state"] == Json.parse(Json.stringify(report))) { "工作区未确认代理实测状态" }
+        val response = WorkspaceRpc.obj(rpc.request("services.report", mapOf("serviceId" to "proxy", "epoch" to lease(), "state" to report)))
+        acknowledge(response, report)
     }
     override suspend fun writeLog(text: String) = logs.withLock {
         if (text != lastLog) {
             val previous = documents.read(NAMESPACE, "runtime.log")
-            documents.write(NAMESPACE, "runtime.log", text, previous.revision)
+            control("publishLog", mapOf("text" to text, "expectedRevision" to previous.revision))
             lastLog = text
         }
     }

@@ -4,10 +4,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.RandomAccessFile
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption.CREATE_NEW
-import java.nio.file.StandardOpenOption.WRITE
 import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.serialization.json.Json
@@ -18,7 +14,6 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import top.flysoftbeta.workflow.proxy.config.LocalProxyConfig
-import top.flysoftbeta.workflow.proxy.config.MihomoConfigTemplate
 import top.flysoftbeta.workflow.proxy.guardian.ProxyProcessIdentity
 import top.flysoftbeta.workflow.proxy.io.readProxyBytes
 
@@ -45,22 +40,6 @@ class ProxyFiles(directory: File) {
         check(config.isFile) { "还没有代理配置" }
         check(config.length() <= LocalProxyConfig.MAX_CONFIG_BYTES) { "代理配置超过 16 MiB" }
         return config.inputStream().use { readProxyBytes(it, LocalProxyConfig.MAX_CONFIG_BYTES) }
-    }
-
-    /** Creates the starter template only if no config exists. Returns false (and writes nothing) otherwise. */
-    fun createTemplate(): Boolean = synchronized(configLock) {
-        ensureDirectory()
-        if (config.exists()) return false
-        val bytes = MihomoConfigTemplate.render(MihomoConfigTemplate.newSecret()).toByteArray(Charsets.UTF_8)
-        // CREATE_NEW: a concurrently created file is never overwritten.
-        try {
-            FileChannel.open(config.toPath(), CREATE_NEW, WRITE).use { output ->
-                val buffer = ByteBuffer.wrap(bytes)
-                while (buffer.hasRemaining()) output.write(buffer)
-                output.force(true)
-            }
-        } catch (_: java.nio.file.FileAlreadyExistsException) { return false }
-        true
     }
 
     /** Explicit user import: atomic replacement of the whole file. */
