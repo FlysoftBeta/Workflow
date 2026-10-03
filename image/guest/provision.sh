@@ -86,8 +86,8 @@ fetch "$nvm_base/bash_completion" /usr/local/lib/nvm/bash_completion "$NVM_BASH_
 fetch "$nvm_base/LICENSE.md" /usr/local/share/doc/nvm/LICENSE.md "$NVM_LICENSE_SHA256"
 
 step "bundled agent entry point"
-install -d -m 0755 /opt/workflow/bundled
-ln -sfn /opt/workflow/bundled/libcodex.so /usr/local/bin/codex
+install -d -m 0755 /opt/workflow/tools
+ln -sfn /opt/workflow/tools/codex/bin/codex /usr/local/bin/codex
 
 step "shell environment"
 cat > /etc/profile.d/workflow.sh <<'EOF'

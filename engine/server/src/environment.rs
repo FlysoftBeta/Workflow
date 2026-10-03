@@ -24,6 +24,7 @@ pub struct Options {
     pub loader: Option<PathBuf>,
     pub apk: Option<PathBuf>,
     pub native_dir: Option<PathBuf>,
+    pub tools: Option<PathBuf>,
     pub image: Option<PathBuf>,
     pub image_index: Option<PathBuf>,
 }
@@ -570,20 +571,7 @@ fn guest_command(
         c.arg("--bind")
             .arg(format!("{}:/etc/resolv.conf", resolver.display()));
     }
-    if let Some(native) = &opts.native_dir {
-        c.arg("--bind")
-            .arg(format!("{}:/opt/workflow/bundled", native.display()));
-        // Bind over the image entry point, including already extracted generations.
-        // Chat continues to launch the native app-server executable directly.
-        let launcher = opts.root.join(".workspace/environment/launchers/codex");
-        let script = include_bytes!("../guest/codex");
-        if fs::read(&launcher).ok().as_deref() != Some(script.as_slice()) {
-            storage::atomic(&launcher, script)?;
-        }
-        fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755))?;
-        c.arg("--bind")
-            .arg(format!("{}:/usr/local/bin/codex", launcher.display()));
-    }
+    crate::tools::bind(opts, &mut c)?;
     c.env_clear();
     c.env("PATH","/opt/toolchains/active/python/bin:/opt/toolchains/active/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").env("HOME",if user=="root"{"/root"}else{"/home/work"}).env("USER",user).env("LANG","C.UTF-8").env("TERM","xterm-256color").env("NVM_DIR","/opt/toolchains/nvm").env("UV_PYTHON_INSTALL_DIR","/opt/toolchains/uv/python").env("UV_CACHE_DIR","/opt/toolchains/uv/cache").env("TMPDIR","/tmp");
     // Apply caller variables with the guest env executable. Loader variables must
@@ -898,6 +886,7 @@ fn build(
             "required packages missing",
         ));
     }
+    verify_tools(opts, &generation, &merged_env)?;
     // Scripts see this generation's verified default toolchain without changing the active profile.
     merged_env["PATH"] = json!(format!(
         "/opt/toolchains/profiles/{profile}/python/bin:/opt/toolchains/profiles/{profile}/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -931,6 +920,20 @@ fn build(
     verify_generation(opts, &activation)?;
     Ok(activation)
 }
+fn verify_tools(opts: &Options, generation: &Path, env: &V) -> Result<()> {
+    for (argv, version) in crate::tools::verification_commands(opts)? {
+        let mut command = guest_command(opts, generation, "work", "/home/work", env, false)?;
+        command.args(&argv);
+        let output = checked(command, "required tool verification")?;
+        if !String::from_utf8_lossy(&output).contains(&version) {
+            return Err(Error::business(
+                "tool_version_mismatch",
+                "Required Engine tool version does not match its pin",
+            ));
+        }
+    }
+    Ok(())
+}
 fn verify_generation(opts: &Options, activation: &V) -> Result<()> {
     let id = storage::identifier(crate::workspace::required(activation, "generation")?)?;
     let generation = opts
@@ -940,9 +943,10 @@ fn verify_generation(opts: &Options, activation: &V) -> Result<()> {
     let mut cmd = Command::new(runtime(opts)?);
     cmd.arg("verify")
         .arg("--generation")
-        .arg(generation)
+        .arg(&generation)
         .arg("--quiet");
     checked(cmd, "generation verification")?;
+    verify_tools(opts, &generation, &activation["environment"])?;
     Ok(())
 }
 fn activate(opts: &Options, activation: &V) -> Result<()> {
@@ -991,9 +995,10 @@ mod launcher_tests {
         let opts = Options {
             root: temp.path().to_path_buf(),
             runtime: Some(PathBuf::from("/bin/true")),
-            native_dir: Some(temp.path().join("native")),
+            tools: Some(temp.path().join("payload")),
             ..Options::default()
         };
+        crate::tools::fixture(&temp.path().join("payload"));
         let generation = temp.path().join("generation");
         let command =
             guest_command(&opts, &generation, "work", "/workspace", &json!({}), true).unwrap();

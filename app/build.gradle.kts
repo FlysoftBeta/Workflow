@@ -20,7 +20,7 @@ plugins {
 
 val repositoryRoot = rootProject.layout.projectDirectory
 /** One directory per prebuilt: manifest.json (version, upstream URL, sha256 per ABI) and LICENSE. */
-val prebuiltPackages = listOf("codex", "mihomo").map { repositoryRoot.dir("third_party/$it") }
+val prebuiltPackages = listOf("mihomo").map { repositoryRoot.dir("third_party/$it") }
 
 abstract class BuildProxyGuardTask : DefaultTask() {
     @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -282,9 +282,9 @@ val buildProxyGuard = tasks.register<BuildProxyGuardTask>("buildProxyGuard") {
 
 val fetchPrebuilts = tasks.register<FetchPrebuiltsTask>("fetchPrebuilts") {
     group = "build setup"
-    description = "Ensures the pinned Codex and Mihomo executables are cached, verified and exposed as jniLibs."
+    description = "Ensures the pinned Mihomo executable is cached, verified and exposed as jniLibs."
     manifests.from(prebuiltPackages.map { it.file("manifest.json") })
-    // Every ABI in abiFilters ships the pinned Codex and Mihomo (x86_64 for emulators).
+    // Platform capability executables remain Android native payloads.
     abis.set(listOf("arm64-v8a", "x86_64"))
     cacheDirectory.set(repositoryRoot.dir("third_party/.cache"))
     outputDirectory.set(layout.buildDirectory.dir("generated/prebuilt-jni"))
@@ -321,10 +321,39 @@ val environmentImages = flavorArchitectures.mapValues { (flavor, arch) ->
     }
 }
 
+abstract class PrepareEngineToolsTask : DefaultTask() {
+    @get:Input abstract val architecture: Property<String>
+    @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE) abstract val script: RegularFileProperty
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sources: ConfigurableFileCollection
+    @get:InputFile @get:PathSensitive(PathSensitivity.NONE) abstract val serviceJar: RegularFileProperty
+    @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+    @get:Inject abstract val execOperations: ExecOperations
+    @TaskAction fun prepare() {
+        execOperations.exec {
+            commandLine("python3", script.get().asFile.absolutePath,
+                "--architecture", architecture.get(), "--jar", serviceJar.get().asFile.absolutePath,
+                "--output", outputDirectory.get().asFile.resolve("environment/tools").absolutePath)
+        }
+    }
+}
+val engineTools = flavorArchitectures.mapValues { (flavor, arch) ->
+    tasks.register<PrepareEngineToolsTask>("prepare${flavor.replaceFirstChar(Char::titlecase)}EngineTools") {
+        dependsOn(":engine-chat:serviceJar")
+        architecture.set(arch)
+        script.set(repositoryRoot.file("engine/tools/package.py"))
+        sources.from(repositoryRoot.file("engine/tools/package.py"))
+        sources.from(listOf("codex", "jre", "claude-code").flatMap { name ->
+            listOf("manifest.json", "LICENSE").map { repositoryRoot.file("third_party/$name/$it") }
+        })
+        serviceJar.set(project(":engine-chat").layout.buildDirectory.file("libs/workflow-chat.jar"))
+        outputDirectory.set(layout.buildDirectory.dir("generated/engine-tools/$flavor"))
+    }
+}
+
 val prebuiltNotices = tasks.register<PrebuiltNoticesTask>("prebuiltNotices") {
     packages.from(prebuiltPackages)
     // Bundled design resources (ui.design): Material Symbols vectors and the JetBrains Mono NL font.
-    packages.from(listOf("material-symbols", "jetbrains-mono", "claude-code").map { repositoryRoot.dir("third_party/$it") })
+    packages.from(listOf("material-symbols", "jetbrains-mono", "claude-code", "codex", "jre").map { repositoryRoot.dir("third_party/$it") })
     outputDirectory.set(layout.buildDirectory.dir("generated/prebuilt-notices"))
 }
 
@@ -398,7 +427,6 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-            keepDebugSymbols += "**/libcodex.so"
             keepDebugSymbols += "**/libmihomo.so"
             // Shipped byte-identical to the engine build (the loader is a relocation-free static-pie).
             keepDebugSymbols += "**/libworkflow-engine.so"
@@ -427,6 +455,7 @@ androidComponents.onVariants { variant ->
     variant.sources.jniLibs?.addGeneratedSourceDirectory(buildEngine, BuildEngineTask::outputDirectory)
     val image = environmentImages[variant.flavorName] ?: throw GradleException("No environment image for flavor ${variant.flavorName}")
     variant.sources.assets?.addGeneratedSourceDirectory(image, PrepareEnvironmentImageTask::outputDirectory)
+    variant.sources.assets?.addGeneratedSourceDirectory((engineTools[variant.flavorName] ?: throw GradleException("No Engine tools for ${variant.flavorName}")), PrepareEngineToolsTask::outputDirectory)
     variant.sources.assets?.addGeneratedSourceDirectory(prebuiltNotices, PrebuiltNoticesTask::outputDirectory)
 }
 
@@ -436,7 +465,9 @@ dependencies {
     implementation("org.commonmark:commonmark-ext-gfm-strikethrough:0.30.0")
     implementation("ru.noties:jlatexmath-android:0.2.0")
     implementation(project(":core"))
-    implementation(project(":agent"))
+    implementation(project(":agent-model"))
+    testImplementation(project(":agent"))
+    androidTestImplementation(project(":agent"))
     implementation(project(":proxy"))
     implementation(libs.androidx.webkit)
     implementation(platform(libs.sora.editor.bom))

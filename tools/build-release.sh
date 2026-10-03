@@ -41,7 +41,7 @@ for spec in arm64:arm64-v8a x86_64:x86_64; do
   "$sdk/build-tools/37.0.0/aapt" dump badging "$apk" > "$output/$abi-package.txt"
 done
 python3 - "$output" <<'PY'
-import hashlib, json, sys, zipfile
+import hashlib, io, json, sys, zipfile
 from pathlib import Path
 out = Path(sys.argv[1])
 artifacts = []
@@ -52,7 +52,7 @@ for abi, arch in [('arm64-v8a', 'arm64'), ('x86_64', 'amd64')]:
     assert "sdkVersion:'28'" in package and 'application-debuggable' not in package, abi
     with zipfile.ZipFile(apk) as z:
         names = set(z.namelist())
-        for binary in ('workflow-engine', 'workflow-runtime', 'workflow-loader', 'workflow_pty', 'codex', 'mihomo', 'proxyguard'):
+        for binary in ('workflow-engine', 'workflow-runtime', 'workflow-loader', 'workflow_pty', 'mihomo', 'proxyguard'):
             # The guardian's exact packaged name is declared in its native build script.
             if binary == 'proxyguard':
                 assert any(n.startswith(f'lib/{abi}/lib') and 'guard' in n for n in names), abi
@@ -68,6 +68,18 @@ for abi, arch in [('arm64-v8a', 'arm64'), ('x86_64', 'amd64')]:
         assert index['metadata']['profile'] == 'workspace'
         assert index['metadata']['format'] == 'workflow-image'
         assert index['metadata']['formatVersion'] == 2
+        assert not any(n.endswith('/libcodex.so') for n in names)
+        tools = json.loads(z.read('assets/environment/tools/tools.json'))
+        assert tools['format'] == 1 and tools['architecture'] == arch
+        payload = z.read('assets/environment/tools/tools.zip')
+        assert len(payload) == tools['size'] and hashlib.sha256(payload).hexdigest() == tools['sha256']
+        with zipfile.ZipFile(io.BytesIO(payload)) as contents:
+            assert set(contents.namelist()) == {item['path'] for item in tools['files']}
+            for item in tools['files']:
+                data = contents.read(item['path'])
+                assert len(data) == item['size'] and hashlib.sha256(data).hexdigest() == item['sha256']
+            for required in ['codex/bin/codex', 'jre/bin/java', 'chat/workflow-chat.jar', 'notices/codex-LICENSE', 'notices/jre-LICENSE', 'notices/claude-code-LICENSE']:
+                assert required in contents.namelist()
         assert 'assets/web/terminal.html' in names
         assert not any(n.startswith('assets/web/chat/') for n in names)
         assert not any(n.startswith('assets/environment/bootstrap/') for n in names)
