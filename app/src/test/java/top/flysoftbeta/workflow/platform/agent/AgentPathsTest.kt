@@ -3,8 +3,6 @@ package top.flysoftbeta.workflow.platform.agent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import top.flysoftbeta.workflow.agent.model.BackendKind
-import top.flysoftbeta.workflow.agent.model.ConversationEntry
 
 class AgentPathsTest {
     private val paths = AgentPaths("/workspace")
@@ -40,20 +38,4 @@ class AgentPathsTest {
         assertNull(paths.parseLink(""))
     }
 
-    @Test fun indexCodecRoundTripsAndRefusesNewerFormats() {
-        val entries = listOf(
-            ConversationEntry("a", BackendKind.CODEX, "t1", "标题", "/workspace", 1, 2, archived = true, model = "gpt-5.5", effort = "high", preview = "你好"),
-            ConversationEntry("b", BackendKind.CLAUDE, null, null, "/workspace", 3, 4, forkedFrom = "a", forkedAt = "turn-1"),
-        )
-        assertEquals(entries, ConversationIndexCodec.decode(ConversationIndexCodec.encode(entries)))
-        try {
-            ConversationIndexCodec.decode("""{"format":2,"conversations":[]}""")
-            throw AssertionError("newer format accepted")
-        } catch (_: ConversationIndexCodec.NewerFormatException) {
-        }
-        // Entries with an unknown backend are dropped, the rest survives.
-        assertEquals(listOf("x"), ConversationIndexCodec.decode(
-            """{"format":1,"conversations":[{"id":"x","backend":"codex","cwd":""},{"id":"y","backend":"other"}]}""",
-        ).map { it.id })
-    }
 }

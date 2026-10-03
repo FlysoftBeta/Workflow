@@ -152,11 +152,13 @@ class ComposerModel(
         addPaths(paths)
     }
 
-    suspend fun acknowledge(submitted: ComposerDraft) {
-        val stored = store.acknowledgeComposer(submitted)
-        revision = maxOf(revision, stored.revision)
-        if (!stored.hasContent) return
-        if (!hasContent) adopt(stored)
+    /** Engine acknowledges the exact submitted revision; this only refreshes the UI projection. */
+    fun accepted(submitted: ComposerDraft) {
+        scope.launch {
+            val stored = store.state.first { it.composer(conversationId).revision > submitted.revision }.composer(conversationId)
+            revision = maxOf(revision, stored.revision)
+            if (!hasContent) adopt(stored)
+        }
     }
 
     private fun adopt(draft: ComposerDraft) {

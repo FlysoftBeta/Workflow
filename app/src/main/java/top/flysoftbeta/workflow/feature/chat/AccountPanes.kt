@@ -168,6 +168,7 @@ private fun LoginBody(c: ConversationController) {
     val flow = c.backend?.account?.login
     var apiKey by remember { mutableStateOf<String?>(null) }
     val context = c.context.appContext
+    val chatConfiguration by c.hub.configuration.collectAsState()
     fun open(url: String) = runCatching {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
@@ -209,11 +210,11 @@ private fun LoginBody(c: ConversationController) {
                     InlineError("登录没有完成", Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
                 }
-                val methods = c.hub.loginMethods(kind)
-                val primary = methods.first()
+                val methods = chatConfiguration.loginMethods[kind].orEmpty()
+                val primary = methods.firstOrNull()
                 var more by remember { mutableStateOf(false) }
                 if (apiKey == null) {
-                    Button(onClick = { c.login(primary) }, enabled = c.backend?.process is ProcessState.Ready) { Text("登录 $name") }
+                    Button(onClick = { primary?.let { c.login(it) } }, enabled = primary != null && c.backend?.process is ProcessState.Ready) { Text("登录 $name") }
                     Box {
                         TextButton(onClick = { more = true }) { Text("其他方式") }
                         CompositeMenu(

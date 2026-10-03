@@ -4,19 +4,17 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import top.flysoftbeta.workflow.app.panel.PanelRegistry
 import top.flysoftbeta.workflow.app.panel.PanelWiring
 import top.flysoftbeta.workflow.core.store.WorkspaceStore
 import top.flysoftbeta.workflow.platform.agent.AgentHub
-import top.flysoftbeta.workflow.platform.agent.AgentEnvironmentWiring
 import top.flysoftbeta.workflow.platform.agent.ClaudeCodeInstaller
 import top.flysoftbeta.workflow.platform.engine.EngineController
 import java.io.File
 import java.time.ZoneId
 
 /**
- * Process-scoped owners (docs/architecture.md §1). ViewModels read from here and hold no
+ * Connection-scoped service projections and Android adapters. ViewModels read from here and hold no
  * durable state. Workspace data is supplied exclusively by the selected Engine connection.
  */
 object AppGraph {
@@ -55,8 +53,8 @@ object AppGraph {
     }
 
     /**
-     * The agent host (docs/agents.md §2): backends, their shared state and the conversation index.
-     * Both backends run inside the environment once it is usable ([AgentEnvironmentWiring]).
+     * The chat RPC client: disposable transcript and metadata projections.
+     * The Engine owns backend processes and conversation lifecycle.
      */
     fun agentHub(context: Context): AgentHub = hub ?: synchronized(this) {
         hub ?: run {
@@ -64,9 +62,6 @@ object AppGraph {
             AgentHub(app, workspaceStore(app), workspaceScope(app), Dispatchers.IO).also { created ->
                 created.start()
                 hub = created
-                workspaceScope(app).launch {
-                    AgentEnvironmentWiring.run(created, engine(app), claudeInstaller(app), workspaceStore(app))
-                }
             }
         }
     }
@@ -95,7 +90,7 @@ object AppGraph {
     fun proxy(context: Context): top.flysoftbeta.workflow.proxy.runtime.ProxyApi =
         top.flysoftbeta.workflow.platform.proxy.ProxyService.get(context)
 
-    /** Claude Code inside the environment, installed on demand. */
+    /** Engine-managed Claude tool status and install commands. */
     fun claudeInstaller(context: Context): ClaudeCodeInstaller = claude ?: synchronized(this) {
         claude ?: ClaudeCodeInstaller(engine(context), workspaceScope(context)).also { claude = it }
     }

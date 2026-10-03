@@ -151,6 +151,7 @@ class ConversationController(
                 }
             }
         }
+        context.scope.launch { hub.configuration.collect { permissions = it.permissions } }
         context.scope.launch { transcriptLoop() }
         // A pick that finished after the process was recreated still lands in this conversation.
         context.scope.launch {
@@ -342,24 +343,31 @@ class ConversationController(
     val reviewerBlocked: Boolean
         get() = thread?.settings?.approvalsReviewer?.let { it != "user" } == true
 
+    private var pendingSend: Pair<top.flysoftbeta.workflow.core.resource.ComposerDraft, String>? = null
+    private var sending = false
+
     fun send(mode: SendMode = SendMode.AUTO) {
         val e = entry ?: return
-        if (!composer.hasContent || composer.importing) return
+        if (!composer.hasContent || composer.importing || sending) return
         problem = null
         context.scope.launch {
-            val stored = composer.save()
+            sending = true
+            val stored = try { composer.save() } catch (error: Exception) { sending = false; throw error }
             val (text, attachments) = composer.takeForSend()
             val settings = TurnSettings(model = selection?.model, effort = selection?.effort, permissions = permissions)
             try {
-                hub.send(e.id, text, attachments, settings, mode)
-                composer.acknowledge(stored)
+                val operation = pendingSend?.takeIf { it.first == stored }
+                    ?: (stored to java.util.UUID.randomUUID().toString()).also { pendingSend = it }
                 selection?.let { hub.rememberSelection(e.id, it.model, it.effort) }
+                hub.send(e.id, stored, settings, mode, operation.second)
+                pendingSend = null
+                composer.accepted(stored)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 composer.restore(text, attachments.map { it.path })
                 report(error)
-            }
+            } finally { sending = false }
         }
     }
 
@@ -367,7 +375,7 @@ class ConversationController(
 
     fun cancelQueued(turn: Turn) = launchCatching { turn.clientMessageId?.let { hub.cancelQueued(conversationId, it) } }
 
-    fun respond(request: PendingRequest, response: RequestResponse) = launchCatching { hub.respond(request.key, response) }
+    fun respond(request: PendingRequest, response: RequestResponse) = launchCatching { hub.respond(request, response) }
 
     fun select(position: SliderPosition) {
         selection = position
