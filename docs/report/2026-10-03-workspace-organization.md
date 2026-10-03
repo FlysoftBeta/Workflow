@@ -10,7 +10,7 @@ Moves preserved inode, size, mode and modification metadata; no historical text 
 
 Module READMEs explain source, tests, generated inputs and platform boundaries. Unused filesystem/trash writers moved from production `core` into its existing reference test fixtures, while production retains the protocol-facing models and hashing helpers. Proxy acceptance now injects a scoped panel provider instead of changing a process-global production service override. Rust Server framing, strict JSON, binary conversion and errors moved into `protocol.rs`; their external behavior is unchanged.
 
-The documentation hierarchy now distinguishes [product](../product/README.md), [UX](../ux/README.md), [implementation](../implementation/README.md), and [development](../development/README.md). Development guidance includes proposals, task packets, review handoffs, resource scheduling and integration recovery. Old top-level subject paths are short English navigation pointers. `.gitattributes` preserves upstream licenses, frozen archives and byte-exact golden specimens rather than reformatting them for a whitespace check.
+The documentation hierarchy now distinguishes [product](../product/README.md), [UX](../ux/README.md), [implementation](../archive/module-reorganization-2026-10-03/implementation/README.md), and [development](../development/README.md). Development guidance includes proposals, task packets, review handoffs, resource scheduling and integration recovery. Old top-level subject paths are short English navigation pointers. `.gitattributes` preserves upstream licenses, frozen archives and byte-exact golden specimens rather than reformatting them for a whitespace check.
 
 ## Executable coordination
 

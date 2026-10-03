@@ -1,4 +1,4 @@
-"""Strict reader and reference installer for the image format (docs/environment.md §2.5).
+"""Strict reader and reference installer for the image format (docs/engine/environment.md §2.5).
 
 This is the executable form of the contract: the engine's installer must accept exactly what this
 accepts. The reference installer materialises hardlinks as host hardlinks and never creates

@@ -2,17 +2,18 @@
 
 This directory preserves original implementation history, retired source, reports, and licenses. It is not a source of current product behavior. Start at the [repository README](../../README.md) for maintained documentation.
 
-Historical originals retain their original language, bytes, commands, links, and evidence. Relative paths and references inside them describe their original locations; they are not maintained instructions. Use the [relocation manifest](relocations-2026-10-03.json) to find moved material. To reproduce a historical experiment, restore its recorded layout in an isolated checkout; do not add archived implementations to production builds.
+Historical originals retain their original language, bytes, commands, links, and evidence. Relative paths and references inside them describe their original locations; they are not maintained instructions. Use the [original relocation manifest](relocations-2026-10-03.json) and [module reorganization map](module-reorganization-map.json) to find moved material. To reproduce a historical experiment, restore its recorded layout in an isolated checkout; do not add archived implementations to production builds.
 
 | Archive | Original location and purpose |
 | --- | --- |
 | [Initial design documents](initial/) | Existing frozen documentation from before the Rust Workspace Engine rewrite. |
-| [Native C engine](native-engine/ARCHIVE.md) | Existing frozen C runtime, loader, syscall generator, harness, and upstream licenses. Production code is in `engine/runtime` and `engine/loader`. |
+| [Native C engine](native-engine/ARCHIVE.md) | Existing frozen C runtime, loader, syscall generator, harness, and upstream licenses. Production code is in `engine/environment/runtime` and `engine/environment/loader`. |
 | [Web chat](web-chat/README.md) | Existing frozen WebView chat and Markdown sources, generated assets, lockfile, and upstream licenses. Current chat uses native Compose. |
 | [Legacy proxy examples](legacy-runtime/proxy/) | Existing retired proxy configuration examples with no production callers. |
-| [Android file watcher](android-workspace/AndroidFileWatcher.kt) | Existing retired client-side watcher. Android reference-store test adapters remain under `app/src/androidTest`. |
+| [Android file watcher](android-workspace/AndroidFileWatcher.kt) | Existing retired client-side watcher. Android reference-store test adapters remain under `app/android/src/androidTest`. |
 | [Implementation 1.0.0 reports](implementation-1.0.0/README.md) | Original `docs/report/initial/` and `docs/report/rewrite/`, plus their former catalog and the former archive catalog. |
 | [Retired experiments](experiments/README.md) | Original diagnostic source retired from `tools/`; kept with its original documentation. |
+| [Module reorganization documents](module-reorganization-map.md) | Byte-preserved `docs/implementation/` and top-level navigation originals, with current Engine/App destinations. |
 
 New verification records belong in [docs/report](../report/README.md). Historical reports only substantiate the source and test matrix recorded at their own dates.
 

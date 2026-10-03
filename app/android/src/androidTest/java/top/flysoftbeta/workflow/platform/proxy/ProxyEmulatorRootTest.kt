@@ -70,7 +70,7 @@ class ProxyEmulatorRootTest {
     }
 
     @After fun cleanUp() {
-        if (!::app:proxy.isInitialized) return
+        if (!::proxy.isInitialized) return
         runBlocking { withTimeout(20_000) { proxy.stop() } }
         root.run("ip link delete Meta 2>/dev/null; true")
         root.run("ip rule del pref 9505 from all lookup 9700 2>/dev/null; ip rule del pref 9700 from all lookup 9700 2>/dev/null; ip route del unreachable 198.51.100.0/24 table 9500 2>/dev/null; true")

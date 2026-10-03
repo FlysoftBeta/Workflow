@@ -1,6 +1,6 @@
 """Minimal strict POSIX tar (ustar + PAX) writer and reader for the image format.
 
-The reader mirrors what the engine's installer must accept (docs/environment.md §2.2) and rejects
+The reader mirrors what the engine's installer must accept (docs/engine/environment.md §2.2) and rejects
 everything else; it deliberately does not use `tarfile`, which silently accepts GNU extensions.
 """
 from dataclasses import dataclass, field

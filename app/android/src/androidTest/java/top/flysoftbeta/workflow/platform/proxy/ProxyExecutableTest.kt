@@ -71,7 +71,7 @@ class ProxyExecutableTest {
 
             val edited = original.text!! + "# Canonical editor change\n"
             assertTrue(engine.session.store.saveFile(ProxyService.CONFIG_PATH, edited) is top.flysoftbeta.workflow.core.store.SaveResult.Saved)
-            val conflict = runCatching { engine.documents.write("services.proxy", "config.yaml", original.text, original.revision) }
+            val conflict = runCatching { engine.documents.write("services.proxy", "config.yaml", checkNotNull(original.text), original.revision) }
             assertTrue("An editor save must invalidate document CAS", conflict.isFailure)
             service.refresh().getOrThrow()
             assertTrue("Editor bytes did not replace staging", edited == service.configFile.readText())

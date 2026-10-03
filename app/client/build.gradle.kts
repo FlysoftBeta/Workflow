@@ -26,3 +26,9 @@ dependencies {
 }
 
 sourceSets.test { resources.srcDir(rootProject.file("engine/protocol")) }
+
+// Changes to the actual server must rerun the client/Engine tests, including previously skipped ones.
+tasks.test {
+    inputs.file(rootProject.layout.projectDirectory.file("engine/target/debug/workflow-engine"))
+        .optional().withPathSensitivity(PathSensitivity.NONE)
+}

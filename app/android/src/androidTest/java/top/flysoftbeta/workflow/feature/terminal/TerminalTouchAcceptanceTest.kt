@@ -56,8 +56,9 @@ class TerminalTouchAcceptanceTest {
         touch(page, thumb, top, holdMs = 100)
         await("thumb reached first rows") { js(page, "Number(document.querySelector('.workflow-scrollbar').getAttribute('aria-valuenow')) < 40") == "true" }
         val before = js(page, "Number(document.querySelector('.workflow-scrollbar').getAttribute('aria-valuenow'))").toInt()
+        val maximum = js(page, "Number(document.querySelector('.workflow-scrollbar').getAttribute('aria-valuemax'))").toInt()
         onMain { page.write("new streamed output\r\n") }
-        SystemClock.sleep(200)
+        await("stream parsed") { js(page, "Number(document.querySelector('.workflow-scrollbar').getAttribute('aria-valuemax'))").toInt() > maximum }
         assertEquals(before, js(page, "Number(document.querySelector('.workflow-scrollbar').getAttribute('aria-valuenow'))").toInt())
         val end = rect(page, "document.querySelector('.workflow-scrollbar')", yFraction = 0.98)
         touch(page, rect(page, "document.querySelector('.workflow-scroll-thumb')"), end, holdMs = 100)

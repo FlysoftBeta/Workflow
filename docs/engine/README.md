@@ -1,0 +1,60 @@
+# Workspace Engine
+
+The Engine is the authority for sessions, panel layout, files, drafts, configuration, the complete execution environment and published service state. Android is a [connection and presentation client](../app/README.md). Its workspace state is a disposable projection of an Engine snapshot, so reconnecting never creates a second writer. The [product](../product/README.md) and [UX](../ux/README.md) documents define supported behavior and presentation; the [protocol](protocol.md) defines the client boundary.
+
+## Modules and dependencies
+
+`engine/` is one Cargo workspace. `workflow-server` composes the domain crates and owns JSON-RPC, transport and cross-domain transactions. Domain crates expose typed APIs and depend on `workflow-environment`, not on each other or on Server wire methods. Server can export their serde data types without transferring protocol ownership to them.
+
+| Source and package | Responsibility | Reference |
+| --- | --- | --- |
+| `engine/server`, `workflow-server` | Transport, typed protocol, subscriptions and domain composition; binary `workflow-engine` | [Server](server.md) |
+| `engine/workspace`, `workflow-workspace` | Sessions, panel layouts, view state and paradigm selection | [Workspace](workspace.md) |
+| `engine/filework`, `workflow-filework` | Workspace files, revisions, drafts, imports, diff and archive preflight | [FileWork](filework.md) |
+| `engine/terminal`, `workflow-terminal` | Terminal resources, settings, PTY attachment, generation and cwd | [Terminal](terminal.md) |
+| `engine/chat`, `workflow-chat` | Rust conversation domain and adapter port; production cutover remains gated | [Chat](chat.md) |
+| `engine/environment`, `workflow-environment` | Private typed storage, configuration, service intent/receipts, images, tools, lifecycle and guest process API | [Environment](environment.md) |
+| `engine/environment/runtime`, `workflow-runtime` | Ptrace isolation executable and its platform implementation | [Runtime](runtime.md) |
+| `engine/environment/loader`, `workflow-loader` | Freestanding guest ELF loader | [Loader](loader.md) |
+
+The Rust Chat work is incomplete. The retained Kotlin `:engine-chat` service and Engine-only `:agent` adapters remain the production implementation until reducer, codec, adapter and service parity plus isolated API 28 guest/device acceptance pass against the integrated source. Their JAR and Linux JRE remain required payload members. The target is Rust-only production Engine code; the presence of a Rust Chat crate does not establish that cutover. Client presentation types now belong to `:app:client`, while the temporary JVM service can depend on them during this transition.
+
+Environment owns `.workspace/` path construction, typed atomic publication, image and tool lifecycle, workspace-delivered appearance/client configuration, and service desired state and executor receipts. Agent/backend defaults belong to Chat, and terminal settings belong to Terminal. Server retains the combined transaction and maps domain data to the exported contract. Ordinary workspace-file IO belongs to FileWork; guest execution goes through Environment's runtime API. Known data uses typed models; explicitly opaque vendor content and unknown fields remain lossless.
+
+## Workspace storage
+
+The user chooses a root that appears as `/workspace` in the environment. User files live directly beneath it. Engine configuration and private data live in its `.workspace/` directory:
+
+```text
+<workspace-root>/
+  .workspace/
+    config.json                 revisioned workspace configuration
+    env.json                    environment declaration
+    proxy/                      canonical proxy YAML, providers and redacted logs
+    services/<serviceId>/        other explicitly editable service files
+    state/workspace.json         sessions, layouts, file and composer drafts
+    state/terminals.json         terminal identities and metadata
+    state/services/              measured service reports
+    state/local-services/        desired state and executor receipts
+    environment/                 generations, home, tools and activation records
+    documents/                   typed or opaque documents and revision sidecars
+    uploads/                     incomplete restricted uploads
+    trash/                       reversible deletions
+    corrupt/                     original data retained during recovery
+```
+
+The normal explorer hides `.workspace`. Explicit configuration actions can open allowed files, including `.workspace/proxy/`; the file API rejects private state. Environment supplies the guest mask for private state. Runtime metadata inside a generation uses `.workflow-engine/`, a separate implementation directory. Version 1.0.0 has no migration or scan for historical layouts. The proxy directory is `.workspace/proxy/`; the earlier `.workspace/services/proxy/` location is not imported.
+
+The Server commits session/layout state and Working Resources in one workspace transaction through the Environment store. Keeping their domain ownership separate must not split archive protection into independently acknowledged writes. Atomic publication, backup and quarantine happen before a committed revision is acknowledged.
+
+## Execution and connection lifetime
+
+After the exact-version `hello`, clients load the authoritative snapshot and begin connection-scoped watches. Commands return the committed revision and state; clients replace their projections. Watches, environment builds, process waits and output reads do not retain the workspace transaction lock while they wait. Remote and SSH transports remain abstractions only.
+
+Terminals and coding agents require the verified environment. Environment runs product processes through the distinct runtime and loader executables; Android packages Server, runtime and loader as `libworkflow-engine.so`, `libworkflow-runtime.so` and `libworkflow-loader.so`. The verified tools archive carries guest Codex and, until Chat cutover, the Linux JRE and service JAR. Optional Claude installation is Engine-owned. There is no host, Android-shell or Android-JVM fallback.
+
+The embedded stdio Server stops when its transport closes and cleans up its processes. Reconnection reloads committed drafts and metadata but does not imply a detached daemon or uninterrupted process/output survival. Closing a terminal panel only removes a view; Terminal applies reference-based cleanup. Local Android proxy execution is outside the guest, with Environment-owned intent and measured receipts described in the [App proxy reference](../app/proxy.md).
+
+The runtime's `host`, `android_x86_64` and `android_aarch64` trees remain separate in this round; the `runtime-dedup` task owns their extraction independently. Its final gate includes `runtime-host`, Engine builds for both ABIs and isolated API 28 guest exec, PTY and stop acceptance. A partial merge is not an accepted end state, and ARM64 compilation never establishes ARM64 device acceptance.
+
+Build tooling lives in `image/`, `engine/tools/`, and `tools/`; App native adapters and offline terminal assets live under `app/`. Archived C code and retired WebView chat are outside production build inputs. [Status](../status.md) and [testing](../development/testing.md) distinguish recorded acceptance from pending work.

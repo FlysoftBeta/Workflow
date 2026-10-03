@@ -104,6 +104,9 @@ class WorktreeTests(unittest.TestCase):
         task = change_scope(self.repo, "alpha", ["a", "b/file"], share_paths=["b/file"], reason="Owner-approved one-line documentation fix")
         self.assertEqual(["b/file"], task["sharedPaths"])
         self.assertEqual("share-files", task["decisions"][-1]["action"])
+        self.assertEqual(["b"], change_scope(self.repo, "beta", ["b"])["owns"])
+        # A shared claim does not release the original owner's remaining exclusive directory.
+        with self.assertRaises(WorkflowError): self.task("gamma", ["b/file"])
         with self.assertRaises(WorkflowError): change_scope(self.repo, "alpha", ["a", "b"])
 
     def test_worktrees_share_lock_identity_but_not_checkout_output(self):

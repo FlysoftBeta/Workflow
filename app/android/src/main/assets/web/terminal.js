@@ -418,8 +418,9 @@
   }
   function drawScrollbar() {
     if (!scrollbar) return;
+    // A hidden control has no DOM geometry. Reveal it before measuring the first scrollback frame.
+    scrollbar.hidden = !term.buffer.active.baseY;
     var metrics = scrollMetrics();
-    scrollbar.hidden = !metrics.max;
     scrollbar.setAttribute('aria-valuemax', metrics.max);
     scrollbar.setAttribute('aria-valuenow', term.buffer.active.viewportY);
     scrollbar.setAttribute('aria-valuetext', 'Row ' + (term.buffer.active.viewportY + 1) + ' of ' + (metrics.max + 1));

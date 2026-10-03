@@ -31,6 +31,7 @@ export async function terminal(t, { cols = 40, rows = 8, bridge = {}, pointer = 
   const rect = (x, y, width, height) => ({ x, y, left: x, top: y, width, height, right: x + width, bottom: y + height });
   let term;
   w.HTMLElement.prototype.getBoundingClientRect = function () {
+    if (this.hidden) return rect(0, 0, 0, 0);
     const columns = term?.cols ?? cols;
     const lines = term?.rows ?? rows;
     if (this.id === 'terminal') return rect(0, 0, columns * 10 + 48, lines * 22 + 8);

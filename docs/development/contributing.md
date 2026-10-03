@@ -1,6 +1,6 @@
 # Making a change
 
-Workflow is a local-first Android client backed by an authoritative Rust Workspace Engine. Before editing, read the product behavior and UX relevant to the change, then the implementation contract it crosses. Changes to sessions, files, environment, and services must preserve the ownership rules in [architecture](../implementation/architecture.md). The JSONL boundary is specified in [protocol](../implementation/protocol.md).
+Workflow is a local-first Android client backed by an authoritative Rust Workspace Engine. Before editing, read the product behavior and UX relevant to the change, then the implementation contract it crosses. Changes to sessions, files, environment, and services must preserve the ownership rules in [Engine](../engine/README.md) and [App](../app/README.md). The JSONL boundary is specified in [protocol](../engine/protocol.md).
 
 ## Choose a bounded result
 

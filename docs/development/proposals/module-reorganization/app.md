@@ -1,14 +1,18 @@
 # App layout, configuration and documentation
 
-Status: completed round-1 plan; implementation begins in round 2. Updated: 2026-10-03.
+Status: decided; App relocation and documentation are round-2 work, with integrated acceptance pending. Updated: 2026-10-03.
 
-The [target architecture](../module-reorganization.md) leaves Android responsible for connections, local Engine hosting, configuration synchronization, the Workbench and local capabilities. Round 1 changes Engine packaging paths only when necessary; the Android production client and Kotlin chat service keep their current wire behavior.
+The [target architecture](../module-reorganization.md) leaves Android responsible for connections, local Engine hosting, configuration synchronization, the Workbench and local capabilities. The module move preserves Kotlin package and wire identities. The Kotlin Chat service remains the production path while Rust parity and isolated device acceptance are incomplete.
 
 ## Target modules and synchronization
 
 Use `app/android/` for the Android application, Compose features, platform adapters and instrumentation; `app/client/` for pure JVM typed protocol bindings, JSON-RPC transport, connection abstractions, disposable projections and configuration synchronization; and `app/proxy/` for the pure JVM proxy executor model and controller. App-owned native PTY fixtures and the proxy guardian move to `app/native/`; offline xterm sources/tests move to `app/web/`, with packaged assets remaining in the Android application. `core` client contracts move to `app/client`; obsolete reference persistence stays test-only or is archived. `agent` and the Engine JVM service are deleted only after Rust Chat parity and device acceptance. `agent-model` presentation types move to the typed client, then its reducer is replaced by projection changes in the coordinated Chat follow-up. Feature packages continue to communicate through App interfaces.
 
-Connection profiles remain the only client-authored durable source. Workspace-delivered appearance, fonts, terminal preferences and service configuration may be cached by connection/workspace identity and revision. Initial connection loads `hello`, the authoritative snapshot and `client.config`; reconnect replaces stale projections. Writes carry the last observed revision. A conflict first updates the projection, then reapplies the user's intended transformation; it never retries an unchanged stale whole document. Proxy canonical configuration is `.workspace/services/proxy/`, accessed through revisioned document APIs; boot-bound executor epochs and operation receipts prevent replaying an unknown local action. Credentials are not logged or copied into fixtures. Engine-private state never enters Android's durable cache.
+Connection profiles remain the only client-authored durable source. Workspace-delivered appearance, fonts, terminal preferences and service configuration may be cached by connection/workspace identity and revision. Initial connection loads `hello`, the authoritative snapshot and `client.config`; reconnect replaces stale projections. Writes carry the last observed revision. A conflict first updates the projection, then reapplies the user's intended transformation; it never retries an unchanged stale whole document. Proxy canonical configuration is `.workspace/proxy/`, retaining the `services.proxy` document namespace with no migration; it is accessed through revisioned document APIs; boot-bound executor epochs and operation receipts prevent replaying an unknown local action. Credentials are not logged or copied into fixtures. Engine-private state never enters Android's durable cache.
+
+Environment owns the configuration and service domain types and behavior, including appearance, overlay/client settings and proxy intent/receipts. Chat owns agent/backend defaults; Terminal owns terminal configuration. Server composes their existing serde shapes into the wire contract. App synchronization mirrors these owners rather than depending on Server-only domain state.
+
+The final Gradle projects are `:app:android`, `:app:client` and `:app:proxy`. `core` and `agent-model` are merged into the client project, while their Kotlin package names remain unchanged initially. The temporary JVM `:agent` and `:engine-chat` projects may depend on `:app:client` until the Rust gate permits deletion. This exception does not allow Android production to depend on vendor execution.
 
 ## Terminal repairs
 
@@ -25,9 +29,9 @@ No replacement terminal renderer or host PTY backend is introduced. Link hit tes
 
 ## Full documentation relocation map
 
-The move is scheduled for round 3 after the code layout settles. Historical text is never rewritten as current guidance.
+The maintained documentation move is included in round 2. The [JSON relocation manifest](../../../archive/module-reorganization-map.json) retains the repository's existing map format and identifies preserved originals and current destinations. Historical text is never rewritten as current guidance.
 
-| Current maintained location | Destination/action |
+| Retired or retained location | Destination/action |
 | --- | --- |
 | `docs/product/**`, `docs/ux/**` | Keep, update source links and clarified ownership |
 | `implementation/architecture.md` | `docs/engine/README.md` and `docs/app/README.md`, split shared boundary narrative |
@@ -44,7 +48,7 @@ The move is scheduled for round 3 after the code layout settles. Historical text
 | `implementation/dependencies.md` | `docs/development/dependencies.md`, grouped by actual Engine/App owner |
 | `implementation/README.md` | Retire after inbound links point at the two new indexes |
 | `docs/development/**`, `docs/status.md`, `docs/report/**` | Keep their roles; reports record exact source/artifacts and acceptance limits |
-| `docs/archive/**` | Preserve; add `docs/archive/module-reorganization-map.md` with old-to-new paths |
+| `docs/archive/**` | Preserve; add `docs/archive/module-reorganization-map.json` with old-to-new paths and a short Markdown catalog |
 | Top-level stubs `agents`, `architecture`, `container-runtime`, `dependencies`, `engine`, `environment`, `product`, `protocol`, `proxy`, `testing`, `ui`, `workspace-engine`, `workspace` | Update all inbound links, record destinations in the relocation map, then remove stubs |
 | Root README, AGENTS, module READMEs and proposal links | Update navigation to final Engine/App/development indexes in the same documentation change |
 
@@ -52,9 +56,9 @@ The move is scheduled for round 3 after the code layout settles. Historical text
 
 | Task | Owned paths | Dependencies | Checks |
 | --- | --- | --- | --- |
-| R2 App module move | `app/**`, `core/**`, `proxy/**`, `agent-model/**`, root Gradle includes/catalog, `native/**`, `web/**` | Frozen Engine catalog; coordinate Chat-owned models | `core`, `proxy`, `app-unit`, `web`, `native`, `lint`, both ABI APK builds |
+| R2 App module move | `app/**`, `core/**`, `proxy/**`, `agent-model/**`, root Gradle includes/catalog, `native/**`, `web/**` | Frozen Engine catalog; coordinate Chat-owned models | `client`, `proxy`, `app-unit`, `web`, `native`, `lint`, both ABI APK builds |
 | R2 typed bindings/config sync | `app/client/**`, configuration/connection platform adapters and tests | Module move; Rust schema and fixtures | Codec/schema goldens, concurrent revision conflict and reconnect tests; isolated connection/proxy device cases |
 | R2 terminal repairs | `app/android/**/terminal/**`, `app/web/**` | Server path-resolution API | Offline tests and API 28 touch acceptance for all four defects, rotation and streaming |
 | R2 Chat deletion | Client chat bindings, old JVM module includes and fixtures | Rust adapter/service parity plus guest/device acceptance | Chat/client suites; remove JRE only after accepted cutover |
-| R3 docs reorganization | Entire maintained `docs/`, root/module READMEs and AGENTS | Integrated Engine/App layout | `documentation`, navigation audit, archive map, accurate status/report matrix |
-| R3 final acceptance | Integration tests and reports, no new behavior | R2 complete | Source-bound host checks, both ABI builds, API 28 isolated AVD; ARM64/device gaps explicitly recorded |
+| R2 docs reorganization | Entire maintained `docs/`, root/module READMEs and AGENTS | Integrated Engine/App layout | `documentation`, navigation audit, archive map, accurate status/report matrix |
+| Integrated acceptance | Integration tests and reports, no new behavior | R2 complete | Source-bound host checks, both ABI builds, API 28 isolated AVD; ARM64/device gaps explicitly recorded |

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Pack the running, provisioned guest into a workspace image from inside the guest. This is the
 # arm64 build path (run in the Workflow engine on the device after provision.sh, see
-# docs/environment.md §7); image/tests/podman-roundtrip.sh exercises it under podman.
+# docs/engine/environment.md §7); image/tests/podman-roundtrip.sh exercises it under podman.
 # Usage, as (virtual) root: pack-in-guest.sh OUT_DIR [BUILDER]   (OUT_DIR under /tmp or /workspace)
 # Environment: LEVEL (zstd level, default 19), WINDOW_LOG (default 27; the app packs with 3 and 23 on the
 # device to bound compressor memory).

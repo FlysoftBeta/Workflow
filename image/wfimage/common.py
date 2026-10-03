@@ -1,4 +1,4 @@
-"""Shared constants and helpers for the Workflow image format (docs/environment.md §2)."""
+"""Shared constants and helpers for the Workflow image format (docs/engine/environment.md §2)."""
 import stat
 
 FORMAT = "workflow-image"

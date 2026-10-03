@@ -66,10 +66,11 @@ def copy_apks(root: Path, output: Path) -> dict:
 def build_inputs(root: Path, apk: bool) -> dict:
     if not apk: return {}
     records = {}
-    for name in ("image.json", "image.tar.zst"):
-        relative = "artifacts/image/amd64/" + name
-        path = root / relative
-        if path.is_file(): records[relative] = {"sha256": digest(path), "bytes": path.stat().st_size}
+    for arch in ("amd64", "arm64"):
+        for name in ("image.json", "image.tar.zst"):
+            relative = "artifacts/image/" + arch + "/" + name
+            path = root / relative
+            if path.is_file(): records[relative] = {"sha256": digest(path), "bytes": path.stat().st_size}
     return records
 
 

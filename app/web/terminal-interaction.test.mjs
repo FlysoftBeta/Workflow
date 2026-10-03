@@ -169,6 +169,7 @@ test('large scrollbar maps full-track touch drags to rows and preserves the view
   const thumb = bar.querySelector('.workflow-scroll-thumb');
   assert.equal(bar.hidden, false);
   assert.ok(parseFloat(thumb.style.height) >= 48);
+  assert.ok(parseFloat(thumb.style.top) > 0, 'newly revealed thumb must start at the bottom');
   assert.equal(h.w.getComputedStyle(bar).width, '44px');
   const max = h.term.buffer.active.baseY;
   const p = { x: r.left + 22, y: r.top + r.height / 2 };

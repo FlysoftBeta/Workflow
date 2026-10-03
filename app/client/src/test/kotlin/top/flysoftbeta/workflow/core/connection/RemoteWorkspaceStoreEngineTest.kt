@@ -134,7 +134,7 @@ class RemoteWorkspaceStoreEngineTest {
 
     private class Engine(val root: File) : AutoCloseable {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        private val executable = System.getenv("WORKFLOW_ENGINE")?.let(::File) ?: File("../engine/target/debug/workflow-engine")
+        private val executable = System.getenv("WORKFLOW_ENGINE")?.let(::File) ?: File("../../engine/target/debug/workflow-engine")
         init { assumeTrue("Build host Rust Engine or set WORKFLOW_ENGINE", executable.canExecute()) }
         private val process = ProcessBuilder(executable.absolutePath, "serve", "--root", root.path)
             .redirectError(File(root, "engine-diagnostic.log")).start()

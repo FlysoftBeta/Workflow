@@ -83,7 +83,7 @@ def parse_rows(data):
 
 
 def check_rows(rows):
-    """Check invariants 1, 2 and 4 of docs/environment.md §2.4. Returns summary counts."""
+    """Check invariants 1, 2 and 4 of docs/engine/environment.md §2.4. Returns summary counts."""
     if not rows or rows[0].path != b"/" or rows[0].type != "d":
         raise ImageError("attributes-root", "first row must be the root directory")
     kinds = {}

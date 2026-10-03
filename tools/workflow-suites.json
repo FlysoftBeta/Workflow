@@ -28,12 +28,7 @@
     },
     "app-unit": {
       "command": [
-        "./gradlew",
-        ":app:client:test",
-        ":app:proxy:test",
-        ":agent:test",
-        ":engine-chat:test",
-        ":app:android:testX86_64DebugUnitTest"
+        "tools/check-app-unit.sh"
       ],
       "heavy": true,
       "reports": [

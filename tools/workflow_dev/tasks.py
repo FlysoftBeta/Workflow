@@ -85,8 +85,9 @@ def create_task(repo: Repository, name: str, objective: str, scopes: list[str], 
         if task_file(repo, name).exists() or checkout.exists():
             raise WorkflowError(f"Task {name!r} already exists; do not reuse its identity")
         for other in all_tasks(repo):
-            if other["status"] in {"active", "ready", "integrating"} and overlap(scopes, other["owns"]):
-                raise WorkflowError(f"Ownership overlaps active task {other['name']}: {other['owns']}")
+            exclusive = [path for path in other["owns"] if path not in other.get("sharedPaths", [])]
+            if other["status"] in {"active", "ready", "integrating"} and overlap(scopes, exclusive):
+                raise WorkflowError(f"Ownership overlaps active task {other['name']}: {exclusive}")
         task = {"format": 1, "name": name, "objective": objective.strip(), "owns": scopes,
                 "checks": checks, "base": commit, "branch": branch, "checkout": str(checkout),
                 "status": "active", "createdAt": int(time.time())}
@@ -225,7 +226,9 @@ def change_scope(repo: Repository, name: str, scopes: list[str] | None, checks: 
         shared &= set(scopes)
         for other in all_tasks(repo):
             if other["name"] != name and other["status"] in {"active", "ready", "integrating"}:
-                conflicts = [path for path in scopes if overlap([path], other["owns"]) and path not in shared]
+                other_shared = set(other.get("sharedPaths", []))
+                conflicts = [path for path in scopes if path not in shared and any(
+                    overlap([path], [claimed]) and claimed not in other_shared for claimed in other["owns"])]
                 if conflicts:
                     raise WorkflowError(f"Ownership overlaps {other['name']}: {conflicts}")
         outside = [p for p in changed_paths(Path(task["checkout"]), task["base"]) if not owns(scopes, p)]

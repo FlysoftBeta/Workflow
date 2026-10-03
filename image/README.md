@@ -28,5 +28,5 @@ Build a customized image explicitly with `image/build.sh --profile workspace --a
 `--arch arm64`. Images, indexes, package inventories and build logs go into ignored
 `artifacts/image/<arch>/`; `--out` selects another output directory. Do not put generated archives
 or container exports in source control. The
-[environment guide](../docs/implementation/environment.md) defines the image/runtime contract,
+[environment guide](../docs/engine/environment.md) defines the image/runtime contract,
 and the [testing guide](../docs/development/testing.md) records the required acceptance matrix.
