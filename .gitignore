@@ -16,7 +16,7 @@ local.properties
 /artifacts/
 /runtime/artifacts/
 /.prompt_tmp/
-/third_party/.cache/
+/third_party/.cache
 
 /.kotlin/
 
