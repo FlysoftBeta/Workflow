@@ -1,9 +1,11 @@
+mod chat;
 mod environment;
 mod home_stage;
 mod layout;
 mod process;
 mod protocol;
 mod storage;
+mod tools;
 mod workspace;
 use protocol::{
     Error, MAX_BLOB, MAX_FRAME, PROTOCOL, Result, RpcId, decode_blob, encode_blob, line, response,
@@ -32,7 +34,8 @@ struct Server {
     workspace: Mutex<workspace::Workspace>,
     changed: Condvar,
     environment: Arc<Mutex<environment::Environment>>,
-    processes: process::Processes,
+    processes: Arc<process::Processes>,
+    chat: chat::Chat,
     uploads: Mutex<HashMap<String, Upload>>,
     closed: AtomicBool,
     workers: AtomicUsize,
@@ -140,7 +143,7 @@ impl Server {
         self.changed.notify_all();
         Ok(json!({"revision":meta["revision"]}))
     }
-    fn call(&self, method: &str, a: &V) -> Result<V> {
+    fn call(self: &Arc<Self>, method: &str, a: &V) -> Result<V> {
         if matches!(
             method,
             "documents.write"
@@ -153,6 +156,7 @@ impl Server {
                 | "environment.reconcile"
                 | "environment.restart"
                 | "process.spawn"
+                | "chat.command"
         ) && !self.workspace.lock().unwrap().writable
         {
             return Err(Error::business(
@@ -161,6 +165,21 @@ impl Server {
             ));
         }
         match method {
+            "chat.snapshot" | "chat.watch" | "chat.command" => {
+                let weak = Arc::downgrade(self);
+                self.chat.request(&self.environment, Arc::new(move |method, params| {
+                    let server = weak.upgrade().ok_or_else(|| Error::business("closed", "workspace stopped"))?;
+                    if server.closed.load(Ordering::SeqCst) { return Err(Error::business("closed", "workspace stopped")); }
+                    if method == "hello" {
+                        if params["protocol"] != PROTOCOL || params["clientId"].as_str().is_none_or(str::is_empty) {
+                            return Err(Error::business("protocol_mismatch", "invalid internal chat handshake"));
+                        }
+                        let w = server.workspace.lock().unwrap();
+                        return Ok(json!({"protocol":PROTOCOL,"engineVersion":"1.0.0","workspaceRoot":w.root,"capabilities":{"workspace":true,"files":true,"documents":true,"environment":true,"processes":true,"pty":true,"services":true,"chat":true,"maxFrameBytes":MAX_FRAME,"maxBlobChunkBytes":MAX_BLOB}}));
+                    }
+                    server.call(method, params)
+                }), method, a)
+            }
             "workspace.snapshot" => Ok(self.workspace.lock().unwrap().snapshot()),
             "workspace.watch" => {
                 let after = a["afterRevision"]
@@ -450,6 +469,7 @@ impl Server {
                     return Ok(environment.status());
                 }
                 {
+                    self.chat.stop();
                     self.processes.stop_all();
                     let deadline = Instant::now() + Duration::from_secs(10);
                     while self.processes.running.load(Ordering::SeqCst) > 0
@@ -496,7 +516,8 @@ fn serve(options: environment::Options) -> Result<()> {
         workspace: Mutex::new(workspace),
         changed: Condvar::new(),
         environment,
-        processes: process::Processes::new(running),
+        processes: Arc::new(process::Processes::new(running)),
+        chat: chat::Chat::default(),
         uploads: Mutex::new(HashMap::new()),
         closed: AtomicBool::new(false),
         workers: AtomicUsize::new(0),
@@ -618,7 +639,7 @@ fn serve(options: environment::Options) -> Result<()> {
                 &writer,
                 id.unwrap(),
                 Ok(
-                    json!({"protocol":PROTOCOL,"engineVersion":"1.0.0","workspaceRoot":w.root,"capabilities":{"workspace":true,"files":true,"documents":true,"environment":true,"processes":true,"pty":true,"services":true,"maxFrameBytes":MAX_FRAME,"maxBlobChunkBytes":MAX_BLOB}}),
+                    json!({"protocol":PROTOCOL,"engineVersion":"1.0.0","workspaceRoot":w.root,"capabilities":{"workspace":true,"files":true,"documents":true,"environment":true,"processes":true,"pty":true,"services":true,"chat":true,"maxFrameBytes":MAX_FRAME,"maxBlobChunkBytes":MAX_BLOB}}),
                 ),
             );
             continue;
@@ -638,7 +659,10 @@ fn serve(options: environment::Options) -> Result<()> {
         }
         let concurrent = matches!(
             method.as_str(),
-            "workspace.watch"
+            "chat.snapshot"
+                | "chat.watch"
+                | "chat.command"
+                | "workspace.watch"
                 | "process.read"
                 | "process.wait"
                 | "process.write"
@@ -677,6 +701,7 @@ fn serve(options: environment::Options) -> Result<()> {
     }
     server.closed.store(true, Ordering::SeqCst);
     server.changed.notify_all();
+    server.chat.stop();
     server.processes.stop_all();
     for (_, u) in server.uploads.lock().unwrap().drain() {
         let _ = fs::remove_file(u.temp);
