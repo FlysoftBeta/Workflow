@@ -1,4 +1,4 @@
-// Shared by :core, :agent and :proxy (applied after the Kotlin JVM plugin).
+// Shared by :app:client, :agent and :app:proxy (applied after the Kotlin JVM plugin).
 // Fails the build if a pure module references Android APIs in source or pulls an Android artifact
 // onto its classpath. The module graph already keeps android.jar off the classpath; this check also
 // catches androidx/org.json usage that would only surface when the module is consumed by :app.

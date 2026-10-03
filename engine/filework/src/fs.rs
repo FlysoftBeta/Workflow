@@ -17,6 +17,8 @@ pub fn valid_path(p: &str) -> bool {
         && p != ".workspace"
         && (!p.starts_with(".workspace/")
             || matches!(p, ".workspace/config.json" | ".workspace/env.json")
+            || p.strip_prefix(".workspace/proxy/")
+                .is_some_and(|s| s.split('/').all(identifier_valid))
             || p.strip_prefix(".workspace/services/")
                 .is_some_and(|s| s.split('/').count() >= 2 && s.split('/').all(identifier_valid)))
 }

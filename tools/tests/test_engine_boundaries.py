@@ -19,8 +19,8 @@ class EngineBoundaryTests(unittest.TestCase):
     def test_domains_depend_only_on_environment(self):
         workspace = tomllib.loads((ENGINE / "Cargo.toml").read_text())
         self.assertEqual({"environment", "environment/runtime", "environment/loader", "workspace",
-                          "filework", "terminal", "server"}, set(workspace["workspace"]["members"]))
-        for name in ("workspace", "filework", "terminal"):
+                          "filework", "terminal", "server", "chat"}, set(workspace["workspace"]["members"]))
+        for name in ("workspace", "filework", "terminal", "chat"):
             manifest = tomllib.loads((ENGINE / name / "Cargo.toml").read_text())
             internal = {key for key in manifest.get("dependencies", {}) if key.startswith("workflow-")}
             self.assertEqual({"workflow-environment"}, internal, name)
@@ -31,7 +31,7 @@ class EngineBoundaryTests(unittest.TestCase):
         self.assertEqual("workflow-engine", server["bin"][0]["name"])
 
     def test_no_private_path_construction_outside_environment(self):
-        for name in ("workspace", "filework", "terminal", "server"):
+        for name in ("workspace", "filework", "terminal", "chat", "server"):
             for path in (ENGINE / name / "src").rglob("*.rs"):
                 source = production(path)
                 self.assertNotRegex(source, r'\.join\s*\(\s*"\.workspace(?:/|"|\b)', str(path))
@@ -39,7 +39,7 @@ class EngineBoundaryTests(unittest.TestCase):
                     self.assertNotRegex(source, r'\b(?:std::)?fs::(?:read|write|rename|create_dir|remove|metadata)', str(path))
 
     def test_guest_process_and_pty_access_remains_in_runtime_api(self):
-        for name in ("workspace", "filework", "terminal", "server"):
+        for name in ("workspace", "filework", "terminal", "chat", "server"):
             for path in (ENGINE / name / "src").rglob("*.rs"):
                 self.assertNotRegex(production(path), r'\bCommand::new\s*\(|libc::(?:openpty|fork|exec|kill|prctl|ioctl)', str(path))
 
@@ -52,7 +52,7 @@ class EngineBoundaryTests(unittest.TestCase):
                 self.assertNotRegex(source, r'\bjson!\s*\(', str(path))
                 self.assertNotRegex(source, r'\bserde_json::Value\b|\bValue\s+as\s+V\b', str(path))
 
-    def test_round_one_chat_exception_is_explicit_and_functional(self):
+    def test_chat_parity_gate_retains_the_working_production_bridge(self):
         self.assertTrue((ENGINE / "chat/build.gradle.kts").is_file())
         self.assertTrue((ENGINE / "server/src/chat.rs").is_file())
         self.assertIn("spawn_piped", production(ENGINE / "server/src/chat.rs"))

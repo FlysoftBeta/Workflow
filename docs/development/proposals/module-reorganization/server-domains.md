@@ -1,6 +1,6 @@
 # Server, Workspace, FileWork and Terminal
 
-Status: round-1 implementation contract. Owner: Engine contributor. Updated: 2026-10-03.
+Status: decided; round-1 domain split implemented, round-2 composition and terminal work pending integrated evidence. Owner: Engine contributor. Updated: 2026-10-03.
 
 This appendix completes the [architecture](../module-reorganization.md). The source inventory was verified against `f1ed8994ae513bd1e04106bbf162df56919cf2b6`. Round 1 preserves the Android method names, JSON field names, executable names, version 1.0.0 and current state formats. It adds no remote transport or migration.
 
@@ -14,7 +14,9 @@ This appendix completes the [architecture](../module-reorganization.md). The sou
 | Session operations in `server/src/workspace.rs` | `workspace` | Session creation, activation, pin order, archive/restore, maintenance eligibility and resource references |
 | File/draft operations in `workspace.rs`; `imports.rs`; file helpers in `storage.rs` | `filework` | Safe paths, versions, bounded reads, file writes, drafts/composers, imports, trash, diff and archive save preflight |
 | `server/src/terminal.rs` | `terminal` | Metadata, terminal generations, runtime PTY attachment, output cursors, resize/stop/wait, OSC scanning and unreferenced cleanup |
-| `main.rs`, `protocol.rs`, `local_services.rs` | `server` | Protocol, composition, local executor receipts and service-document routing |
+| `main.rs`, `protocol.rs` | `server` | Protocol, composition and service-document routing |
+| Configuration/service domain logic formerly in Server `state.rs` and `local_services.rs` | `environment` | Workspace-delivered appearance/client configuration, service intent, epochs and receipts |
+| Agent/backend defaults and terminal settings formerly in Server `state.rs` | `chat`, `terminal` respectively | Domain configuration types and behavior, with Server composing wire projections |
 | `server/src/chat.rs` | Server temporary bridge | Typed private envelopes around opaque Kotlin chat bodies until round 2 |
 
 Each domain depends only on Environment. Domain structs can derive serde and JSON Schema for storage and export; they contain no method names, JSON-RPC IDs or transport decisions. The Server embeds those data types rather than maintaining duplicate representations. Cross-domain effects are explicit composition operations. In particular, FileWork returns a successful moved path before Server rebases Workspace references, and Server asks FileWork about dirty resources before changing a session's archive state.
@@ -22,6 +24,8 @@ Each domain depends only on Environment. Domain structs can derive serde and JSO
 Workspace's API takes typed state and operations and returns typed changes. FileWork takes typed Working Resources plus its root/store handles; it reports revisions and conflicts without accepting a client-computed layout. Terminal takes Environment runtime process handles, typed launch/read/resize options and terminal IDs. Its typed metadata includes generation, working directory, title, size and exit state. No domain accepts a raw method string as its business API.
 
 The Environment store owns private document keys, bounded reads, atomic publication, backup, quarantine, upload staging and the workspace lock. FileWork owns ordinary workspace file IO and the no-symlink path policy. Server owns no direct workspace-file access. Configuration remains explicitly editable through FileWork with validators supplied by the owner; private state remains hidden.
+
+The configuration/service extraction follows the later user-directed ownership decision. Server retains cross-domain transaction state and wire DTOs or re-exports; moving these types must keep the exported contract and goldens stable unless a rename is deliberate on both sides. Proxy configuration and assets use `.workspace/proxy/` with the `services.proxy` namespace and no migration.
 
 ## Typed JSON-RPC and contract export
 
@@ -45,7 +49,7 @@ Restart orchestration serializes spawn with stop, captures running terminal iden
 
 The current code already has URL callbacks, candidate-file detection, OSC 7 working-directory tracking and touch-selection code. Their existence does not establish usable behavior on the device. Round 1 moves these responsibilities without claiming the four defects fixed.
 
-For file opening, Terminal must keep bounded incremental OSC parsing across output chunks and reset it on lost scrollback or generation changes. The authoritative current directory must come from shell OSC 7 where available, with the launch directory as fallback. A future `terminal.resolvePaths` request will accept terminal identity, generation and candidate text and return workspace-relative path, file/directory kind and optional line/column. Server composes Terminal's guest-path mapping with FileWork's safe existence checks. The client must not reconstruct the host root or probe guessed directory listings. Guest home/system paths are not workspace files; private `.workspace` paths remain denied. URI decoding, localhost/host checks, traversal, Unicode and colon-suffixed diagnostics need tests.
+For file opening, Terminal must keep bounded incremental OSC parsing across output chunks and reset it on lost scrollback or generation changes. The authoritative current directory must come from shell OSC 7 where available, with the launch directory as fallback. The agreed `terminal.resolvePaths` request is `{terminalId,generation,candidates:[string]}`. Its result is `{terminalId,generation,cwd,paths:[{text,path?,kind?,line?,column?}]}`; rejected items contain only `text`, and a stale generation fails the request. Resolved items identify workspace-relative paths and optional line/column. Server composes Terminal's guest-path mapping with FileWork's safe existence checks. The client must not reconstruct the host root or probe guessed directory listings. Guest home/system paths are not workspace files; private `.workspace` paths remain denied. URI decoding, localhost/host checks, traversal, Unicode and colon-suffixed diagnostics need tests.
 
 Scrolling requires a consistent `(terminalId,generation,startOffset,nextOffset)` stream, reset indication and bounded retained output. Engine byte cursors describe output replay, not rendered rows; xterm owns wrapping, alternate-screen state and viewport row geometry. A large draggable thumb and fast scrolling need no second Engine scrollback database. The client anchors the viewport to xterm rows, preserves it during streaming, and clearly resets selection/viewport when Engine retention or generation changes invalidate the anchor.
 

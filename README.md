@@ -6,7 +6,7 @@ The Android client connects to the embedded Engine and keeps only connection pro
 
 ## Find the right document
 
-[Product design](docs/product/README.md) explains the work model and supported behavior. [UX design](docs/ux/README.md) describes visual rules and interaction. [Implementation](docs/implementation/README.md) explains the modules and their contracts. [Development](docs/development/README.md) describes how to propose, implement, verify and integrate a change. The [status record](docs/status.md) distinguishes measured acceptance from known limits.
+[Product design](docs/product/README.md) explains the work model and supported behavior. [UX design](docs/ux/README.md) describes visual rules and interaction. [Engine](docs/engine/README.md) explains Rust domains and the protocol; [App](docs/app/README.md) explains connection, configuration, Workbench and local execution. [Development](docs/development/README.md) describes how to propose, implement, verify and integrate a change. The [status record](docs/status.md) distinguishes measured acceptance from known limits.
 
 Historical reports, retired implementations and their original licenses are indexed in [the archive](docs/archive/README.md). Historical originals retain their original language; maintained documentation is written in English. New change-specific evidence belongs in [reports](docs/report/README.md), while large local logs and artifacts remain ignored.
 
@@ -15,16 +15,16 @@ Historical reports, retired implementations and their original licenses are inde
 The [build guide](docs/development/building.md) covers host setup, required image inputs, Debug APKs, and signed Release delivery. Use JDK 25, Rust 1.93.1, Python 3.11 or newer, and the pinned Android toolchain. After preparing the customized images, run from the repository root:
 
 ```sh
-tools/with-build-lock.sh ./gradlew :app:assembleDebug
+tools/with-build-lock.sh ./gradlew :app:android:assembleDebug
 ```
 
-This builds separate `arm64` and `x86_64` APKs. The flavors select Android ABIs `arm64-v8a` and `x86_64`; they describe CPU compatibility, independent of whether Android runs on physical hardware or an emulator. Both support Android 9/API 28 and newer. For one ABI, use `:app:assembleArm64Debug` or `:app:assembleX86_64Debug`. Standard `:app:assembleRelease` also aggregates both ABIs and requires the local release key described in the build guide.
+This builds separate `arm64` and `x86_64` APKs. The flavors select Android ABIs `arm64-v8a` and `x86_64`; they describe CPU compatibility, independent of whether Android runs on physical hardware or an emulator. Both support Android 9/API 28 and newer. For one ABI, use `:app:android:assembleArm64Debug` or `:app:android:assembleX86_64Debug`. Standard `:app:android:assembleRelease` also aggregates both ABIs and requires the local release key described in the build guide.
 
 For source-bound checks and Android acceptance preparation:
 
 ```sh
 tools/workflow init
-tools/workflow check core
+tools/workflow check client
 tools/workflow check android-apk
 ```
 

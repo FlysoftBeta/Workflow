@@ -4,16 +4,16 @@ Run the commands in this guide from the repository root on a Linux x86_64 host. 
 
 | Flavor | Android ABI | Environment image architecture | Debug task | Release task |
 | --- | --- | --- | --- | --- |
-| `arm64` | `arm64-v8a` | `arm64` | `:app:assembleArm64Debug` | `:app:assembleArm64Release` |
-| `x86_64` | `x86_64` | `amd64` | `:app:assembleX86_64Debug` | `:app:assembleX86_64Release` |
+| `arm64` | `arm64-v8a` | `arm64` | `:app:android:assembleArm64Debug` | `:app:android:assembleArm64Release` |
+| `x86_64` | `x86_64` | `amd64` | `:app:android:assembleX86_64Debug` | `:app:android:assembleX86_64Release` |
 
-Choose the ABI supported by the Android target. Either flavor can run on compatible physical hardware or an emulator; the flavor does not describe that distinction. Both retain application ID `top.flysoftbeta.workflow`, version 1.0.0/versionCode 10000, and minSdk 28. The standard `:app:assembleDebug` and `:app:assembleRelease` tasks aggregate both flavors and produce two APKs, each containing one ABI and its corresponding image.
+Choose the ABI supported by the Android target. Either flavor can run on compatible physical hardware or an emulator; the flavor does not describe that distinction. Both retain application ID `top.flysoftbeta.workflow`, version 1.0.0/versionCode 10000, and minSdk 28. The standard `:app:android:assembleDebug` and `:app:android:assembleRelease` tasks aggregate both flavors and produce two APKs, each containing one ABI and its corresponding image.
 
 ## Prepare the host
 
 Use JDK 25 to run Gradle, Rust 1.93.1 through rustup, Python 3.11 or newer, Git, Bash, and the usual Linux build utilities, including `flock`, `readelf`, and `sha256sum`. The Android build scripts select the NDK's `linux-x86_64` toolchain. Image construction additionally requires rootless Podman, zstd, curl, tar, and `dpkg-deb`; release-key creation requires OpenSSL. Node.js and npm are needed when regenerating or testing the offline terminal assets.
 
-The checked-in wrapper selects Gradle 9.8.0, while the version catalog pins Android Gradle Plugin 9.4.1, NDK 30.0.15729638, and CMake 4.3.0. Install Android SDK Platform 37 and Build-Tools 37.0.0. These are repository versions; consult [dependencies](../implementation/dependencies.md) and its linked manifests when changing them.
+The checked-in wrapper selects Gradle 9.8.0, while the version catalog pins Android Gradle Plugin 9.4.1, NDK 30.0.15729638, and CMake 4.3.0. Install Android SDK Platform 37 and Build-Tools 37.0.0. These are repository versions; consult [dependencies](dependencies.md) and its linked manifests when changing them.
 
 Set `JAVA_HOME` to the JDK 25 installation, add its `bin` directory to `PATH`, and set `ANDROID_HOME` to the SDK installation. Alternatively, record the SDK path as `sdk.dir=/absolute/path/to/Android/Sdk` in the ignored `local.properties`. After installing Android command-line tools, install the required SDK components:
 
@@ -41,13 +41,15 @@ image/build.sh --profile workspace --arch arm64
 
 The required input pairs are `artifacts/image/amd64/image.tar.zst` with `image.json` and `artifacts/image/arm64/image.tar.zst` with `image.json`. Each command also writes package inventories, image state, checksums, and logs beside the archive. A single-flavor APK build needs the matching image pair; an aggregate Debug or Release build needs both.
 
-The image builder coordinates its compression through the shared build lock. On an x86_64 host, the arm64 command uses the pinned build-only QEMU through a rootless Podman user namespace and a private mount namespace. This cross-build path requires Linux 6.7 or newer and does not configure global host binfmt. See [environment construction](../implementation/environment.md#building-and-checking-images) for the image inputs, checks, and runtime contract.
+The image builder coordinates its compression through the shared build lock. On an x86_64 host, the arm64 command uses the pinned build-only QEMU through a rootless Podman user namespace and a private mount namespace. This cross-build path requires Linux 6.7 or newer and does not configure global host binfmt. See [environment construction](../engine/environment.md#building-and-checking-images) for the image inputs, checks, and runtime contract.
 
 APK assembly verifies the image profile, architecture, archive size, and SHA-256. It fails when the required pair is missing or invalid. Assembly does not provision the image, and a `base` image cannot replace the customized environment. Prepared task checkouts can receive independent image snapshots through `tools/workflow prepare NAME`, as described in the [multi-agent workflow](multi-agent.md).
 
 ## Engine tools payload
 
-The `agent` verification suite builds `:engine-chat:serviceJar`, producing `engine/chat/build/libs/workflow-chat.jar`. This is Java 17 bytecode for the bundled guest JRE, independent of both the Gradle JDK and Android's runtime. Android production depends on `:agent-model`; `:agent` and `:engine-chat` must not enter its production dependency graph. Instrumentation may retain adapter/process fixtures explicitly.
+The Kotlin Chat service remains the production path while the Rust port is incomplete. Keep its JAR, JRE and packaging checks until the [Chat cutover gate](../engine/chat.md#rust-port-and-cutover-gate) passes. Host policy tests or the presence of a Rust crate are not permission to remove them.
+
+The `agent` verification suite builds `:engine-chat:serviceJar`, producing `engine/chat/build/libs/workflow-chat.jar`. This is Java 17 bytecode for the bundled guest JRE, independent of both the Gradle JDK and Android's runtime. Android production depends on `:app:client`; `:agent` and `:engine-chat` must not enter its production dependency graph. Instrumentation may retain adapter/process fixtures explicitly.
 
 APK assembly invokes `engine/tools/package.py` for the selected architecture. It produces `tools.json` and `tools.zip` under generated assets at `assets/environment/tools/`. The payload combines pinned Codex, Eclipse Temurin JRE 17.0.20.1+1, the service JAR and retained upstream notices. Its catalog records per-file size, SHA-256 and executable mode, archive identity, architecture, fixed guest entry points and the pinned optional Claude release. Ignored downloads live beneath `third_party/.cache/engine`; a corrupt existing cache fails rather than being silently replaced.
 
@@ -67,24 +69,24 @@ Use `arm64` for the other architecture. Supply that output directory with Server
 Use the shared build-lock wrapper for direct Gradle commands:
 
 ```sh
-tools/with-build-lock.sh ./gradlew :app:assembleDebug
+tools/with-build-lock.sh ./gradlew :app:android:assembleDebug
 ```
 
 For only one ABI, use either command:
 
 ```sh
-tools/with-build-lock.sh ./gradlew :app:assembleArm64Debug
-tools/with-build-lock.sh ./gradlew :app:assembleX86_64Debug
+tools/with-build-lock.sh ./gradlew :app:android:assembleArm64Debug
+tools/with-build-lock.sh ./gradlew :app:android:assembleX86_64Debug
 ```
 
-Gradle automatically cross-compiles the Rust Workspace Server, runtime, and loader, builds the local proxy guardian and native test support as configured, stages verified Mihomo and notices, builds the guest chat service and Engine tools payload, and packages the selected environment image. Codex is a guest payload executable, not `libcodex.so` in Android JNI libraries. No separate manual native build is needed. Generated inputs stay under `app/build/`; Cargo and other build caches remain ignored. Shared native preparation currently builds both Android ABIs even when assembling a single flavor, so install both Rust targets.
+Gradle automatically cross-compiles the Rust Workspace Server, runtime, and loader, builds the local proxy guardian and native test support as configured, stages verified Mihomo and notices, builds the guest chat service and Engine tools payload, and packages the selected environment image. Codex is a guest payload executable, not `libcodex.so` in Android JNI libraries. No separate manual native build is needed. Generated inputs stay under `app/android/build/`; Cargo and other build caches remain ignored. Shared native preparation currently builds both Android ABIs even when assembling a single flavor, so install both Rust targets.
 
 The Debug outputs use standard Android debug signing:
 
 | Flavor | APK path |
 | --- | --- |
-| `arm64` | `app/build/outputs/apk/arm64/debug/app-arm64-debug.apk` |
-| `x86_64` | `app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk` |
+| `arm64` | `app/android/build/outputs/apk/arm64/debug/android-arm64-debug.apk` |
+| `x86_64` | `app/android/build/outputs/apk/x86_64/debug/android-x86_64-debug.apk` |
 
 The wrapper uses the primary checkout's `artifacts/.gradle.lock`, including from linked task checkouts. Cargo uses at most two jobs. Do not set `WORKFLOW_BUILD_LOCK_HELD=1` yourself; it is an internal signal passed after the lease is held. Commands such as `tools/workflow check` and `tools/build-release.sh` manage their own lease and should be invoked directly.
 
@@ -101,10 +103,10 @@ The script creates the ignored `artifacts/signing/Workflow-release.p12` only whe
 To assemble both signed Release APKs without creating a delivery bundle:
 
 ```sh
-tools/with-build-lock.sh ./gradlew :app:assembleRelease
+tools/with-build-lock.sh ./gradlew :app:android:assembleRelease
 ```
 
-Use `:app:assembleArm64Release` or `:app:assembleX86_64Release` for one flavor. These write `app/build/outputs/apk/arm64/release/app-arm64-release.apk` and `app/build/outputs/apk/x86_64/release/app-x86_64-release.apk`, respectively. Direct Gradle builds can select another compatible PKCS#12 key with `-Pworkflow.keystore=/absolute/path/to/key.p12`; the alias and password expectations stay the same. The delivery helper expects the default local key path.
+Use `:app:android:assembleArm64Release` or `:app:android:assembleX86_64Release` for one flavor. These write `app/android/build/outputs/apk/arm64/release/android-arm64-release.apk` and `app/android/build/outputs/apk/x86_64/release/android-x86_64-release.apk`, respectively. Direct Gradle builds can select another compatible PKCS#12 key with `-Pworkflow.keystore=/absolute/path/to/key.p12`; the alias and password expectations stay the same. The delivery helper expects the default local key path.
 
 For the verified release delivery, run:
 

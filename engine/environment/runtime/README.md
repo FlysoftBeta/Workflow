@@ -51,6 +51,6 @@ or `engine/target/`.
 The [acceptance directory](tests/README.md) separates native guest/oracle workloads, the Android
 test app and device drivers. `test-host.sh` and `test-android.sh` are the supported entry points;
 the latter uses the repository's single AVD wrapper. The
-[runtime guide](../../../docs/implementation/container-runtime.md) explains compatibility limits,
+[runtime guide](../../../docs/engine/runtime.md) explains compatibility limits,
 and the [testing guide](../../../docs/development/testing.md) defines the evidence required for each
 ABI and Android target.

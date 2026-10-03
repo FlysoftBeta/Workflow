@@ -48,8 +48,8 @@ def task_context(repo: Repository, task_name: str | None):
 
 
 def copy_apks(root: Path, output: Path) -> dict:
-    paths = {"app": "app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk",
-             "test": "app/build/outputs/apk/androidTest/x86_64/debug/app-x86_64-debug-androidTest.apk"}
+    paths = {"app": "app/android/build/outputs/apk/x86_64/debug/android-x86_64-debug.apk",
+             "test": "app/android/build/outputs/apk/androidTest/x86_64/debug/android-x86_64-debug-androidTest.apk"}
     output.mkdir(parents=True)
     result = {}
     for name, relative in paths.items():
@@ -66,10 +66,11 @@ def copy_apks(root: Path, output: Path) -> dict:
 def build_inputs(root: Path, apk: bool) -> dict:
     if not apk: return {}
     records = {}
-    for name in ("image.json", "image.tar.zst"):
-        relative = "artifacts/image/amd64/" + name
-        path = root / relative
-        if path.is_file(): records[relative] = {"sha256": digest(path), "bytes": path.stat().st_size}
+    for arch in ("amd64", "arm64"):
+        for name in ("image.json", "image.tar.zst"):
+            relative = "artifacts/image/" + arch + "/" + name
+            path = root / relative
+            if path.is_file(): records[relative] = {"sha256": digest(path), "bytes": path.stat().st_size}
     return records
 
 

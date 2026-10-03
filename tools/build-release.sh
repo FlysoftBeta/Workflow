@@ -23,13 +23,13 @@ if [[ ! -f artifacts/signing/Workflow-release.p12 ]]; then
 fi
 mkdir -p -- "$output"
 # Keep both build and immutable copies under the same lock; image-profile builds share output paths.
-./gradlew :app:assembleRelease \
+./gradlew :app:android:assembleRelease \
   > "$output/build.log" 2>&1
 for spec in arm64:arm64-v8a x86_64:x86_64; do
   flavor=${spec%%:*}
   abi=${spec#*:}
   apk="$output/Workflow-$version-$abi-release.apk"
-  cp -- "app/build/outputs/apk/$flavor/release/app-$flavor-release.apk" "$apk"
+  cp -- "app/android/build/outputs/apk/$flavor/release/android-$flavor-release.apk" "$apk"
   # Verification starting at API 21 exercises v1 as well as v2/v3; the manifest still requires API 28.
   "$signer" verify --verbose --print-certs --min-sdk-version 21 "$apk" > "$output/$abi-signature.txt"
   for scheme in v1 v2 v3; do

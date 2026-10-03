@@ -2,7 +2,7 @@
 
 Workflow is a compact Android workspace for editing files and working with coding agents. Its two main ways of working, Files and Chat, put the current task at the center without forcing files and conversations into one tab system. Switching between them preserves the work already in progress.
 
-This directory defines intended user-visible behavior. [Workspace tools and services](workspace-and-services.md) covers files, conversations, the runtime, and device utilities. The [UX specification](../ux/README.md) defines presentation and interaction, while [implementation documentation](../implementation/README.md) defines ownership and mechanisms. These are specifications, not claims that every interaction has passed device acceptance; verification and current limits belong in the [development documentation](../development/README.md).
+This directory defines intended user-visible behavior. [Workspace tools and services](workspace-and-services.md) covers files, conversations, the runtime, and device utilities. The [UX specification](../ux/README.md) defines presentation and interaction, while the [Engine](../engine/README.md) and [App](../app/README.md) references define ownership and mechanisms. These are specifications, not claims that every interaction has passed device acceptance; verification and current limits belong in the [development documentation](../development/README.md).
 
 ## Entering and leaving a workspace
 

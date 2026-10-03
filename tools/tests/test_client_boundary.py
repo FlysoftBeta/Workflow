@@ -6,10 +6,12 @@ Instrumentation fixtures deliberately have a different dependency boundary.
 """
 from pathlib import Path
 import re
+import subprocess
+import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-APP_SRC = ROOT / "app/src"
+APP_SRC = ROOT / "app/android/src"
 MAIN = APP_SRC / "main"
 
 # Preserve literals (including URLs) while removing comments before checking code.
@@ -39,7 +41,7 @@ class ClientBoundaryTests(unittest.TestCase):
     def test_production_dependency_graph_cannot_reach_agent_or_chat_service(self):
         # Resolve every reached module, so a newly introduced intermediary cannot hide a server dependency.
         aliases = {":engine-chat": ROOT / "engine/chat/build.gradle.kts"}
-        pending = [":app"]
+        pending = [":app:android"]
         visited = set()
         while pending:
             module = pending.pop()
@@ -51,7 +53,7 @@ class ClientBoundaryTests(unittest.TestCase):
             build = aliases.get(module, ROOT / module.lstrip(":").replace(":", "/") / "build.gradle.kts")
             self.assertTrue(build.is_file(), f"Unresolved production module {module}; extend boundary resolution explicitly")
             pending.extend(production_dependencies(build.read_text()))
-        self.assertIn(":agent-model", visited, "Android must consume the shared wire/model module")
+        self.assertIn(":app:client", visited, "Android must consume the typed client module")
 
     def test_vendor_adapters_and_process_launchers_are_not_android_production_code(self):
         forbidden = re.compile(
@@ -80,7 +82,7 @@ class ClientBoundaryTests(unittest.TestCase):
                                r'System\.loadLibrary\s*\(\s*"workflow_pty"')
         self.assertEqual([], [str(path) for path, text in self.sources() if forbidden.search(text)])
         for name in ("NativePty.kt", "PtyTerminalProcess.kt", "AndroidShellBackend.kt"):
-            self.assertTrue((ROOT / "app/src/androidTest/java/top/flysoftbeta/workflow/platform/pty" / name).is_file())
+            self.assertTrue((ROOT / "app/android/src/androidTest/java/top/flysoftbeta/workflow/platform/pty" / name).is_file())
 
     def test_terminal_client_has_no_process_or_reference_reaping_policy(self):
         forbidden = re.compile(r'"process\.(?:spawn|stop|wait)"|\b(?:EnvironmentRestartListener|beforeRestart|afterRestart|referencedTerminals)\b|\breap\s*\(')
@@ -98,18 +100,27 @@ class ClientBoundaryTests(unittest.TestCase):
         self.assertFalse((MAIN / "java/top/flysoftbeta/workflow/platform/workspace/WorkspaceLocation.kt").exists())
 
     def test_codex_is_not_packaged_as_android_jni(self):
-        build = code((ROOT / "app/build.gradle.kts").read_text())
+        build = code((ROOT / "app/android/build.gradle.kts").read_text())
         packages = re.search(r'val\s+prebuiltPackages\s*=\s*listOf\((.*?)\)', build, re.S)
         self.assertIsNotNone(packages, "Inspect the JNI prebuilt packaging contract when replacing its implementation")
         self.assertNotRegex(packages.group(1), r'["\'](?:codex|claude-code|jre)["\']')
         self.assertNotRegex(build, r'libcodex\.so')
-        for path in (ROOT / "app/src").glob("*/jniLibs/**/*"):
+        for path in (ROOT / "app/android/src").glob("*/jniLibs/**/*"):
             self.assertFalse(path.is_file() and "codex" in path.name.lower(), str(path))
 
+    def test_generated_client_bindings_match_server_export(self):
+        subprocess.run([sys.executable, str(ROOT / "tools/generate-client-protocol.py"), "--check"], cwd=ROOT, check=True)
+
+    def test_terminal_resolution_has_no_client_filesystem_guessing(self):
+        controller = code((MAIN / "java/top/flysoftbeta/workflow/feature/terminal/TerminalPanel.kt").read_text())
+        self.assertNotIn("listDirectory(", controller)
+        self.assertNotIn("TerminalLinks.candidates", controller)
+        self.assertIn("resolvePaths(", controller)
+
     def test_dependency_gate_distinguishes_test_fixtures(self):
-        self.assertEqual({":agent-model", ":core"}, production_dependencies('''
-            implementation(project(":agent-model"))
-            debugImplementation(project(path = ":core"))
+        self.assertEqual({":app:client", ":app:proxy"}, production_dependencies('''
+            implementation(project(":app:client"))
+            debugImplementation(project(path = ":app:proxy"))
             testImplementation(project(":agent"))
             androidTestImplementation(project(":agent"))
             // implementation(project(":agent"))

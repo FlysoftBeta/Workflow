@@ -1,12 +1,14 @@
 # Module appendix: Environment, runtime and loader
 
-Status: verified round-1 plan and later-round design. Owner: Engine contributor. Updated: 2026-10-03.
+Status: decided; round-1 foundation implemented, remaining work gated. Owner: Engine contributor; runtime extraction belongs to the separate `runtime-dedup` task. Updated: 2026-10-03.
 
 This appendix plans `workflow-environment`, `workflow-runtime` and the loader for the [module reorganization](../module-reorganization.md). The draft inventory was checked against `f1ed8994ae513bd1e04106bbf162df56919cf2b6`. Historical counts are approximate: the four current source files total 2,714 lines including tests (`environment` 1,020, `process` 418, `tools` 814 and `home_stage` 462). API sketches below describe the eventual design; the concrete round-1 API is the crate source and the handoff, not every proposed convenience wrapper.
 
+The inventories and task sketches below record the baseline used for planning; they are not a claim that every sketched API exists. Later user steering assigns configuration and service domain logic to Environment, agent defaults to Chat and terminal settings to Terminal, superseding the old Server/services allocation in that inventory. Runtime extraction is separately owned and excluded from the current round-2 source scope.
+
 ## Key decisions
 
-- **On-disk compatibility is preserved byte for byte where it matters.** Every `.workspace/` path, every persisted field name and both environment fingerprints stay identical, because version 1.0.0 has no migration. A path change on the user's tablet would orphan the persistent home (which holds agent logins) and force a rebuild. The reorganization centralizes paths; it does not rename them.
+- **On-disk compatibility is preserved byte for byte where it matters.** Environment declaration/lifecycle paths, persisted field names and both environment fingerprints stay identical, because version 1.0.0 has no migration. A path change on the user's tablet would orphan the persistent home (which holds agent logins) and force a rebuild. The proxy is the explicit user-directed exception: all canonical proxy files use `.workspace/proxy/`, retaining `services.proxy` identifiers, without migration from the previous service directory.
 - **The declaration is still `.workspace/env.json`.** The user and the skeleton say `environment.json`, but today that name belongs to the private lifecycle record at `.workspace/environment/environment.json`. The typed model is called `EnvironmentDeclaration`. Round 1 deliberately retains that name and documents the distinction; no rename or migration is introduced.
 - **`workflow-environment` is the foundation crate.** Every domain crate already depends on it, so it hosts the shared primitives: strict JSON, `Identifier`, SHA-256 helpers, atomic file publication and `DiskVersion`.
 - **`workflow-runtime` stays a separate executable.** A ptrace tracer must not run inside the multi-threaded Server, and the runtime explicitly sets `PR_SET_PDEATHSIG` and supervises process-tree convergence. The Rust API that drives it, including PTYs, supervision and stop, is `workflow_environment::runtime`.
@@ -118,7 +120,7 @@ Paths are unchanged. One table in `persist::layout` drives directory creation, p
 | --- | --- | --- | --- |
 | `config.json` | Editable config (settings v2) | workspace registers the validator | visible |
 | `env.json` | Editable config (declaration v1) | environment | visible |
-| `services/<svc>/<key>` | Editable service file, with a sidecar revision | Server/services | visible |
+| `proxy/<key>` and other `services/<svc>/<key>` | Editable service file, with a sidecar revision | Environment/services | visible |
 | `engine.lock` | Private; `flock` held for the Engine's lifetime | environment | hidden |
 | `state/workspace.json` (+`.bak`) | Private state | workspace | hidden |
 | `state/terminals.json` | Private state | terminal | hidden |
@@ -212,7 +214,7 @@ pub struct UnknownFields(serde_json::Map<String, serde_json::Value>);   // opaqu
 
 `claim` fails if a location is already claimed, so each document has exactly one owning crate. Owners serialize their own access. Policies reproduce current behavior: `workspace.json` and `environment.json` keep a backup and become read-only on an unknown format, `tools/state.json` has no format field and is quarantined on a wrong shape, and `terminals.json` becomes read-only. `from_slice_strict` keeps today's duplicate-key rejection and depth limit of 128.
 
-The rule "no `.workspace` path construction outside the environment" is met as follows. Filework receives `AreaDir`s for `uploads` and `trash` and performs ordinary file IO inside them. It writes editable configuration through `ConfigFileHandle`, which runs the validator registered by the owner. Workspace registers the `config.json` validator, so filework does not depend on workspace.
+The rule "no `.workspace` path construction outside the environment" is met as follows. Filework receives `AreaDir`s for `uploads` and `trash` and performs ordinary file IO inside them. It writes editable configuration through `ConfigFileHandle`, which runs the validator registered by the owner. Environment owns configuration validation and Server composes the Chat and Terminal sections, so FileWork does not depend on those domains.
 
 ### 3.4 Typed declaration (`env.json`)
 
@@ -429,7 +431,7 @@ The coordinator should freeze `engine/server/src/{environment,process,tools,home
 **ENV-4.**
 - Owns the deletion of `engine/server/src/{environment,process,tools,home_stage}.rs`.
 - Call-site edits in `engine/server/src/{main,storage,terminal,chat,workspace,layout,imports,tests}.rs` and `engine/server/Cargo.toml` are temporarily assigned by the coordinator.
-- Also owns `git mv engine/server/guest engine/environment/guest`, `docs/implementation/{environment,container-runtime,workspace,workspace-engine}.md` and `docs/report/<date>-environment-crate.md`.
+- Also owns `git mv engine/server/guest engine/environment/guest`, `docs/engine/{environment,runtime,workspace,server}.md` and `docs/report/<date>-environment-crate.md`.
 - Wire output stays unchanged.
 - Checks:
   - `rust-server`, `rust-environment`, `documentation`, `infrastructure`.
@@ -443,7 +445,7 @@ The coordinator should freeze `engine/server/src/{environment,process,tools,home
 
 **ENV-5.**
 - Owns `git mv engine/runtime engine/environment/runtime` and `git mv engine/loader engine/environment/loader`, with path edits in their scripts, `tests/device/cases`, `tests/android-harness/build.gradle.kts` and `generate-syscalls.py`.
-- Also owns `engine/build-android.sh`, `engine/tools/**` (moving to `image/tools-payload/**`, see Q8), the member path in `engine/Cargo.toml` and the path mentions in `docs/implementation/container-runtime.md` and `docs/development/testing.md`.
+- Also owns `engine/build-android.sh`, `engine/tools/**` (moving to `image/tools-payload/**`, see Q8), the member path in `engine/Cargo.toml` and the path mentions in `docs/engine/runtime.md` and `docs/development/testing.md`.
 - Requested edits: `tools/workflow-suites.json` `runtime-host` (coordinator) and the `package.py` path in `app/build.gradle.kts` (App planner).
 - Remove the ignored `build/` and `.gradle/` directories of the old harness before moving it.
 - Checks: `runtime-host`, `python3 engine/environment/runtime/tools/generate-syscalls.py --check`, `engine/build-android.sh` for both ABIs under the lock, `image`, `documentation`.
@@ -453,7 +455,7 @@ The coordinator should freeze `engine/server/src/{environment,process,tools,home
   - No active code/build link uses the old runtime or loader path. Baseline inventory and relocation prose may retain the old names explicitly.
 
 **ENV-6.**
-- Owns `engine/environment/runtime/src/**`, `engine/environment/runtime/tools/check-platform-merge.py`, the runtime README and `docs/implementation/container-runtime.md`.
+- Owns `engine/environment/runtime/src/**`, `engine/environment/runtime/tools/check-platform-merge.py`, the runtime README and `docs/engine/runtime.md`.
 - Checks:
   - The equivalence check for all three targets against the ENV-5 commit.
   - `cargo check -p workflow-runtime` for the host, `x86_64-linux-android` and `aarch64-linux-android` under the lock.
@@ -467,7 +469,7 @@ The coordinator should freeze `engine/server/src/{environment,process,tools,home
 
 **ENV-7.**
 - Owns `engine/environment/src/tools/**`, `image/tools-payload/**` and the removal of `third_party/jre/**`, coordinated with the App notices task.
-- Owns the tool-list text in `docs/implementation/{environment,protocol}.md`; the Server planner owns the wire change.
+- Owns the tool-list text in `docs/engine/{environment,protocol}.md`; the Server planner owns the wire change.
 - Checks: `rust-environment`, `rust-server`, `android-apk`, `EngineIntegrationTest` together with the chat device acceptance.
 - Acceptance:
   - The payload holds only Codex and the notices, and `tools.status` lists `codex` and `claude`.
@@ -484,9 +486,9 @@ The coordinator should freeze `engine/server/src/{environment,process,tools,home
 
 Cross-module assumptions:
 
-- Server: maps wire types to this API after ENV-4, owns the `services.` namespace routing and `local_services.rs`, and defines the settings wire methods.
+- Server: maps wire types to this API after ENV-4 and owns `services.` namespace routing and settings wire methods. Local service intent, tickets, receipts and configuration domain behavior move to Environment.
 - Filework: uses `classify`, `AreaDir`, `ConfigFileHandle`, `fsx` and `DiskVersion`.
-- Workspace: claims `StateLocation::Workspace` and registers the `config.json` validator.
+- Workspace: supplies session/layout state for the combined Server transaction; configuration validation follows the Environment/Chat/Terminal ownership split.
 - Terminal: uses PTY spawn, `locate`, `RuntimeEvent::Activated` for restore, and `StateLocation::Terminals`.
 - Chat: uses `Capture::Stream`, `Tools`, and `OpaqueDocuments` (namespace `chat`) for the existing send ledgers.
 - App: keeps the Engine CLI flags and library names unchanged.
@@ -495,17 +497,17 @@ Cross-module assumptions:
 
 The declaration and persisted paths/field names/fingerprints stay compatible. `.workspace/` is not renamed. The foundation exposes a typed `Store` with strict bounded generic reads, atomic writes, backup, quarantine, directory listing, workspace lock and upload staging; each domain owns its document type and recovery policy. Public file operations remain in FileWork. Store-relative typed keys are centralized in Environment and validated; handing another crate an unrestricted private root is not the intended API.
 
-Server owns service executor tickets and wire composition, while Environment owns their storage and resolver generation. Domain data structs derive serde/schema so Server can export them without duplicating every domain model. Environment uses standard threads and locks; no async runtime is added. The CLI and all three packaged native library names remain unchanged. Source tooling/tests can include Python, C probes and the existing Android harness; the Rust-only rule applies to production Engine implementation. Kotlin production Chat is the explicit round-1 exception, removed only after parity and device proof.
+Environment owns service executor tickets, intent, receipts, storage and resolver generation; Server owns their wire composition. Environment also owns appearance, overlay and client configuration; Chat owns backend defaults and Terminal owns terminal settings. Domain data structs derive serde/schema so Server can export them without duplicating every domain model. Environment uses standard threads and locks; no async runtime is added. The CLI and all three packaged native library names remain unchanged. Source tooling/tests can include Python, C probes and the existing Android harness; the Rust-only rule applies to production Engine implementation. Kotlin production Chat is the explicit round-1 exception, removed only after parity and device proof.
 
 The runtime and loader move together. Loader remains a specialized `no_std` executable with its static-PIE build flags; adding a Cargo package must not replace its known Android linker settings. `engine/tools/package.py` remains build tooling during round 1, and moving it is coordinated with App/JRE removal. The draft proposed a new settings facade and runtime subscription API; these are later API refinements, not extra round-1 wire methods. Optional Claude provisioning continues through the existing explicit tools operation and guest service policy; adding a new declaration field requires schema/product agreement first.
 
-The claim that the platform trees can be mechanically merged is withdrawn. No host-only run proves Android bionic ABI equivalence or ARM64 register behavior. The safe round-1 decision is relocation without deduplication. A later merge must compare each selected target tree to its retained baseline, run the host suites and Android builds, and obtain isolated Android runtime acceptance. If ARM64 device evidence is unavailable, the affected code remains separate.
+The claim that the platform trees can be mechanically merged is withdrawn. No host-only run proves Android bionic ABI equivalence or ARM64 register behavior. The safe round-1 decision is relocation without deduplication. The separately owned `runtime-dedup` task must compare selected target behavior to the retained baseline, run `runtime-host`, cross-build Engine for both ABIs and obtain isolated API 28 x86_64 guest exec, PTY and stop acceptance. Physical ARM64 device proof remains a reported gap; the daily tablet is not available for it. Leave the full original trees intact if the extraction cannot complete, never a partial merge.
 
 ## 6. Later-round tasks
 
 | Round/task | Owned paths | Dependencies | Checks |
 | --- | --- | --- | --- |
-| R2 ENV-6 platform extraction | `engine/environment/runtime/src/**`, equivalence checker and runtime tests | Preserved round-1 baseline; audited cfg vocabulary for OS and architecture | Host oracle before/after, both Android targets, isolated Android runtime suites; report ARM64 limits |
+| Separate `runtime-dedup` task | `engine/environment/runtime/src/**`, equivalence checker and runtime tests | Preserved round-1 baseline; audited cfg vocabulary for OS and architecture | Host oracle before/after, both Android targets, isolated Android runtime suites; report ARM64 limits |
 | R2 Environment settings/API refinement | `engine/environment/src/**`, Server settings types/export, App settings owner | Typed store/declaration and config-sync revision contract | Declaration/default/unknown-field tests, conflict and restart tests, schema drift, isolated settings acceptance |
 | R2 ENV-7 JVM removal | Environment tools, `engine/tools`, image tooling, JRE manifests/notices and packaging lines | Rust Chat parity and isolated device cutover | Tools catalog/measurement tests, image, both ABI APKs, real guest tool probes |
 | R3 persistence/lifecycle audit | Environment store/runtime, domain call sites, boundary guard, `docs/engine/environment.md` and runtime/loader pages | Integrated domain and App moves | Malformed/newer-format preservation, interrupted atomic writes, stop convergence, private mount masking, infrastructure and documentation |

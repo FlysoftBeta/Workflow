@@ -20,326 +20,12 @@ use workflow_workspace::{
     self as workspace, LayoutAction, ResourceRef, Target, Workbench, WorkspaceState,
 };
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default, rename_all = "camelCase")]
-pub struct Appearance {
-    pub theme: String,
-    pub density: String,
-    pub font_scale: f64,
-    pub mono_font_size: f64,
-    #[serde(default, flatten)]
-    pub extra: OpaqueObject,
-}
-impl Default for Appearance {
-    fn default() -> Self {
-        Self {
-            theme: "system".into(),
-            density: "compact".into(),
-            font_scale: 1.0,
-            mono_font_size: 13.0,
-            extra: Default::default(),
-        }
-    }
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct BackendDefaults {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort: Option<String>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct AgentConfig {
-    pub backend: String,
-    pub backends: BTreeMap<String, BackendDefaults>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub permissions: Option<String>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-impl Default for AgentConfig {
-    fn default() -> Self {
-        Self {
-            backend: "codex".into(),
-            backends: Default::default(),
-            permissions: None,
-            extra: Default::default(),
-        }
-    }
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default, rename_all = "camelCase")]
-pub struct OverlayConfig {
-    pub enabled: bool,
-    pub extra_apps: Vec<String>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default, rename_all = "camelCase")]
-pub struct TerminalConfig {
-    pub extra_keys_pinned: bool,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct ClientConfig {
-    pub version: u64,
-    #[serde(default)]
-    pub appearance: Appearance,
-    #[serde(default)]
-    pub agent: AgentConfig,
-    #[serde(default)]
-    pub overlay: OverlayConfig,
-    #[serde(default = "default_launcher")]
-    pub launcher: Vec<String>,
-    #[serde(default)]
-    pub terminal: TerminalConfig,
-    #[serde(default, flatten)]
-    pub extra: OpaqueObject,
-}
-fn default_launcher() -> Vec<String> {
-    vec!["workbench".into(), "proxy".into(), "settings".into()]
-}
-impl Default for ClientConfig {
-    fn default() -> Self {
-        Self {
-            version: 2,
-            appearance: Default::default(),
-            agent: Default::default(),
-            overlay: Default::default(),
-            launcher: default_launcher(),
-            terminal: Default::default(),
-            extra: Default::default(),
-        }
-    }
-}
-impl ClientConfig {
-    pub fn validate(&mut self) -> Result<()> {
-        if self.version != 2 {
-            return Err(Error::invalid("config.version must be 2"));
-        }
-        if !matches!(self.appearance.theme.as_str(), "system" | "light" | "dark") {
-            return Err(Error::invalid("appearance.theme: invalid value"));
-        }
-        if !matches!(self.appearance.density.as_str(), "compact" | "standard") {
-            return Err(Error::invalid("appearance.density: invalid value"));
-        }
-        if !(0.8..=1.3).contains(&self.appearance.font_scale) {
-            return Err(Error::invalid("appearance.fontScale: out of range"));
-        }
-        if !(10.0..=20.0).contains(&self.appearance.mono_font_size) {
-            return Err(Error::invalid("appearance.monoFontSize: out of range"));
-        }
-        if self.agent.backend.trim().is_empty() {
-            return Err(Error::invalid("agent.backend: expected nonempty string"));
-        }
-        if !self.overlay.extra_apps.iter().all(|id| app_ref(id)) {
-            return Err(Error::invalid("overlay.extraApps: invalid application"));
-        }
-        if !self
-            .launcher
-            .iter()
-            .all(|id| matches!(id.as_str(), "workbench" | "proxy" | "settings") || app_ref(id))
-        {
-            return Err(Error::invalid("launcher: invalid application"));
-        }
-        let mut entries = vec![];
-        for id in &self.launcher {
-            if !entries.contains(id) {
-                entries.push(id.clone())
-            }
-        }
-        if !entries.iter().any(|id| id == "workbench") {
-            entries.insert(0, "workbench".into())
-        }
-        for required in ["proxy", "settings"] {
-            if !entries.iter().any(|id| id == required) {
-                entries.push(required.into())
-            }
-        }
-        self.launcher = entries;
-        Ok(())
-    }
-    pub fn patch(&mut self, p: ConfigPatch) -> Result<()> {
-        p.version.assign(&mut self.version);
-        if let FieldPatch::Value(p) = p.appearance {
-            p.theme.assign(&mut self.appearance.theme);
-            p.density.assign(&mut self.appearance.density);
-            p.font_scale.assign(&mut self.appearance.font_scale);
-            p.mono_font_size.assign(&mut self.appearance.mono_font_size);
-            merge_extra(&mut self.appearance.extra, p.extra)
-        }
-        if let FieldPatch::Value(p) = p.agent {
-            p.backend.assign(&mut self.agent.backend);
-            p.permissions.assign(&mut self.agent.permissions);
-            if let FieldPatch::Value(backends) = p.backends {
-                for (id, p) in backends {
-                    let b = self.agent.backends.entry(id).or_default();
-                    p.model.assign(&mut b.model);
-                    p.effort.assign(&mut b.effort);
-                    merge_extra(&mut b.extra, p.extra)
-                }
-            }
-            merge_extra(&mut self.agent.extra, p.extra)
-        }
-        if let FieldPatch::Value(p) = p.overlay {
-            p.enabled.assign(&mut self.overlay.enabled);
-            p.extra_apps.assign(&mut self.overlay.extra_apps);
-            merge_extra(&mut self.overlay.extra, p.extra)
-        }
-        p.launcher.assign(&mut self.launcher);
-        if let FieldPatch::Value(p) = p.terminal {
-            p.extra_keys_pinned
-                .assign(&mut self.terminal.extra_keys_pinned);
-            merge_extra(&mut self.terminal.extra, p.extra)
-        }
-        merge_extra(&mut self.extra, p.extra);
-        self.validate()
-    }
-}
-fn app_ref(id: &str) -> bool {
-    let mut parts = id.split('/');
-    let pkg = parts.next().unwrap_or("");
-    let activity = parts.next();
-    parts.next().is_none()
-        && pkg.contains('.')
-        && pkg
-            .split('.')
-            .all(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'))
-        && activity.is_none_or(|s| {
-            !s.is_empty()
-                && s.bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'$'))
-        })
-}
-/// Unknown extension objects merge recursively; known configuration fields never enter this path.
-fn merge_extra(to: &mut OpaqueObject, from: OpaqueObject) {
-    for (k, v) in from {
-        if let Some(old) = to.get_mut(&k) {
-            old.merge(v)
-        } else {
-            to.insert(k, v);
-        }
-    }
-}
-#[derive(Clone, Debug, PartialEq)]
-pub enum FieldPatch<T> {
-    Value(T),
-    Missing,
-}
-impl<T: Serialize> Serialize for FieldPatch<T> {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
-        match self {
-            Self::Value(v) => v.serialize(s),
-            Self::Missing => s.serialize_unit(),
-        }
-    }
-}
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for FieldPatch<T> {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
-        T::deserialize(d).map(Self::Value)
-    }
-}
-impl<T: JsonSchema> JsonSchema for FieldPatch<T> {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        T::schema_name()
-    }
-    fn json_schema(g: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        T::json_schema(g)
-    }
-}
-impl<T> Default for FieldPatch<T> {
-    fn default() -> Self {
-        Self::Missing
-    }
-}
-impl<T> FieldPatch<T> {
-    fn is_missing(&self) -> bool {
-        matches!(self, Self::Missing)
-    }
-    fn assign(self, to: &mut T) {
-        if let Self::Value(v) = self {
-            *to = v
-        }
-    }
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default, rename_all = "camelCase")]
-pub struct AppearancePatch {
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub theme: FieldPatch<String>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub density: FieldPatch<String>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub font_scale: FieldPatch<f64>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub mono_font_size: FieldPatch<f64>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct BackendPatch {
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub model: FieldPatch<Option<String>>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub effort: FieldPatch<Option<String>>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct AgentPatch {
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub backend: FieldPatch<String>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub backends: FieldPatch<BTreeMap<String, BackendPatch>>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub permissions: FieldPatch<Option<String>>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default, rename_all = "camelCase")]
-pub struct OverlayPatch {
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub enabled: FieldPatch<bool>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub extra_apps: FieldPatch<Vec<String>>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default, rename_all = "camelCase")]
-pub struct TerminalPatch {
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub extra_keys_pinned: FieldPatch<bool>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(default)]
-pub struct ConfigPatch {
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub version: FieldPatch<u64>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub appearance: FieldPatch<AppearancePatch>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub agent: FieldPatch<AgentPatch>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub overlay: FieldPatch<OverlayPatch>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub launcher: FieldPatch<Vec<String>>,
-    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
-    pub terminal: FieldPatch<TerminalPatch>,
-    #[serde(flatten)]
-    pub extra: OpaqueObject,
-}
+pub use workflow_chat::config::{AgentConfig, AgentPatch};
+pub use workflow_environment::config::{Appearance, FieldPatch, OverlayConfig};
+pub use workflow_terminal::config::{TerminalConfig, TerminalPatch};
+pub type ClientConfig = workflow_environment::config::ClientConfig<AgentConfig, TerminalConfig>;
+pub type ConfigPatch = workflow_environment::config::ConfigPatch<AgentPatch, TerminalPatch>;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Notice {
     pub id: String,
@@ -414,14 +100,7 @@ pub enum CommandValue {
     Composer(ComposerDraft),
     Config(ConfigOutcome),
 }
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum ConfigOutcome {
-    Updated { config: ClientConfig },
-    Conflict { revision: u64 },
-    Blocked { problem: String },
-    Failed { message: String },
-}
+pub type ConfigOutcome = workflow_environment::config::ConfigOutcome<AgentConfig, TerminalConfig>;
 #[derive(Clone)]
 pub struct Workspace {
     pub root: PathBuf,
@@ -874,17 +553,7 @@ impl Workspace {
         })
     }
     pub fn reload_config(&mut self) {
-        match self.store.read::<ConfigPatch>(CONFIG).and_then(|p| {
-            let Some(p) = p else {
-                return Err(Error::invalid("configuration is missing"));
-            };
-            if !matches!(p.version, FieldPatch::Value(2)) {
-                return Err(Error::invalid("config.version must be 2"));
-            }
-            let mut config = ClientConfig::default();
-            config.patch(p)?;
-            Ok(config)
-        }) {
+        match workflow_environment::config::load(&self.store) {
             Ok(config) => {
                 self.state.config = config;
                 self.state.config_problem = None
@@ -1143,35 +812,17 @@ impl Workspace {
         patch: ConfigPatch,
         expected_revision: u64,
     ) -> Result<ConfigOutcome> {
-        if expected_revision != self.revision {
-            return Ok(ConfigOutcome::Conflict {
-                revision: self.revision,
-            });
+        let change = workflow_environment::config::update(
+            &self.store,
+            &self.state.config,
+            self.revision,
+            expected_revision,
+            patch,
+        )?;
+        if change.reloaded {
+            self.reload_config();
         }
-        let previous = self.state.config.clone();
-        self.reload_config();
-        if let Some(problem) = &self.state.config_problem {
-            return Ok(ConfigOutcome::Blocked {
-                problem: problem.clone(),
-            });
-        }
-        if self.state.config != previous {
-            return Ok(ConfigOutcome::Conflict {
-                revision: self
-                    .revision
-                    .checked_add(1)
-                    .ok_or_else(|| Error::business("overflow", "revision overflow"))?,
-            });
-        }
-        let mut input = self.state.config.clone();
-        match input.patch(patch) {
-            Ok(()) => {
-                self.store.write(CONFIG, &input)?;
-                self.reload_config();
-                Ok(ConfigOutcome::Updated { config: input })
-            }
-            Err(e) => Ok(ConfigOutcome::Failed { message: e.message }),
-        }
+        Ok(change.outcome)
     }
 }
 fn file_resource(r: ResourceRef) -> filework::ResourceRef {

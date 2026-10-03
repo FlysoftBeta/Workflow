@@ -1,6 +1,6 @@
 #!/bin/bash
 # Provision a Debian trixie guest into the Workflow workspace (debian-trixie typeVersion 1,
-# docs/environment.md §2.6). Runs inside the guest as (virtual) root with network access — under
+# docs/engine/environment.md §2.6). Runs inside the guest as (virtual) root with network access — under
 # podman on a native-architecture host, or inside the Workflow engine on the device. Idempotent:
 # a second run on a provisioned guest downloads nothing and changes no declared state.
 set -euo pipefail

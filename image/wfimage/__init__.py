@@ -1,1 +1,1 @@
-"""Workflow workspace image tooling (format: docs/environment.md §2)."""
+"""Workflow workspace image tooling (format: docs/engine/environment.md §2)."""

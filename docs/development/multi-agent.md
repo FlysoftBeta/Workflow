@@ -12,12 +12,12 @@ The repository must have an initial commit before a task worktree can be created
 tools/workflow init
 tools/workflow task create editor-reading-position \
   --objective "Preserve the reading position when the editor is resized." \
-  --owns app/src/main/java/top/flysoftbeta/workflow/feature/editor \
-  --owns app/src/androidTest/java/top/flysoftbeta/workflow/feature/editor \
+  --owns app/android/src/main/java/top/flysoftbeta/workflow/feature/editor \
+  --owns app/android/src/androidTest/java/top/flysoftbeta/workflow/feature/editor \
   --checks app-unit --checks android
 ```
 
-The command creates `codex/editor-reading-position` and prints its checkout path. Its Markdown packet is stored under `artifacts/workflow/tasks/`. Start the agent in that checkout. Claims are plain repository-relative files or directories; a parent directory overlaps its descendants. They are deliberately exclusive, so two contributors cannot accidentally claim the same implementation. `tools/workflow task scope NAME --owns PATH ...` replaces an active claim after checking other tasks and the paths already changed.
+The command creates `codex/editor-reading-position` and prints its checkout path. Its Markdown packet is stored under `artifacts/workflow/tasks/`. Start the agent in that checkout. Claims are plain repository-relative files or directories; a parent directory overlaps its descendants. A coordinator-authorized shared-file exception uses `task scope --share-path PATH --reason TEXT` together with an explicit file claim. It records the reason and applies only to that existing file, never a directory; ordinary overlapping claims remain rejected. Use this narrowly for agreed integration edits and review the merge deliberately. They are deliberately exclusive, so two contributors cannot accidentally claim the same implementation. `tools/workflow task scope NAME --owns PATH ...` replaces an active claim after checking other tasks and the paths already changed.
 
 Worktrees live under the primary checkout's ignored `artifacts/workflow/checkouts/`. Their source and build directories are independent. Machine-local `local.properties` and the pinned prebuilt cache may be linked from the primary checkout. `tools/workflow prepare NAME` takes independent, copy-on-write image snapshots where supported; an agent cannot overwrite another task's image through a shared writable image link. Signing material is not copied or linked into task checkouts. Release signing belongs to the coordinator checkout.
 

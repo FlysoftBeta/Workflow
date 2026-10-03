@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build a workspace image using podman, native or isolated build-only QEMU emulation.
 # Debian base conversion remains available only for build and runtime test fixtures.
-# Format and paths: docs/environment.md §2 and §7.
+# Format and paths: docs/engine/environment.md §2 and §7.
 #
 #   image/build.sh [--profile workspace|base] [--arch amd64|arm64] [--out DIR] [--level N] [--keep]
 #

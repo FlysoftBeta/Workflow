@@ -1,0 +1,66 @@
+@font-face {
+  font-family: "JetBrains Mono NL";
+  src: url("../fonts/JetBrainsMonoNL-Regular.ttf") format("truetype");
+  font-weight: 400;
+}
+@font-face {
+  font-family: "JetBrains Mono NL";
+  src: url("../fonts/JetBrainsMonoNL-Bold.ttf") format("truetype");
+  font-weight: 700;
+}
+html, body, #terminal { height: 100%; margin: 0; overflow: hidden; }
+body { background: transparent; -webkit-tap-highlight-color: transparent; }
+#terminal { box-sizing: border-box; padding: 4px; }
+.xterm { height: 100%; }
+.xterm-screen { position: relative; }
+/* Touch has no hover: links are always marked with a dashed underline, solid while pressed. */
+.workflow-links { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; z-index: 5; }
+.workflow-link { position: absolute; height: 0; border-bottom: 1px dashed currentColor; opacity: 0.75; color: var(--link, #286B57); }
+.workflow-link.pressed { border-bottom-style: solid; border-bottom-width: 2px; opacity: 1; }
+/* Lines wrap in a terminal: never show a horizontal scrollbar strip. */
+.xterm .xterm-scrollable-element > .scrollbar.horizontal { display: none !important; }
+/* xterm.css paints the viewport black; the strip below the last full row must match the theme. */
+.xterm .xterm-viewport { background-color: transparent !important; }
+/* Reserve a touch lane so the large scrollbar never steals the last text columns. */
+#terminal { position: relative; padding-right: 44px; }
+.xterm .xterm-scrollable-element > .scrollbar.vertical { display: none !important; }
+.workflow-scrollbar {
+  position: absolute; top: 4px; right: 0; bottom: 4px; width: 44px;
+  z-index: 8; touch-action: none; -webkit-user-select: none; user-select: none;
+}
+.workflow-scrollbar::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 20px; width: 4px;
+  border-radius: 4px; background: var(--link, #286B57); opacity: 0.15;
+}
+.workflow-scroll-thumb { position: absolute; left: 0; width: 44px; min-height: 48px; }
+.workflow-scroll-thumb::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 14px; width: 16px;
+  border-radius: 10px; background: var(--link, #286B57); opacity: 0.65;
+}
+.workflow-scrollbar.dragging .workflow-scroll-thumb::before,
+.workflow-scrollbar:focus .workflow-scroll-thumb::before { opacity: 1; }
+.workflow-scrollbar:focus { outline: 2px solid var(--link, #286B57); outline-offset: -2px; }
+.workflow-selection-handle {
+  position: absolute; width: 44px; height: 44px; padding: 0; margin: 0; border: 0;
+  background: transparent; z-index: 12; touch-action: none;
+  -webkit-user-select: none; user-select: none;
+}
+.workflow-selection-handle::before {
+  content: ''; position: absolute; top: 0; width: 2px; height: 12px; background: var(--link, #286B57);
+}
+.workflow-selection-handle::after {
+  content: ''; position: absolute; top: 8px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--link, #286B57); box-shadow: 0 1px 3px #0005;
+}
+.workflow-selection-handle.start::before { right: 0; }
+.workflow-selection-handle.start::after { right: 0; border-top-right-radius: 0; }
+.workflow-selection-handle.end::before { left: 0; }
+.workflow-selection-handle.end::after { left: 0; border-top-left-radius: 0; }
+.workflow-selection-handle:focus { outline: 2px solid var(--link, #286B57); border-radius: 8px; }
+.workflow-selection-handle.dragging::after { box-shadow: 0 0 0 5px #80808040; }
+.workflow-selection-handle[hidden], .workflow-scrollbar[hidden] { display: none !important; }
+/* The underline also provides a labelled, focusable link for keyboards/accessibility. */
+button.workflow-link { padding: 0; margin: 0; border: 0; border-bottom: 1px dashed currentColor; background: transparent; }
+.workflow-link { box-sizing: border-box; }
+button.workflow-link:focus { outline: 2px solid currentColor; opacity: 1; }
+button.workflow-link.pressed { border-bottom-style: solid; border-bottom-width: 2px; }

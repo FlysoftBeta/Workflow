@@ -25,6 +25,11 @@ enum Location {
     User(PathBuf),
     Stored(String),
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExistingPathKind {
+    File,
+    Directory,
+}
 #[derive(Default)]
 pub struct Uploads {
     pending: BTreeMap<String, Upload>,
@@ -61,6 +66,30 @@ impl FileWork {
             return Err(Error::invalid("directory does not exist"));
         }
         Ok(path)
+    }
+    /// Checked path classification for terminal links; avoids reading or hashing file contents.
+    pub fn existing_path_kind(&self, raw: &str) -> Result<Option<ExistingPathKind>> {
+        if raw.is_empty() {
+            return Ok(Some(ExistingPathKind::Directory));
+        }
+        let (file, directory) = match self.location(raw)? {
+            Location::User(path) => match stdfs::metadata(path) {
+                Ok(meta) => (meta.is_file(), meta.is_dir()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                Err(e) => return Err(e.into()),
+            },
+            Location::Stored(key) => match self.store.metadata(&key)? {
+                Some(meta) => (meta.is_file, meta.is_dir),
+                None => return Ok(None),
+            },
+        };
+        Ok(if file {
+            Some(ExistingPathKind::File)
+        } else if directory {
+            Some(ExistingPathKind::Directory)
+        } else {
+            None
+        })
     }
     pub fn version(&self, raw: &str) -> Result<FileVersion> {
         match self.location(raw)? {
@@ -663,7 +692,10 @@ impl FileWork {
                 imports::validate(&self.root, directory, name)?
             }
             UploadDestination::Exact { path } => {
-                if path.starts_with(".workspace/") && !path.starts_with(".workspace/services/") {
+                if path.starts_with(".workspace/")
+                    && !path.starts_with(".workspace/services/")
+                    && !path.starts_with(".workspace/proxy/")
+                {
                     return Err(Error::invalid(
                         "upload is only for user files and explicit service assets",
                     ));

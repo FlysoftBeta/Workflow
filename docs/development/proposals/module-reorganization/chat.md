@@ -1,8 +1,10 @@
 # Appendix: Chat (`workflow-chat`)
 
-Status: verified round-2 port plan; round-1 JVM service retained. Owner: Engine contributor. Updated: 2026-10-03.
+Status: decided; partial Rust implementation, production JVM service retained pending parity and device acceptance. Owner: Engine contributor. Updated: 2026-10-03.
 
 This appendix plans the port of chat from the Kotlin guest service to a pure Rust crate at `engine/chat/`. The inventory was rechecked against `f1ed8994ae513bd1e04106bbf162df56919cf2b6`, including the guest service, shared model, adapter fixtures and App projection. The Environment, Server-domains and App appendices now settle the shared contracts. This entire Rust port is round 2: round 1 retains `engine/chat/` unchanged and only types/moves its Rust bridge and runtime supervision.
+
+The current round-2 Rust result is a partial typed core with policies and ports, not a complete Codex/Claude adapter and service replacement. All deletion tasks below remain gated. The production JRE/JAR, Kotlin adapters and shared client event reducer are retained; no Rust production Chat acceptance is claimed.
 
 ## Key decisions
 
@@ -81,7 +83,7 @@ The fixtures in `agent/src/test/resources/fixtures/{codex,claude}/*.jsonl` (alre
 
 ### 1.4 What the Android client consumes today (for the App planner)
 
-The production client depends on `:agent-model`. Its test and androidTest source sets also depend on `:agent`.
+At the inventoried baseline the production client depended on `:agent-model`, with test and androidTest source sets also using `:agent`. The App move merges model types into `:app:client` while retaining their package/wire identities; temporary JVM Engine modules use those definitions until cutover.
 
 - `platform/agent/AgentHub.kt` uses `ChatWire`, `ChatSnapshot`, `ChatUpdate`, `ChatSnapshotChunk` and `ChatMetadata`, and runs `AgentReducer.reduceAll` on journal events. It derives `attention` from open requests and tracks `processEpochs` for each displayed request.
 - Rendering in `feature/chat/*` and `transcript/*` uses `AgentState`, `BackendStatus`, `ThreadState`, `Turn`, every `Item` subclass, `ItemStatus`, `MessagePhase`, `MarkerKind`, `FileDelta`, `FileChangeKind`, `CommandAction`, `PlanStepStatus`, `Notice`, `NoticeLevel`, `TurnStatus`, `TurnError`, `PendingRequest`, `RequestKey`, `RequestKind`, `RequestStatus`, `Decision`, `DecisionKind`, `Question`, `ProcessState`, `LoginState`, `RateLimitWindow`, `ConversationEntry`, `ThreadKey` and `StreamText`.
@@ -284,7 +286,7 @@ pub enum ChatErrorKind { InvalidArgument, NotFound, BackendUnavailable, RequestE
 
 ### 3.8 What the protocol must carry (for the Server planner)
 
-- **Phase 1 (unchanged wire).** `chat.snapshot {transferId?, offset?}`, `chat.watch {epoch, afterRevision, timeoutMs}` and `chat.command {name, args}` for the 24 existing names listed under "Chat resources" in `docs/implementation/protocol.md`. They use the `ChatWire` shape: an `_type` tag, uppercase enum names, `encodeDefaults` behavior (absent optional fields are written as `null`), structured map keys as alternating key/value arrays, and `BackendKind`-keyed maps as objects. The domain types derive serde in exactly this shape. The Server owns the frozen chunked transfer (above 1 MiB, 64 KiB raw chunks, a 64 MiB cap, two transfers retained) because it is a framing concern.
+- **Phase 1 (unchanged wire).** `chat.snapshot {transferId?, offset?}`, `chat.watch {epoch, afterRevision, timeoutMs}` and `chat.command {name, args}` for the 24 existing names listed under "Chat resources" in `docs/engine/protocol.md`. They use the `ChatWire` shape: an `_type` tag, uppercase enum names, `encodeDefaults` behavior (absent optional fields are written as `null`), structured map keys as alternating key/value arrays, and `BackendKind`-keyed maps as objects. The domain types derive serde in exactly this shape. The Server owns the frozen chunked transfer (above 1 MiB, 64 KiB raw chunks, a 64 MiB cap, two transfers retained) because it is a framing concern.
 - **Phase 2.** Typed methods replace `chat.command`:
   - `chat.snapshot` and `chat.watch`, which return `ChatChange[]` plus metadata or `resnapshot`.
   - Conversation methods: `chat.conversation.{create, ensure, open, loadEarlier, setBackend, rename, archive, delete, fork, compact, setPermissions, rememberSelection}`.
@@ -313,7 +315,7 @@ pub enum ChatErrorKind { InvalidArgument, NotFound, BackendUnavailable, RequestE
 
 ## 5. Implementation tasks
 
-Every task updates the maintained documentation it affects in the same change (`docs/implementation/agents.md`, `protocol.md`, `workspace-engine.md`, `environment.md`, `testing.md`, or their successors after the documentation reorganization). Heavy Cargo and Gradle commands go through the suites. The new suite is `"chat": ["cargo","test","--manifest-path","engine/Cargo.toml","--locked","-p","workflow-chat","-j","2"]` (heavy).
+Every task updates the maintained documentation it affects in the same change (`docs/engine/chat.md`, `docs/engine/protocol.md`, `docs/engine/server.md`, `docs/engine/environment.md` and `docs/development/testing.md`). Heavy Cargo and Gradle commands go through the suites. The new suite is `"chat": ["cargo","test","--manifest-path","engine/Cargo.toml","--locked","-p","workflow-chat","-j","2"]` (heavy).
 
 | ID | Objective | Owned paths | Depends on | Tier | Checks |
 | --- | --- | --- | --- | --- | --- |
@@ -339,7 +341,7 @@ Every task updates the maintained documentation it affects in the same change (`
 
 ## 6. Resolved cross-appendix decisions
 
-Phase 1 preserves the existing `ChatWire` shape; the projection protocol is a separate coordinated phase after parity. Chat owns the typed `agent` preferences section, Environment owns `config.json` publication, and Server composes revision checks and projections. Domain structs can derive serde/schema, but only Server defines RPC envelopes, method names, errors and framing. The Environment store keeps `documents/<namespace>/<key>.json` with its format/revision/document envelope; it adds bounded typed access rather than moving existing indexes or ledgers. Standard threads/channels remain the concurrency model.
+Phase 1 preserves the existing `ChatWire` shape; the projection protocol is a separate coordinated phase after parity. Chat owns typed agent/backend defaults, Environment owns workspace-delivered appearance/client configuration, service intent/receipts and `config.json` publication, Terminal owns terminal settings, and Server composes revision checks and projections. Domain structs can derive serde/schema, but only Server defines RPC envelopes, method names, errors and framing. The Environment store keeps `documents/<namespace>/<key>.json` with its format/revision/document envelope; it adds bounded typed access rather than moving existing indexes or ledgers. Standard threads/channels remain the concurrency model.
 
 The port must preserve the explicit Codex user reviewer setting and extend raw-console enforcement to the two settings methods. That hardening is an intentional recorded difference, never an approval bypass. Existing Engine-authored text stays for initial parity; localization/error-kind projection is a separate client protocol change. A login flow requiring a terminal becomes a user action routed by Server to Terminal, without Chat depending on Terminal. Client presentation can parse links, but authoritative workspace path resolution belongs to Server composition with FileWork and Environment.
 

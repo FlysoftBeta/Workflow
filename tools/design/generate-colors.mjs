@@ -1,4 +1,4 @@
-// Generates app/src/main/java/top/flysoftbeta/workflow/ui/design/theme/GeneratedColors.kt.
+// Generates app/android/src/main/java/top/flysoftbeta/workflow/ui/design/theme/GeneratedColors.kt.
 // Seed: the launcher icon's primary color. Scheme: SchemeTonalSpot, contrast 0 (docs/ui.md §1.3).
 // Extended roles (success, warning) use the tonal palettes of fixed source colors, not harmonized,
 // so that diff "+" and latency colors stay distinguishable from the teal primary.
@@ -75,6 +75,6 @@ ${extended(true)}
 )
 `;
 const here = dirname(fileURLToPath(import.meta.url));
-const target = resolve(here, '../../app/src/main/java/top/flysoftbeta/workflow/ui/design/theme/GeneratedColors.kt');
+const target = resolve(here, '../../app/android/src/main/java/top/flysoftbeta/workflow/ui/design/theme/GeneratedColors.kt');
 writeFileSync(target, out);
 console.log('wrote', target);

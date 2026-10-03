@@ -4,7 +4,7 @@ Choose checks by the boundary a change affects. Pure model and protocol tests ar
 
 ## Host checks
 
-The supported development host is Linux, with Git, Python 3.11 or newer, JDK 25, Rust 1.93.1, the Android SDK/build-tools 37, the pinned NDK and CMake, Node.js, and zstd. The [build guide](building.md) gives exact toolchain setup, customized-image prerequisites, Debug/Release commands, and output paths. Exact dependency manifests and the Gradle wrapper are checked into the repository. Configure the Android SDK through `local.properties` or the SDK environment variables; do not commit machine-local paths. Install web test dependencies with `npm ci --ignore-scripts` in `web/` before its first check.
+The supported development host is Linux, with Git, Python 3.11 or newer, JDK 25, Rust 1.93.1, the Android SDK/build-tools 37, the pinned NDK and CMake, Node.js, and zstd. The [build guide](building.md) gives exact toolchain setup, customized-image prerequisites, Debug/Release commands, and output paths. Exact dependency manifests and the Gradle wrapper are checked into the repository. Configure the Android SDK through `local.properties` or the SDK environment variables; do not commit machine-local paths. Install web test dependencies with `npm ci --ignore-scripts` in `app/web/` before its first check.
 
 `tools/workflow check NAME` runs a named suite in the coordinator checkout. Add `--task NAME` to run in an isolated task checkout. The catalog is executable configuration in `tools/workflow-suites.json`, so commands and output locations can be reviewed together.
 
@@ -12,9 +12,9 @@ The `app-unit`, `lint`, and `android-apk` suites select the `x86_64` flavor for 
 
 | Suite | What it establishes |
 | --- | --- |
-| `core`, `proxy` | JVM workspace contracts and local executor behavior. Reference-store tests explicitly use test fixtures. |
-| `agent` | Shared `agent-model` codec/model tests, Engine-only vendor adapter tests, `engine-chat` service tests and the guest service JAR build. |
-| `app-unit` | Pure app-level formatting, rendering projections, interaction models and adapter helpers. |
+| `client`, `proxy` | `:app:client` protocol/workspace contracts and `:app:proxy` local execution. Reference-store tests explicitly use test fixtures. |
+| `agent` | Retained client codec/model tests, temporary Engine-only Kotlin adapter/service tests and the guest service JAR build while Rust Chat cutover is incomplete. |
+| `app-unit` | Client/proxy tests, the retained Kotlin adapter/service oracle tests, and Android formatting, rendering projections, interaction models and adapter helpers. |
 | `rust-server` | Authoritative workspace, layout, imports, tools, terminal resources, local-service tickets, environment and protocol behavior in Rust. |
 | `runtime-host` | The Rust container runtime against the real host syscall and filesystem oracles. |
 | `native` | Remaining native PTY and proxy guardian checks. |
@@ -29,11 +29,21 @@ Run only the checks needed by the change, then broaden when another boundary or 
 
 The runtime host oracle needs a pristine `artifacts/engine/rootfs-amd64` and the customized image. It creates its own disposable working copy. `ENGINE_HOST_BUILD` selects its output directory, while `ENGINE_ROOTFS` can select a different pristine input. The Android harness's ARM64 fixture is now `artifacts/engine/fixtures/debian-13-slim-arm64`, not the retired research directory.
 
-Additional Server black-box, differential layout and real-image lifecycle checks are in `engine/server/tools/`. Their arguments and proven scope are documented in the [Server implementation](../implementation/workspace-engine.md). The source-level Kotlin reducer is an oracle for Rust behavior, not a production state writer. Keep fixture process tests distinct from real runtime execution.
+Additional Server black-box, differential layout and real-image lifecycle checks are in `engine/server/tools/`. Their arguments and proven scope are documented in the [Server implementation](../engine/server.md). The source-level Kotlin reducer is an oracle for Rust behavior, not a production state writer. Keep fixture process tests distinct from real runtime execution.
 
 The separation worker's `agent` run `20261003T083733Z-4df7e37c` passed 67 JVM tests: 53 adapter tests, two shared codec tests and twelve service tests, and built the service JAR. That evidence belongs to its recorded source fingerprint and establishes host contracts, not final merged-source or guest/device acceptance. The service cases cover bounded journals and snapshot transfers, process epochs, submission deduplication and ambiguous outcomes, and index concurrency/recovery. Final runtime and device validation must use the integrated source and frozen artifacts.
 
 `tools/tests/test_client_boundary.py` guards the production dependency graph, vendor process/import boundaries, absence of client vendor paths/installers, host-PTY fixture isolation, terminal lifecycle ownership, workspace-root encapsulation and guest-only Codex packaging. These source checks complement behavior tests; they cannot prove a JRE executes under Android 9's app UID.
+
+## Reorganization gates
+
+The App Gradle paths are `:app:android`, `:app:client` and `:app:proxy`. The former `core` suite is now `client`; other suite labels select their relocated catalog commands. Run the source-bound catalog, not historical commands copied from reports. Kotlin client fixtures must be compared with the Rust-exported catalog/schema/goldens; moving source folders does not establish binding parity.
+
+Rust Chat policy, port and model tests establish only their implemented scope. Production cutover and removal of Kotlin/JRE/JAR require reducer/codec, adapter replay and service parity plus the zero-skip isolated API 28 guest Chat matrix in the [Chat reference](../engine/chat.md#rust-port-and-cutover-gate). Retain the production JVM path while any part of that gate remains unmet. Replacing the client event reducer is a separate coordinated projection-protocol change.
+
+Runtime deduplication belongs to the separate `runtime-dedup` task, outside the current round-2 implementation. It requires the real `runtime-host` oracle, Engine cross-builds for both ABIs and isolated API 28 guest exec, PTY and stop. Keep all three existing trees intact if the full extraction cannot pass; do not hand off a partial merge. State physical ARM64 device proof as remaining, without using the daily tablet.
+
+Terminal URL/file navigation, touch scrollbar and visible selection handles require joint device interaction checks while streaming and after wrapping, resize, rotation and IME changes. Offline web tests verify logic but cannot establish these Android touch behaviors.
 
 ## Android acceptance
 

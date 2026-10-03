@@ -17,8 +17,8 @@ kotlin {
 }
 
 dependencies {
-    api(project(":agent-model"))
-    // No :core dependency yet: nothing in :agent uses it (keeps :agent buildable/testable on its own).
+    api(project(":app:client"))
+    // Retained Engine parity oracle consumes the client wire types until Rust Chat cutover.
     api(libs.kotlinx.coroutines.core)
     api(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)

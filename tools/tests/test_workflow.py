@@ -87,6 +87,28 @@ class WorktreeTests(unittest.TestCase):
         self.task("beta", ["b"])
         self.assertFalse(overlap(["app"], ["app2"]))
 
+    def test_scope_can_update_checks_without_releasing_claims(self):
+        task = self.task()
+        changed = change_scope(self.repo, "alpha", None, ["tiny", "android"])
+        self.assertEqual(task["owns"], changed["owns"])
+        self.assertEqual(["android", "tiny"], changed["checks"])
+        with self.assertRaises(WorkflowError): change_scope(self.repo, "alpha", None, ["missing"])
+        self.assertEqual(["android", "tiny"], load_task(self.repo, "alpha")["checks"])
+
+    def test_shared_claim_requires_an_explicit_file_and_recorded_reason(self):
+        self.task()
+        self.task("beta", ["b"])
+        with self.assertRaises(WorkflowError): change_scope(self.repo, "alpha", ["a", "b/file"])
+        with self.assertRaises(WorkflowError): change_scope(self.repo, "alpha", ["a", "b"], share_paths=["b"], reason="coordinated")
+        with self.assertRaises(WorkflowError): change_scope(self.repo, "alpha", ["a", "b/file"], share_paths=["b/file"])
+        task = change_scope(self.repo, "alpha", ["a", "b/file"], share_paths=["b/file"], reason="Owner-approved one-line documentation fix")
+        self.assertEqual(["b/file"], task["sharedPaths"])
+        self.assertEqual("share-files", task["decisions"][-1]["action"])
+        self.assertEqual(["b"], change_scope(self.repo, "beta", ["b"])["owns"])
+        # A shared claim does not release the original owner's remaining exclusive directory.
+        with self.assertRaises(WorkflowError): self.task("gamma", ["b/file"])
+        with self.assertRaises(WorkflowError): change_scope(self.repo, "alpha", ["a", "b"])
+
     def test_worktrees_share_lock_identity_but_not_checkout_output(self):
         a = self.task(); b = self.task("beta", ["b"])
         left, right = Repository(Path(a["checkout"])), Repository(Path(b["checkout"]))
@@ -156,8 +178,8 @@ class WorktreeTests(unittest.TestCase):
         self.assertEqual("coordinator\n", (self.root / "a/file").read_text())
 
     def test_apk_snapshot_is_frozen_and_tampering_is_rejected(self):
-        app = "app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk"
-        test = "app/build/outputs/apk/androidTest/x86_64/debug/app-x86_64-debug-androidTest.apk"
+        app = "app/android/build/outputs/apk/x86_64/debug/android-x86_64-debug.apk"
+        test = "app/android/build/outputs/apk/androidTest/x86_64/debug/android-x86_64-debug-androidTest.apk"
         (self.root / ".gitignore").write_text((self.root / ".gitignore").read_text() + "**/build/\n")
         code = f"from pathlib import Path; paths={[app,test]!r}; [(Path(p).parent.mkdir(parents=True, exist_ok=True),Path(p).write_bytes(b'APK')) for p in paths]"
         self.catalog["suites"]["apk"] = {"command": [sys.executable, "-c", code], "heavy": True, "apkSnapshot": True}

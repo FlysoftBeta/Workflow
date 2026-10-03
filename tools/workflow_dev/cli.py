@@ -28,7 +28,7 @@ def parser():
         change.add_argument("name"); change.add_argument("--reason", required=True)
     tasks.add_parser("list")
     show = tasks.add_parser("show"); show.add_argument("name")
-    scope = tasks.add_parser("scope"); scope.add_argument("name"); scope.add_argument("--owns", action="append", required=True)
+    scope = tasks.add_parser("scope"); scope.add_argument("name"); scope.add_argument("--owns", action="append"); scope.add_argument("--checks", action="append"); scope.add_argument("--share-path", action="append", default=[]); scope.add_argument("--reason")
     verify = tasks.add_parser("verify"); verify.add_argument("name")
     prepare = sub.add_parser("prepare", help="snapshot image inputs and link machine-local caches")
     prepare.add_argument("name")
@@ -69,7 +69,7 @@ def main(argv=None):
                 result = create_task(repo, args.name, args.objective, args.owns, args.checks, args.base)
             elif args.task_command == "list": result = all_tasks(repo)
             elif args.task_command == "show": result = load_task(repo, args.name)
-            elif args.task_command == "scope": result = change_scope(repo, args.name, args.owns)
+            elif args.task_command == "scope": result = change_scope(repo, args.name, args.owns, args.checks, args.share_path, args.reason)
             elif args.task_command in {"reopen", "cancel"}: result = revise_task(repo, args.name, args.task_command, args.reason)
             else: result = {"changedPaths": verify_scope(load_task(repo, args.name))}
         elif args.command == "prepare": result = {"inputs": prepare_inputs(repo, load_task(repo, args.name))}

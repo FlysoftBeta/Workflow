@@ -45,6 +45,7 @@
     "terminal.wait",
     "terminal.rename",
     "terminal.clear",
+    "terminal.resolvePaths",
     "services.executor.register",
     "services.executor.retire",
     "services.command",
@@ -338,6 +339,14 @@
       },
       "result": {
         "$ref": "#/$defs/Dimensions"
+      }
+    },
+    "terminal.resolvePaths": {
+      "params": {
+        "$ref": "#/$defs/TerminalResolvePathsParams"
+      },
+      "result": {
+        "$ref": "#/$defs/TerminalResolvedPaths"
       }
     },
     "terminal.restart": {
