@@ -48,7 +48,7 @@ import top.flysoftbeta.workflow.core.resource.ComposerAttachment
 import top.flysoftbeta.workflow.core.store.WorkspaceStore
 
 /**
- * How one backend runs inside the environment (docs/agents.md §3).
+ * How one backend runs inside the environment (docs/engine/chat.md).
  * The environment installs guest launchers through [AgentHub.install] only when usable.
  */
 data class BackendSetup(
@@ -423,7 +423,7 @@ class AgentHub(
             } else if (event.state is ProcessState.Exited || event.state is ProcessState.Failed) {
                 if ((event.state as? ProcessState.Exited)?.exitCode == SIGSYS_EXIT && event.backend !in readySeen) {
                     // Killed by the app's seccomp filter (e.g. x86_64 musl `readlink`): this launcher cannot
-                    // run here; the environment engine's launcher is required (docs/implementation/agents.md).
+                    // run here; the environment engine's launcher is required (docs/engine/chat.md).
                     unsupported.value = unsupported.value + event.backend
                 }
                 resumed.removeAll { it.backend == event.backend }
