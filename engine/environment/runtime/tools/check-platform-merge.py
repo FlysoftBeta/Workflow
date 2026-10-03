@@ -95,9 +95,41 @@ def scalar_types(ts, aliases):
             out.append(PRIMITIVES[ts[i + 8]])
             i += 9
         else:
-            out.extend(aliases.get(ts[i], [ts[i]]))
+            # A local alias does not rename a same-spelled external type.
+            out.extend([ts[i]] if ts[max(0, i - 2):i] == [":", ":"]
+                       else aliases.get(ts[i], [ts[i]]))
             i += 1
     return out
+
+
+def assignment_blocks(ts):
+    """Remove only scope-free, single-assignment blocks introduced by cfg.
+
+    Rust requires a block around cfg-selected assignments. There is no binding,
+    tail value or lifetime change here: the assignment still ends in a semicolon.
+    Blocks with declarations, multiple statements or non-assignment expressions
+    remain visible to the comparison.
+    """
+    i = 1
+    while i < len(ts):
+        if ts[i] != "{" or ts[i - 1] not in ("{", ";", "}"):
+            i += 1
+            continue
+        end = closing(ts, i)
+        j = i + 1
+        top = []
+        while j < end:
+            if ts[j] in ("(", "[", "{"):
+                j = closing(ts, j) + 1
+            else:
+                top.append(ts[j])
+                j += 1
+        if (top and top[-1] == ";" and top.count(";") == 1 and "=" in top
+                and not any(t in top for t in ("let", "static", "const", "return", "break"))):
+            ts = ts[:i] + ts[i + 1:end] + ts[end + 1:]
+        else:
+            i += 1
+    return ts
 
 
 def canonical(source):
@@ -152,7 +184,11 @@ def canonical(source):
         out = []
         i = 0
         while i < len(item):
-            if item[i] in wrappers and item[i + 1:i + 3] == [":", ":"]:
+            if item[i] in wrappers and item[i + 1:i + 2] == ["("]:
+                end = closing(item, i + 1)
+                out.extend(item[i + 2:end])
+                i = end + 1
+            elif item[i] in wrappers and item[i + 1:i + 3] == [":", ":"]:
                 out.append(item[i + 3])
                 i += 4
                 if item[i:i + 2] == [".", "0"]:
@@ -172,11 +208,24 @@ def canonical(source):
             assert errno_symbol in ("__errno", "__errno_location")
         if "fn" in item:
             name = item[item.index("fn") + 1]
-            if name.startswith("platform_empty_"):
+            if name.startswith(("platform_empty_", "platform_expr_")):
                 body = item[item.index("{") + 1:-1]
-                assert "return" not in body and "unsafe" not in body and "fn" not in body
-                assert "(" not in body, "Empty aggregate helper must have no calls"
-                helpers[name] = body
+                assert not any(t in body for t in ("return", "unsafe", "fn", "let", "static", "if", "loop", "while", "match"))
+                assert not any(t == "=" and body[i - 1:i] not in (["="], ["!"], ["<"], [">"])
+                               and body[i + 1:i + 2] != ["="] for i, t in enumerate(body))
+                begin = item.index("fn") + 2
+                end = closing(item, begin)
+                params = item[begin + 1:end]
+                if name.startswith("platform_empty_"):
+                    assert not params and "(" not in body
+                else:
+                    # Pure scalar/field expressions, with one scalar or pointer
+                    # argument. No calls, bindings, assignments or tail blocks.
+                    assert len(params) >= 3 and params[1] == ":" and "," not in params
+                    assert ";" not in body and "{" not in body
+                    assert not any(re.fullmatch(r"[A-Za-z_]\w*", t) and body[i + 1:i + 2] == ["("]
+                                   for i, t in enumerate(body))
+                helpers[name] = (params[:1], body)
         if item[:2] == ["pub", "const"] and item[2] in MODE_NAMES:
             assert item[4] == "i32"
             modes[item[2]] = item[6:-1]
@@ -203,9 +252,15 @@ def canonical(source):
         i = 0
         while i < len(item):
             t = item[i]
-            if t in helpers and item[i + 1:i + 3] == ["(", ")"]:
-                out.extend(helpers[t])
-                i += 3
+            if t in helpers and item[i + 1:i + 2] == ["("]:
+                end = closing(item, i + 1)
+                args = item[i + 2:end]
+                params, body = helpers[t]
+                assert bool(args) == bool(params)
+                substituted = []
+                for token in body:
+                    substituted.extend(args if params and token == params[0] else [token])
+                item = item[:i] + substituted + item[end + 1:]
                 continue
             if t in modes:
                 t = mode_value(t)
@@ -234,6 +289,8 @@ def canonical(source):
             out = ["_" if i + 1 < len(out) and out[i + 1] == ":"
                    and (i + 2 == len(out) or out[i + 2] != ":")
                    and i and out[i - 1] in ("(", ",") else t for i, t in enumerate(out)]
+        else:
+            out = assignment_blocks(out)
         out = [t for i, t in enumerate(out) if not (t == "," and out[i + 1:i + 2] in (["}"], [">"]))]
         result.append(("extern " if foreign else "") + " ".join(out))
     return Counter(result)
@@ -242,7 +299,7 @@ def expand(path, target, scratch):
     header = (RUNTIME / "src/main.rs").read_text().split("#[cfg", 1)[0]
     header = header.replace("extern crate zstd_sys;", "extern crate self as libc;")
     harness = scratch / "expand.rs"
-    harness.write_text(header + '\nfn getpid() {}\nmod logging { pub fn enabled() {} pub fn dprintf() {} }\n'
+    harness.write_text(header + '\ntype intptr_t = isize;\nfn getpid() {}\nmod logging { pub fn enabled() {} pub fn dprintf() {} }\n'
                        + f'#[path = "{path}"] mod runtime;\n')
     run = subprocess.run(
         ["rustc", "--edition=2024", "--crate-type=lib", "--target", target,

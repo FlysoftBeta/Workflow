@@ -1,7 +1,7 @@
 # Runtime platform extraction audit
 
 The retained baseline is `a2cf9908e6d4f82315bf741d5698a6898281cd25`, with 69,977 Rust
-source lines. The extraction changes source organization, not supported behavior. Dependencies,
+source lines. The shared tree contains 26,013 lines, a reduction of 43,964 lines (62.8%). The extraction changes source organization, not supported behavior. Dependencies,
 the syscall inventory and exported C entry points retain their existing contracts.
 
 ## Equivalence method
@@ -29,7 +29,7 @@ No runtime algorithm is regenerated from archived C, and no source generator is 
 
 ## Divergence decisions
 
-No behavioral accidental drift has been found in the completed modules. The non-behavioral drift
+No behavioral accidental drift was found in any of the fourteen merged modules. The non-behavioral drift
 consists of C header parameter names/order, scalar aliases, expanded file-mode macros, transparent
 header enum names, and redundant pointer casts. Those spellings are normalized as described above;
 neither target's behavior takes precedence.
@@ -44,7 +44,31 @@ neither target's behavior takes precedence.
 | `path` | libc stat layout and aggregate initialization; path semantics are shared. |
 | `cli` | libc stdio/getopt declarations, stat initialization, architecture name and sysconf key. |
 
-Register operations, guest setup, installation, metadata, syscall interception and tracing are
-pending the next extraction step. ARM64 device acceptance is unavailable; the daily tablet is
-excluded from this task. JSON and SHA-256 library adoption is deferred because dependency and
-lockfile changes belong to a separate task.
+| `arch` | Native iovec and ptrace signatures; register get/set/access, aarch64 NT_ARM_SYSTEM_CALL writes, argument restoration, instruction size and syscall-name numbers. |
+| `guest` | Android system/linkerconfig binds; glibc device-number functions versus bionic bit expansions; libc stat/stdio/directory layouts. |
+| `install` | glibc unsigned-long versus bionic unsigned-int ioctl requests; native stat/statvfs/stdio/directory layouts. Archive validation, installation and copy fallback are shared. |
+| `meta` | Native stat/statx and directory/stdio declarations; device-number encoding; aarch64 nlink width; libc directory-type constants. Permissions, hardlink journal/recovery and fsck remain shared. |
+| `sys` | ABI syscall numbers, socket/signal/stat layouts and native device encoding; x86 legacy conversion/exit helpers, getdents/time path table, entry rewrite, dispatch and SIGSYS reissue; aarch64 direct syscall path. |
+| `tracer` | Native sigaction/sigset/siginfo layouts and field access, ptrace request/event/option declarations, argv pointer signatures and wait-status macro expressions; architecture audit ID, x32 filter, legacy deny list and synthetic x86 test filter (ARM still returns ENOSYS). |
+
+Every differing declaration belongs to the selected libc/kernel ABI or its header spelling;
+every differing executable fragment belongs to the functions and mechanisms listed above.
+The exact target-selected comparison covers declarations as well as all function bodies, rather
+than treating a successful host build as evidence about bionic or ARM register semantics.
+No full per-target file remains. The small remaining per-target fragments deliberately retain
+original behavior where choosing a generic implementation would add risk without device proof.
+
+The expression helpers have one scalar or pointer argument and contain only the original field
+access or predicate. The checker substitutes their bodies and arguments at the call site and
+compares the resulting expression. It also removes scope-free single-assignment blocks required
+by Rust's cfg syntax. Blocks with local bindings retain their scope in the comparison. Eleven
+negative-control tests exercise width/signedness, layouts, strings, execution order, mode values,
+constructor fields, helper predicates, errno symbols and real compiler target selection.
+
+The syscall inventory, CLI options, exported entry points and dependency manifests are unchanged.
+Unsupported targets are rejected explicitly, rather than compiling a CLI with no selected runtime.
+ARM64 device acceptance is unavailable; the daily tablet is excluded from this task. JSON and
+SHA-256 library adoption, further consolidation of repeated ABI declarations between different
+modules, and replacement of remaining C-port idioms are follow-ups, not prerequisites for building
+this shared tree. Check and device run directories and the final source identity are recorded in
+the task handoff; outputs remain outside tracked source.
