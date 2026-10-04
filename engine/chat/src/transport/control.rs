@@ -335,6 +335,13 @@ impl ControlConnection {
         })
     }
 
+    /// Registers a request the CLI re-armed in its `initialize` response so the user can answer it.
+    pub fn adopt(&self, id: &str, subtype: &str) {
+        let mut state = self.state.lock().unwrap();
+        if state.closed.is_none() {
+            state.pending_in.insert(id.into(), subtype.into());
+        }
+    }
     /// Forgets an inbound request without answering it (an undeclared `request_user_dialog`).
     pub fn forget(&self, id: &str) {
         self.state.lock().unwrap().pending_in.remove(id);
