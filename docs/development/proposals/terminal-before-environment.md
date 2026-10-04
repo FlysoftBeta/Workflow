@@ -1,6 +1,6 @@
 # Opening a terminal before the environment is ready
 
-Status: accepted, implemented; verification pending. Owner: coordinator. Updated: 2026-10-04.
+Status: accepted, implemented with the limits below. Owner: coordinator. Updated: 2026-10-04.
 
 ## Problem and intended outcome
 
@@ -42,3 +42,5 @@ Because attachment no longer fails on an unusable environment, the terminal's se
 ## Decision and completion
 
 The Engine-allocated `starting` resource was chosen over a client placeholder or a client-proposed ID, because it keeps identity with Engine and needs no schema change. Maintained behavior is described in [Engine Terminal](../../engine/terminal.md), the [protocol](../../engine/protocol.md#terminal-resources), [Workbench adapters](../../app/workbench.md#editor-and-terminal), [Workbench UX](../../ux/workbench.md#terminal-interaction) and the [design system](../../ux/design-system.md).
+
+The [report](../../report/2026-10-04-terminal-before-environment.md) records the evidence. The host suites, the APK build and four isolated API 28 tests passed, including the previously failing terminal test on a freshly prepared environment. No device test yet covers waiting through a failed build and then retrying it, or delivering a path to a terminal that is still waiting.

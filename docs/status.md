@@ -28,6 +28,8 @@ The offline terminal supports swipe scrolling with fling, scrollbar drags that s
 
 Codex sign-in tracks one attempt with at most one outstanding account read; a completion or logged-in read signs the user in, and later null or failed reads cannot undo it. Conversations and Settings share one sign-in surface with waiting, Cancel, Retry and resume re-checks. Adapter replays and an isolated API 28 account read passed for the former Kotlin implementation, and the Rust adapters pass the ported replays on the host; Settings, `TerminalWorkbenchAcceptanceTest` and `SettingsSignInSheetTest` await device runs, and a real ChatGPT login remains unverified. The Android `AgentHub` watch drops replies that overlap a command's snapshot.
 
+A new terminal opens its panel at once and shows environment preparation inside it. Engine allocates the terminal as `starting` until the environment is usable, and the shell starts in the same panel. The host suites and four isolated API 28 tests passed, as recorded in the [terminal report](report/2026-10-04-terminal-before-environment.md). Waiting through a failed build and retrying it has no device test.
+
 The three runtime target trees are merged into one shared tree (about 70k to 26k lines). `runtime-host`, both ABI Engine builds and isolated API 28 x86_64 exec/PTY/stop acceptance passed; physical ARM64 device proof remains open, and the hand-rolled JSON and SHA-256 code is still to be replaced with the pinned libraries.
 
 ## Implemented boundaries
