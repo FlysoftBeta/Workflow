@@ -18,8 +18,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import top.flysoftbeta.workflow.MainActivity
+import top.flysoftbeta.workflow.core.io.WorkspacePaths
 import top.flysoftbeta.workflow.core.layout.*
 import top.flysoftbeta.workflow.core.resource.FileStatus
+import top.flysoftbeta.workflow.core.store.FileOpResult
 import top.flysoftbeta.workflow.core.store.SaveResult
 import top.flysoftbeta.workflow.core.store.saveEnvironmentDeclaration
 import top.flysoftbeta.workflow.feature.editor.TextEditorController
@@ -102,7 +104,7 @@ class WorkbenchEngineAcceptanceTest {
                     assertTrue(store.saveFile(name, text) is SaveResult.Saved)
                 }
                 assertEquals(text, store.openFile(name).text)
-            } else assertEquals(top.flysoftbeta.workflow.core.store.FileOpResult.Done, store.createFile(name, text.toByteArray()))
+            } else assertEquals(FileOpResult.Done, store.createFile(name, text.toByteArray()))
         }
         if (fixtureMode) {
             seed(path, "")
@@ -115,7 +117,34 @@ class WorkbenchEngineAcceptanceTest {
             compose.onNodeWithTag("explorer:edit").performImeAction()
         }
         val editor = editor(path)
-        assertFalse(runBlocking { store.listDirectory("", true) }.any { it.path == ".workspace" })
+        // `.workspace` is always the first, protected root entry. It lists only allowlisted configuration,
+        // never private state, the disposable cache or agent credentials.
+        val root = File(compose.activity.filesDir, "workspaces/${manager.requireSession().profile.id}")
+        for (hidden in listOf(false, true)) {
+            val first = runBlocking { store.listDirectory("", hidden) }.first()
+            assertTrue("First root entry: $first", first.path == WorkspacePaths.INTERNAL && first.isDirectory)
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("受保护的配置文件夹").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(runBlocking { store.movePath(WorkspacePaths.INTERNAL, "qa-moved-workspace") } is FileOpResult.Failed)
+        assertTrue(File(root, WorkspacePaths.CONFIG).isFile && File(root, WorkspacePaths.STATE).isDirectory)
+        // Test-only sentinels, never real secrets, make the credential check meaningful; existing files are left alone.
+        val credentials = listOf("agents/codex/auth.json", "agents/claude/.credentials.json", "agents/claude/.claude.json")
+        val createdHomes = listOf("agents/codex", "agents/claude", "agents").map { File(root, ".workspace/$it") }.filterNot { it.exists() }
+        val planted = credentials.map { File(root, ".workspace/$it") }.filterNot { it.exists() }
+        try {
+            planted.forEach { it.parentFile!!.mkdirs(); it.writeText("{\"qa\":\"sentinel\"}") }
+            for (hidden in listOf(false, true)) {
+                val names = runBlocking { store.listDirectory(WorkspacePaths.INTERNAL, hidden) }.map { it.name }
+                assertTrue("Visible .workspace entries: $names", "config.json" in names && names.all { it in setOf("agents", "proxy", "services", "config.json") })
+                val homes = listOf("codex", "claude").flatMap { runBlocking { store.listDirectory(".workspace/agents/$it", hidden) } }.map { it.path }
+                assertTrue("Agent home entries: $homes", credentials.none { ".workspace/$it" in homes })
+            }
+            for (masked in listOf(".workspace/state", ".workspace/environment", ".workspace/cache")) {
+                assertTrue(masked, runCatching { runBlocking { store.listDirectory(masked, true) } }.isFailure)
+            }
+            for (secret in credentials) assertTrue(secret, runCatching { runBlocking { store.openFile(".workspace/$secret") } }.isFailure)
+        } finally { planted.forEach { it.delete() }; createdHomes.forEach { it.delete() } }
+        note("Protected .workspace listed first; private state, cache (on disk=${File(root, ".workspace/cache").exists()}) and credential sentinels stayed hidden")
         val text = "# Workspace notes\n\nA durable draft.\n" + (1..60).joinToString("\n") { "Line $it: edit, resize and restore." }
         compose.runOnUiThread { editor.editorView!!.commitText(text) }
         compose.waitUntil(10_000) { store.state.value.drafts[path]?.text == text }
@@ -210,7 +239,9 @@ class WorkbenchEngineAcceptanceTest {
         // Trash/undo uses the actual explorer action and authoritative restored file.
         val explorer = runtime.explorerController() as FilesExplorer
         compose.runOnUiThread { explorer.delete(second) }
-        compose.waitUntil(10_000) { shell.snackbar.currentSnackbarData != null }
+        // The session archive's Snackbar may still be showing; wait for this deletion's own undo.
+        compose.waitUntil(10_000) { shell.snackbar.currentSnackbarData?.visuals?.message == "已删除「${WorkspacePaths.name(second)}」" }
+        assertFalse(runBlocking { store.openFile(second).disk.exists })
         note("Trash snackbar: ${shell.snackbar.currentSnackbarData?.visuals?.message}")
         screenshot("trash")
         compose.onNodeWithText("撤销").performClick()
