@@ -55,6 +55,30 @@ fn waiting(s: RunState) -> bool {
     matches!(s, RunState::WaitingApproval | RunState::WaitingInput)
 }
 
+/// Folds one answered account read (see the Codex login state machine in docs/engine/chat.md).
+fn account_read(previous: &AccountState, read: &AccountState) -> AccountState {
+    if read.state == LoginState::LoggedIn {
+        read.clone()
+    } else if LoginFlow::is_confirmed_success(previous.login.as_ref()) {
+        AccountState {
+            check_error: None,
+            ..previous.clone()
+        }
+    } else if LoginFlow::is_pending(previous.login.as_ref()) {
+        AccountState {
+            state: LoginState::LoggingIn,
+            login: previous.login.clone(),
+            ..read.clone()
+        }
+    } else {
+        let mut next = read.clone();
+        if next.login.is_none() && !LoginFlow::is_confirmed_success(previous.login.as_ref()) {
+            next.login = previous.login.clone();
+        }
+        next
+    }
+}
+
 pub fn reduce(s: &mut AgentState, event: &AgentEvent) {
     use AgentEvent::*;
     match event {
@@ -62,7 +86,14 @@ pub fn reduce(s: &mut AgentState, event: &AgentEvent) {
             backend: kind,
             state,
         } => {
-            backend(s, *kind).process = state.clone();
+            let b = backend(s, *kind);
+            b.process = state.clone();
+            // A confirmed completion belongs to the process that reported it; a new process reads afresh.
+            if matches!(state, ProcessState::Starting {})
+                && LoginFlow::is_confirmed_success(b.account.login.as_ref())
+            {
+                b.account.login = None;
+            }
             let message = match state {
                 ProcessState::Exited { exit_code, .. } => format!(
                     "Backend process exited{}",
@@ -110,18 +141,12 @@ pub fn reduce(s: &mut AgentState, event: &AgentEvent) {
             account,
         } => {
             let b = backend(s, *kind);
-            let mut next = account.clone();
-            if next.login.is_none()
-                && next.state != LoginState::LoggedIn
-                && !matches!(
-                    b.account.login,
-                    Some(LoginFlow::Completed { success: true, .. })
-                )
-            {
-                next.login = b.account.login.clone();
-            }
-            b.account = next;
+            b.account = account_read(&b.account, account);
         }
+        AccountCheckFailed {
+            backend: kind,
+            message,
+        } => backend(s, *kind).account.check_error = Some(message.clone()),
         LoginChanged {
             backend: kind,
             flow,
@@ -139,6 +164,10 @@ pub fn reduce(s: &mut AgentState, event: &AgentEvent) {
                 }
                 _ => LoginState::LoggingIn,
             };
+            // A new attempt starts without the previous attempt's check failure.
+            if LoginFlow::is_pending(flow.as_ref()) {
+                a.check_error = None;
+            }
             a.login = flow.clone();
         }
         RateLimitsChanged {
@@ -194,13 +223,13 @@ pub fn reduce(s: &mut AgentState, event: &AgentEvent) {
                 raw: raw.clone(),
             };
             bounded(&mut backend(s, *kind).unknown, record.clone(), MAX_UNKNOWN);
-            if let Some(id) = thread_id {
-                if let Some(t) = s.threads.get_mut(&ThreadKey {
+            if let Some(id) = thread_id
+                && let Some(t) = s.threads.get_mut(&ThreadKey {
                     backend: *kind,
                     id: id.clone(),
-                }) {
-                    bounded(&mut t.unknown, record, MAX_UNKNOWN);
-                }
+                })
+            {
+                bounded(&mut t.unknown, record, MAX_UNKNOWN);
             }
         }
         ThreadUpserted {
@@ -281,10 +310,10 @@ pub fn reduce(s: &mut AgentState, event: &AgentEvent) {
             usage,
         } => {
             let t = thread(s, *kind, thread_id);
-            if let Some(id) = turn_id {
-                if let Some(turn) = t.turns.iter_mut().find(|v| &v.id == id) {
-                    turn.usage = Some(usage.clone());
-                }
+            if let Some(id) = turn_id
+                && let Some(turn) = t.turns.iter_mut().find(|v| &v.id == id)
+            {
+                turn.usage = Some(usage.clone());
             }
             t.usage = Some(usage.clone());
         }
@@ -459,10 +488,9 @@ pub fn reduce(s: &mut AgentState, event: &AgentEvent) {
                 .turns
                 .iter_mut()
                 .find(|v| &v.id == turn_id)
+                && !t.status.is_final()
             {
-                if !t.status.is_final() {
-                    t.status = TurnStatus::Cancelled;
-                }
+                t.status = TurnStatus::Cancelled;
             }
         }
         TurnCompleted {
@@ -737,52 +765,51 @@ fn bind(t: &mut ThreadState, client: &str, id: &str) {
     t.turns.remove(local.max(target));
 }
 fn item_upsert(t: &mut ThreadState, id: &str, item: &Item, completed: bool) {
-    if let Item::UserMessage(u) = item {
-        if !u.local {
-            if let Some(client) = &u.client_message_id {
-                bind(t, client, id);
-            }
-        }
+    if let Item::UserMessage(u) = item
+        && !u.local
+        && let Some(client) = &u.client_message_id
+    {
+        bind(t, client, id);
     }
     let v = turn(t, id);
-    if let Item::UserMessage(echo) = item {
-        if !echo.local {
-            let locals: Vec<_> = v
-                .items
-                .iter()
-                .enumerate()
-                .filter_map(|(i, item)| match item {
-                    Item::UserMessage(u) if u.local => Some((i, u)),
-                    _ => None,
-                })
-                .collect();
-            let found = locals
-                .iter()
-                .find(|(_, u)| {
-                    u.client_message_id.is_some() && u.client_message_id == echo.client_message_id
-                })
-                .or(locals.first())
-                .map(|(i, _)| *i);
-            if let Some(i) = found {
-                if v.items.iter().any(|v| v.id() == echo.id) {
-                    v.items.remove(i);
-                } else {
-                    let Item::UserMessage(local) = &v.items[i] else {
-                        unreachable!()
-                    };
-                    let mut replacement = echo.clone();
-                    if replacement.client_message_id.is_none() {
-                        replacement.client_message_id = local.client_message_id.clone();
-                    }
-                    if !local.parts.is_empty() {
-                        replacement.parts = local.parts.clone();
-                    }
-                    v.items[i] = Item::UserMessage(replacement);
-                    if v.status == TurnStatus::Queued {
-                        v.status = TurnStatus::Running;
-                    }
-                    return;
+    if let Item::UserMessage(echo) = item
+        && !echo.local
+    {
+        let locals: Vec<_> = v
+            .items
+            .iter()
+            .enumerate()
+            .filter_map(|(i, item)| match item {
+                Item::UserMessage(u) if u.local => Some((i, u)),
+                _ => None,
+            })
+            .collect();
+        let found = locals
+            .iter()
+            .find(|(_, u)| {
+                u.client_message_id.is_some() && u.client_message_id == echo.client_message_id
+            })
+            .or(locals.first())
+            .map(|(i, _)| *i);
+        if let Some(i) = found {
+            if v.items.iter().any(|v| v.id() == echo.id) {
+                v.items.remove(i);
+            } else {
+                let Item::UserMessage(local) = &v.items[i] else {
+                    unreachable!()
+                };
+                let mut replacement = echo.clone();
+                if replacement.client_message_id.is_none() {
+                    replacement.client_message_id = local.client_message_id.clone();
                 }
+                if !local.parts.is_empty() {
+                    replacement.parts = local.parts.clone();
+                }
+                v.items[i] = Item::UserMessage(replacement);
+                if v.status == TurnStatus::Queued {
+                    v.status = TurnStatus::Running;
+                }
+                return;
             }
         }
     }
@@ -798,10 +825,11 @@ fn item_upsert(t: &mut ThreadState, id: &str, item: &Item, completed: bool) {
         )
     {
         for i in &mut v.items {
-            if let Item::AgentMessage(m) = i {
-                if m.parent_id.is_none() && m.phase == MessagePhase::Unknown {
-                    m.phase = MessagePhase::Commentary;
-                }
+            if let Item::AgentMessage(m) = i
+                && m.parent_id.is_none()
+                && m.phase == MessagePhase::Unknown
+            {
+                m.phase = MessagePhase::Commentary;
             }
         }
     }
@@ -979,14 +1007,14 @@ fn finish_items(t: &mut Turn) {
         if item.status() == ItemStatus::InProgress {
             item.set_status(ItemStatus::Incomplete);
         }
-        if let Item::AgentMessage(v) = item {
-            if v.phase == MessagePhase::Unknown {
-                v.phase = if Some(n) == last {
-                    MessagePhase::Final
-                } else {
-                    MessagePhase::Commentary
-                };
-            }
+        if let Item::AgentMessage(v) = item
+            && v.phase == MessagePhase::Unknown
+        {
+            v.phase = if Some(n) == last {
+                MessagePhase::Final
+            } else {
+                MessagePhase::Commentary
+            };
         }
     }
 }

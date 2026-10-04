@@ -21,5 +21,6 @@ base64.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+workflow-chat = { path = "../chat", features = ["testing"] }
 workflow-environment = { path = "../environment", features = ["test-support"] }
 tempfile.workspace = true

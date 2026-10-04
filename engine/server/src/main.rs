@@ -25,7 +25,7 @@ struct Server {
     changed: Condvar,
     environment: Arc<Mutex<environment::Environment>>,
     processes: Arc<Processes>,
-    chat: chat::Chat,
+    chat: chat::ChatHost,
     terminals: Terminals,
     execution: Mutex<()>,
     uploads: Mutex<Uploads>,
@@ -92,7 +92,7 @@ impl Server {
     fn hello(&self) -> HelloResult {
         HelloResult::new(&self.workspace.lock().unwrap().root)
     }
-    fn chat(self: &Arc<Self>, method: &str, params: &OpaqueObject) -> Result<Reply> {
+    fn chat(self: &Arc<Self>, call: Call) -> Result<Reply> {
         if !self.environment.lock().unwrap().status().usable {
             environment::Environment::reconcile(&self.environment, false)?;
             return Err(Error::business(
@@ -100,36 +100,15 @@ impl Server {
                 "chat requires a ready environment",
             ));
         }
-        let weak = Arc::downgrade(self);
-        let host = {
-            let _execution = self.execution.lock().unwrap();
-            if self.closed.load(Ordering::SeqCst) {
-                return Err(Error::business("closed", "workspace stopped"));
-            }
-            self.chat.ensure(
-                &self.environment,
-                Arc::new(move |method, params| {
-                    let server = weak
-                        .upgrade()
-                        .ok_or_else(|| Error::business("closed", "workspace stopped"))?;
-                    if server.closed.load(Ordering::SeqCst) {
-                        return Err(Error::business("closed", "workspace stopped"));
-                    }
-                    if method == "hello" {
-                        let p: HelloParams = protocol::params(params)?;
-                        if p.protocol != PROTOCOL || p.client_id.is_empty() {
-                            return Err(Error::business(
-                                "protocol_mismatch",
-                                "invalid internal chat handshake",
-                            ));
-                        }
-                        return opaque(&server.hello());
-                    }
-                    opaque(&server.call(method, params)?)
-                }),
-            )?
-        };
-        Ok(Reply::Chat(host.request(method, params)?))
+        if self.closed.load(Ordering::SeqCst) {
+            return Err(Error::business("closed", "workspace stopped"));
+        }
+        Ok(Reply::Chat(match call {
+            Call::ChatSnapshot(p) => self.chat.snapshot(self, p)?,
+            Call::ChatWatch(p) => self.chat.watch(self, p)?,
+            Call::ChatCommand(p) => self.chat.command(self, p)?,
+            _ => return Err(unknown_method()),
+        }))
     }
     fn document(&self, op: contracts::documents::Operation, a: DocumentParams) -> Result<Reply> {
         let mut w = self.workspace.lock().unwrap();
@@ -186,7 +165,7 @@ impl Server {
                     "hello has already completed",
                 ));
             }
-            ChatSnapshot(_) | ChatWatch(_) | ChatCommand(_) => return self.chat(method, params),
+            call @ (ChatSnapshot(_) | ChatWatch(_) | ChatCommand(_)) => return self.chat(call),
             Snapshot(_) => Reply::Snapshot(self.workspace.lock().unwrap().snapshot()),
             Watch(a) => {
                 if a.timeout_ms > 30000 {
@@ -557,7 +536,7 @@ fn serve(options: environment::Options) -> Result<()> {
         changed: Condvar::new(),
         environment,
         processes: Arc::new(Processes::new(running)),
-        chat: chat::Chat::default(),
+        chat: chat::ChatHost::default(),
         terminals,
         execution: Mutex::new(()),
         uploads: Mutex::new(Uploads::default()),

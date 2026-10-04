@@ -18,6 +18,7 @@ pub struct ComposerAttachment {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubmittedComposer {
+    #[serde(default = "format_one")]
     pub format: u64,
     pub conversation_id: String,
     pub revision: u64,
@@ -25,6 +26,9 @@ pub struct SubmittedComposer {
     pub attachments: Vec<ComposerAttachment>,
     #[serde(default, flatten)]
     pub extra: OpaqueObject,
+}
+fn format_one() -> u64 {
+    1
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SendRequest {

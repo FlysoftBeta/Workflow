@@ -1,70 +1,91 @@
-//! Claude request-card policy. Permission suggestions are data until the user selects one.
+//! Claude control requests as cards, the user's explicit answers, and stream-json builders.
+//! Permission suggestions are data until the user selects one; nothing here grants consent.
 use crate::{
     codex::requests::UserReply,
     error::{ChatError, ErrorKind, Result},
     model::*,
-    transport::raw::RawJson,
+    wire::{self, Arr, Bool, Json, Obj, Str, Strings},
 };
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+/// Reads attachment bytes by guest path (`/workspace/...`); the Engine maps it to workspace files.
+pub type AttachmentReader<'a> = dyn Fn(&str, usize) -> Result<Vec<u8>> + Send + Sync + 'a;
+
+pub fn key(request_id: &str) -> RequestKey {
+    RequestKey {
+        backend: BackendKind::Claude,
+        raw_id: wire::string_value(request_id),
+    }
+}
+
 #[derive(Default, Deserialize)]
 #[serde(default)]
 struct Params {
-    tool_name: String,
-    input: Option<RawJson>,
-    tool_use_id: Option<String>,
-    permission_suggestions: Vec<RawJson>,
-    suppress_always_allow_rule: bool,
-    display_name: Option<String>,
-    title: Option<String>,
-    description: Option<String>,
-    blocked_path: Option<String>,
-    decision_reason: Option<String>,
-    decision_reason_type: Option<String>,
-    default_to_no: bool,
-    requires_user_interaction: bool,
-    agent_id: Option<String>,
-    mcp_server: Option<RawJson>,
-    mcp_server_name: Option<String>,
-    message: Option<String>,
-    mode: Option<String>,
-    url: Option<String>,
-    requested_schema: Option<RawJson>,
-    elicitation_id: Option<String>,
-    dialog_kind: String,
-    payload: Option<RawJson>,
+    tool_name: Str,
+    input: Json,
+    tool_use_id: Str,
+    permission_suggestions: Arr<Json>,
+    suppress_always_allow_rule: Bool,
+    display_name: Str,
+    title: Str,
+    description: Str,
+    blocked_path: Str,
+    decision_reason: Str,
+    decision_reason_type: Str,
+    default_to_no: Bool,
+    requires_user_interaction: Bool,
+    agent_id: Str,
+    mcp_server: Json,
+    mcp_server_name: Str,
+    message: Str,
+    mode: Str,
+    url: Str,
+    requested_schema: Json,
+    elicitation_id: Str,
+    dialog_kind: Str,
+    payload: Json,
 }
 #[derive(Default, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+#[serde(default)]
 struct Input {
-    questions: Vec<QuestionInput>,
-    plan: String,
+    questions: Arr<Obj<QuestionInput>>,
+    plan: Str,
 }
-#[derive(Default, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct QuestionInput {
-    question: String,
-    header: Option<String>,
-    options: Vec<QuestionOption>,
-    multi_select: bool,
+    question: Str,
+    header: Str,
+    options: Arr<Obj<OptionInput>>,
+    multi_select: Bool,
+}
+#[derive(Clone, Default, Deserialize)]
+#[serde(default)]
+struct OptionInput {
+    label: Str,
+    description: Str,
+    preview: Str,
 }
 #[derive(Default, Deserialize)]
 #[serde(default)]
 struct Suggestion {
-    destination: Option<String>,
+    destination: Str,
     #[serde(rename = "type")]
-    kind: Option<String>,
-    behavior: Option<String>,
-    rules: Vec<Rule>,
-    mode: Option<String>,
-    directories: Vec<String>,
+    kind: Str,
+    behavior: Str,
+    rules: Arr<Obj<Rule>>,
+    mode: Str,
+    directories: Strings,
 }
-#[derive(Default, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct Rule {
-    tool_name: Option<String>,
-    rule_content: Option<String>,
+    tool_name: Str,
+    rule_content: Str,
 }
+
 fn decision(id: &str, kind: DecisionKind) -> Decision {
     Decision {
         id: id.into(),
@@ -72,106 +93,129 @@ fn decision(id: &str, kind: DecisionKind) -> Decision {
         ..Default::default()
     }
 }
-fn describe(raw: &RawJson) -> String {
-    let Ok(s) = raw.decode::<Suggestion>() else {
-        return raw.text().into();
-    };
-    let destination = s.destination.as_deref().unwrap_or("session");
-    match s.kind.as_deref() {
+
+/// A human-readable summary of one permission suggestion.
+pub fn describe_suggestion(raw: &OpaqueJson) -> String {
+    let s: Suggestion = wire::project(raw);
+    let destination = s.destination.or("session");
+    match s.kind.get() {
         Some("addRules" | "replaceRules") => format!(
             "{} {} → {destination}",
-            s.behavior.as_deref().unwrap_or("allow"),
+            s.behavior.or("allow"),
             s.rules
+                .items()
                 .iter()
-                .map(|r| format!(
-                    "{}{}",
-                    r.tool_name.as_deref().unwrap_or(""),
-                    r.rule_content
-                        .as_ref()
-                        .map(|v| format!("({v})"))
-                        .unwrap_or_default()
-                ))
+                .map(|r| {
+                    let r = r.0.clone().unwrap_or_default();
+                    format!(
+                        "{}{}",
+                        r.tool_name.or(""),
+                        r.rule_content
+                            .get()
+                            .map(|v| format!("({v})"))
+                            .unwrap_or_default()
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Some("setMode") => format!(
-            "mode {} → {destination}",
-            s.mode.as_deref().unwrap_or("null")
-        ),
+        Some("setMode") => format!("mode {} → {destination}", s.mode.or("null")),
         Some("addDirectories") => {
-            format!("directories {} → {destination}", s.directories.join(", "))
+            format!("directories {} → {destination}", s.directories.0.join(", "))
         }
-        Some("removeRules" | "removeDirectories") => format!("{} → {destination}", s.kind.unwrap()),
-        _ => raw.text().into(),
+        Some(kind @ ("removeRules" | "removeDirectories")) => format!("{kind} → {destination}"),
+        _ => wire::text(raw),
     }
 }
+
+/// `can_use_tool`, `elicitation` and `request_user_dialog` become cards; any other subtype becomes
+/// a generic card whose only choice rejects it. Nothing is answered here.
 pub fn pending(
     id: &str,
     subtype: &str,
-    request: &RawJson,
-    raw: &RawJson,
+    request: &OpaqueJson,
+    raw: &OpaqueJson,
     thread: Option<&str>,
     turn: Option<&str>,
     now: i64,
-) -> Result<PendingRequest> {
+) -> PendingRequest {
     let mut card = PendingRequest {
-        key: RequestKey {
-            backend: BackendKind::Claude,
-            raw_id: RawJson::encode(id)?.opaque()?,
-        },
+        key: key(id),
         method: subtype.into(),
         kind: RequestKind::Unknown {
             method: subtype.into(),
-            params: Some(request.opaque()?),
+            params: Some(request.clone()),
         },
         decisions: vec![decision("reject", DecisionKind::Deny)],
         thread_id: thread.map(str::to_owned),
         turn_id: turn.map(str::to_owned),
         received_at_ms: Some(now),
-        raw: Some(raw.opaque()?),
+        raw: Some(raw.clone()),
         ..Default::default()
     };
-    let Ok(p) = request.decode::<Params>() else {
-        return Ok(card);
-    };
+    if !wire::is_object(request) {
+        return card;
+    }
+    let p: Params = wire::project(request);
     match subtype {
         "can_use_tool" => {
-            let input = p.input.unwrap_or(RawJson::parse("{}")?);
-            let mut remember = Vec::new();
-            if !p.suppress_always_allow_rule {
-                for (n, suggestion) in p.permission_suggestions.iter().enumerate() {
-                    let destination = suggestion
-                        .decode::<Suggestion>()
-                        .ok()
-                        .and_then(|s| s.destination);
-                    remember.push(Decision {
-                        id: format!("allowAlways:{n}"),
-                        kind: if matches!(destination.as_deref(), Some("session" | "cliArg")) {
-                            DecisionKind::AllowSession
-                        } else {
-                            DecisionKind::AllowPersistent
-                        },
-                        detail: Some(describe(suggestion)),
-                        wire: Some(suggestion.opaque()?),
-                    });
-                }
-            }
-            card.item_id = p.tool_use_id.clone();
-            match p.tool_name.as_str() {
+            let input = p.input.get().cloned().unwrap_or_else(wire::empty_object);
+            let remember: Vec<Decision> = if p.suppress_always_allow_rule.is_true() {
+                vec![]
+            } else {
+                p.permission_suggestions
+                    .items()
+                    .iter()
+                    .enumerate()
+                    .map(|(n, s)| {
+                        let s = s.0.clone().unwrap_or_default();
+                        let destination = wire::project::<Suggestion>(&s).destination;
+                        Decision {
+                            id: format!("allowAlways:{n}"),
+                            kind: if matches!(destination.get(), Some("session" | "cliArg")) {
+                                DecisionKind::AllowSession
+                            } else {
+                                DecisionKind::AllowPersistent
+                            },
+                            detail: Some(describe_suggestion(&s)),
+                            wire: Some(s),
+                        }
+                    })
+                    .collect()
+            };
+            card.item_id = p.tool_use_id.owned();
+            let parsed: Input = wire::project(&input);
+            match p.tool_name.get().unwrap_or("") {
                 "AskUserQuestion" => {
-                    let input: Input = input.decode()?;
                     card.kind = RequestKind::UserInput {
-                        questions: input
+                        questions: parsed
                             .questions
-                            .into_iter()
-                            .map(|q| Question {
-                                id: q.question.clone(),
-                                question: q.question,
-                                header: q.header,
-                                options: q.options,
-                                multi_select: q.multi_select,
-                                allow_free_text: true,
-                                secret: false,
+                            .items()
+                            .iter()
+                            .map(|q| {
+                                let q = q.0.clone().unwrap_or_default();
+                                Question {
+                                    id: q.question.or(""),
+                                    question: q.question.or(""),
+                                    header: q.header.owned(),
+                                    options: q
+                                        .options
+                                        .items()
+                                        .iter()
+                                        .map(|o| {
+                                            let o = o.0.clone().unwrap_or_default();
+                                            QuestionOption {
+                                                label: o.label.or(""),
+                                                description: o.description.owned(),
+                                                preview: o.preview.owned(),
+                                            }
+                                        })
+                                        .collect(),
+                                    multi_select: q.multi_select.is_true(),
+                                    // Claude always offers "Other".
+                                    allow_free_text: true,
+                                    secret: false,
+                                }
                             })
                             .collect(),
                         auto_resolution_ms: None,
@@ -179,29 +223,32 @@ pub fn pending(
                     card.decisions = vec![decision("deny", DecisionKind::Deny)];
                 }
                 "ExitPlanMode" => {
-                    let input: Input = input.decode()?;
-                    card.kind = RequestKind::PlanApproval { plan: input.plan };
+                    card.kind = RequestKind::PlanApproval {
+                        plan: parsed.plan.or(""),
+                    };
                     card.decisions = vec![decision("allow", DecisionKind::AllowOnce)];
                     card.decisions.extend(remember);
                     card.decisions.push(decision("deny", DecisionKind::Deny));
                 }
-                _ => {
+                tool => {
+                    let interactive = p.requires_user_interaction.is_true();
                     card.kind = RequestKind::ToolApproval {
-                        tool: p.tool_name,
-                        display_name: p.display_name,
-                        title: p.title.map(|s| sanitize(&s)),
-                        description: p.description.map(|s| sanitize(&s)),
-                        input: Some(input.opaque()?),
-                        blocked_path: p.blocked_path,
-                        reason: p.decision_reason.map(|s| sanitize(&s)),
-                        reason_type: p.decision_reason_type,
-                        default_to_no: p.default_to_no,
-                        requires_user_interaction: p.requires_user_interaction,
-                        tool_use_id: p.tool_use_id,
-                        agent_id: p.agent_id,
-                        mcp_server: p.mcp_server.map(|v| v.opaque()).transpose()?,
+                        tool: tool.into(),
+                        display_name: p.display_name.owned(),
+                        title: p.title.get().map(sanitize),
+                        description: p.description.get().map(sanitize),
+                        input: Some(input),
+                        blocked_path: p.blocked_path.owned(),
+                        reason: p.decision_reason.get().map(sanitize),
+                        reason_type: p.decision_reason_type.owned(),
+                        default_to_no: p.default_to_no.is_true(),
+                        requires_user_interaction: interactive,
+                        tool_use_id: p.tool_use_id.owned(),
+                        agent_id: p.agent_id.owned(),
+                        mcp_server: p.mcp_server.get().cloned(),
                     };
-                    card.decisions = if p.requires_user_interaction {
+                    // A card that is itself the interaction surface cannot be answered with one tap.
+                    card.decisions = if interactive {
                         vec![]
                     } else {
                         let mut d = vec![decision("allow", DecisionKind::AllowOnce)];
@@ -217,12 +264,12 @@ pub fn pending(
         }
         "elicitation" => {
             card.kind = RequestKind::Elicitation {
-                server: p.mcp_server_name,
-                message: p.message.or(p.title).unwrap_or_default(),
-                mode: p.mode.unwrap_or("form".into()),
-                url: p.url,
-                schema: p.requested_schema.map(|v| v.opaque()).transpose()?,
-                elicitation_id: p.elicitation_id,
+                server: p.mcp_server_name.owned(),
+                message: p.message.owned().or(p.title.owned()).unwrap_or_default(),
+                mode: p.mode.or("form"),
+                url: p.url.owned(),
+                schema: p.requested_schema.get().cloned(),
+                elicitation_id: p.elicitation_id.owned(),
             };
             card.decisions = vec![
                 decision("accept", DecisionKind::AllowOnce),
@@ -230,32 +277,71 @@ pub fn pending(
                 decision("cancel", DecisionKind::Abort),
             ];
         }
+        // We declare no supported dialog kinds, so the CLI fails closed; a stray dialog is shown
+        // but is never answered.
         "request_user_dialog" => {
             card.kind = RequestKind::UserDialog {
-                dialog_kind: p.dialog_kind,
-                payload: p.payload.map(|v| v.opaque()).transpose()?,
+                dialog_kind: p.dialog_kind.or(""),
+                payload: p.payload.get().cloned(),
             };
             card.decisions.clear();
         }
         _ => (),
     }
-    Ok(card)
+    card
 }
+
+/// The record of a control request answered with an error (an SDK MCP message).
+pub fn rejected(
+    id: &str,
+    subtype: &str,
+    request: &OpaqueJson,
+    raw: &OpaqueJson,
+    thread: Option<&str>,
+    now: i64,
+) -> PendingRequest {
+    PendingRequest {
+        key: key(id),
+        method: subtype.into(),
+        kind: RequestKind::Unknown {
+            method: subtype.into(),
+            params: Some(request.clone()),
+        },
+        decisions: vec![],
+        thread_id: thread.map(str::to_owned),
+        status: RequestStatus::Rejected,
+        received_at_ms: Some(now),
+        raw: Some(raw.clone()),
+        ..Default::default()
+    }
+}
+
 #[derive(Debug)]
 pub struct Answer {
     pub reply: UserReply,
     pub denied: bool,
 }
-fn invalid(message: &str) -> ChatError {
-    ChatError::new(ErrorKind::DecisionNotOffered, message)
+fn not_offered(request: &PendingRequest, id: &str) -> ChatError {
+    ChatError::new(
+        ErrorKind::DecisionNotOffered,
+        format!(
+            "decision {id} was not offered (offered: [{}])",
+            request
+                .decisions
+                .iter()
+                .map(|d| d.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    )
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Allow<'a> {
     behavior: &'static str,
-    updated_input: &'a RawJson,
+    updated_input: &'a OpaqueJson,
     #[serde(skip_serializing_if = "Option::is_none")]
-    updated_permissions: Option<Vec<&'a OpaqueJson>>,
+    updated_permissions: Option<[&'a OpaqueJson; 1]>,
 }
 #[derive(Serialize)]
 struct Deny<'a> {
@@ -264,41 +350,55 @@ struct Deny<'a> {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     interrupt: bool,
 }
+#[derive(Serialize)]
+struct Elicit<'a> {
+    action: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<&'a OpaqueObject>,
+}
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Frame {
+    request: Json,
+}
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct RequestInput {
+    input: Json,
+}
+
+/// The `control_response` payload for the user's answer on `request`.
 pub fn answer(request: &PendingRequest, response: &RequestResponse) -> Result<Answer> {
     let selected = |id: &str| {
         request
             .decisions
             .iter()
             .find(|d| d.id == id)
-            .ok_or_else(|| invalid("decision was not offered"))
+            .ok_or_else(|| not_offered(request, id))
     };
-    let result = |value, summary, denied| {
+    let result = |value, summary: &str, denied| {
         Ok(Answer {
-            reply: UserReply::Result { value, summary },
+            reply: UserReply::Result {
+                value,
+                summary: summary.into(),
+            },
             denied,
         })
     };
     let deny = |message: Option<&str>, interrupt: bool| {
-        RawJson::encode(&Deny {
+        wire::encode(&Deny {
             behavior: "deny",
             message: message.unwrap_or("The user declined this action."),
             interrupt,
         })
     };
-    #[derive(Deserialize)]
-    struct Frame {
-        request: Option<RawJson>,
-    }
-    let input = request
-        .raw
-        .as_ref()
-        .map(RawJson::encode)
-        .transpose()?
-        .and_then(|r| r.decode::<Frame>().ok())
-        .and_then(|f| f.request)
-        .and_then(|r| r.decode::<Params>().ok())
-        .and_then(|p| p.input)
-        .unwrap_or(RawJson::parse("{}")?);
+    let frame: Frame = wire::project_opt(request.raw.as_ref());
+    let input = frame
+        .request
+        .object()
+        .map(wire::project::<RequestInput>)
+        .and_then(|r| r.input.get().cloned())
+        .unwrap_or_else(wire::empty_object);
     match &request.kind {
         RequestKind::ToolApproval { .. } | RequestKind::PlanApproval { .. } => {
             let RequestResponse::Decide {
@@ -306,57 +406,61 @@ pub fn answer(request: &PendingRequest, response: &RequestResponse) -> Result<An
                 message,
             } = response
             else {
-                return Err(invalid("expected a decision"));
+                return Err(ChatError::invalid("expected a decision"));
             };
             let d = selected(decision_id)?;
-            if d.id == "allow" || d.id.starts_with("allowAlways:") {
+            if d.id == "allow" {
                 result(
-                    RawJson::encode(&Allow {
+                    wire::encode(&Allow {
                         behavior: "allow",
                         updated_input: &input,
-                        updated_permissions: if d.id == "allow" {
-                            None
-                        } else {
-                            Some(vec![
-                                d.wire
-                                    .as_ref()
-                                    .ok_or_else(|| invalid("permission suggestion missing"))?,
-                            ])
-                        },
-                    })?,
-                    decision_id.clone(),
+                        updated_permissions: None,
+                    }),
+                    &d.id,
+                    false,
+                )
+            } else if d.id.starts_with("allowAlways:") {
+                let null = OpaqueJson::default();
+                result(
+                    wire::encode(&Allow {
+                        behavior: "allow",
+                        updated_input: &input,
+                        updated_permissions: Some([d.wire.as_ref().unwrap_or(&null)]),
+                    }),
+                    &d.id,
                     false,
                 )
             } else {
-                result(
-                    deny(message.as_deref(), d.id == "denyAndStop")?,
-                    decision_id.clone(),
-                    true,
-                )
+                result(deny(message.as_deref(), d.id == "denyAndStop"), &d.id, true)
             }
         }
         RequestKind::UserInput { questions, .. } => match response {
             RequestResponse::Answer { answers } => {
-                if answers
+                if let Some(unknown) = answers
                     .keys()
-                    .any(|id| !questions.iter().any(|q| &q.id == id))
+                    .find(|id| !questions.iter().any(|q| &q.id == *id))
                 {
-                    return Err(invalid("unknown question ID"));
+                    return Err(ChatError::invalid(format!("unknown question {unknown}")));
                 }
-                let mut fields = input.decode::<BTreeMap<String, RawJson>>()?;
-                let answers: BTreeMap<_, _> = answers
+                let mut fields: OpaqueObject = if wire::is_object(&input) {
+                    wire::project(&input)
+                } else {
+                    OpaqueObject::new()
+                };
+                // Multi-select answers are comma-separated (AskUserQuestionOutput.answers).
+                let joined: BTreeMap<&str, String> = answers
                     .iter()
-                    .map(|(id, values)| (id, values.join(", ")))
+                    .map(|(id, values)| (id.as_str(), values.join(", ")))
                     .collect();
-                fields.insert("answers".into(), RawJson::encode(&answers)?);
-                let input = RawJson::encode(&fields)?;
+                fields.insert("answers".into(), wire::encode(&joined));
+                let input = wire::encode(&fields);
                 result(
-                    RawJson::encode(&Allow {
+                    wire::encode(&Allow {
                         behavior: "allow",
                         updated_input: &input,
                         updated_permissions: None,
-                    })?,
-                    "answered".into(),
+                    }),
+                    "answered",
                     false,
                 )
             }
@@ -365,9 +469,9 @@ pub fn answer(request: &PendingRequest, response: &RequestResponse) -> Result<An
                 message,
             } => {
                 selected(decision_id)?;
-                result(deny(message.as_deref(), false)?, decision_id.clone(), true)
+                result(deny(message.as_deref(), false), decision_id, true)
             }
-            _ => Err(invalid("expected answers")),
+            _ => Err(ChatError::invalid("expected answers")),
         },
         RequestKind::Elicitation { .. } => {
             let (action, content) = match response {
@@ -375,48 +479,231 @@ pub fn answer(request: &PendingRequest, response: &RequestResponse) -> Result<An
                 RequestResponse::Decide { decision_id, .. } => {
                     (selected(decision_id)?.id.as_str(), None)
                 }
-                _ => return Err(invalid("expected an elicitation answer")),
+                _ => return Err(ChatError::invalid("expected an elicitation answer")),
             };
             if !matches!(action, "accept" | "decline" | "cancel") {
-                return Err(invalid("invalid elicitation action"));
-            }
-            #[derive(Serialize)]
-            struct Elicit<'a> {
-                action: &'a str,
-                #[serde(skip_serializing_if = "Option::is_none")]
-                content: Option<&'a OpaqueObject>,
+                return Err(ChatError::invalid(format!("invalid action {action}")));
             }
             result(
-                RawJson::encode(&Elicit { action, content })?,
-                action.into(),
+                wire::encode(&Elicit { action, content }),
+                action,
                 action != "accept",
             )
         }
-        RequestKind::UserDialog { .. } => {
-            Err(invalid("undeclared dialog kinds must not be answered"))
-        }
-        RequestKind::Unknown { .. } => {
-            if let RequestResponse::RawResult { result: raw } = response {
-                let raw = RawJson::encode(raw)?;
-                let _: BTreeMap<String, RawJson> = raw.decode()?;
-                result(raw, "raw".into(), false)
-            } else {
-                Ok(Answer {
-                    reply: UserReply::Error {
-                        code: -32601,
-                        message: match response {
-                            RequestResponse::Reject { message } => message.clone(),
-                            _ => "Rejected by user".into(),
-                        },
-                        summary: "rejected".into(),
-                    },
-                    denied: true,
-                })
+        RequestKind::UserDialog { .. } => Err(ChatError::new(
+            ErrorKind::State,
+            "undeclared dialog kinds must not be answered",
+        )),
+        RequestKind::Unknown { .. } => match response {
+            RequestResponse::RawResult { result: raw } => {
+                if !wire::is_object(raw) {
+                    return Err(ChatError::invalid("result must be an object"));
+                }
+                result(raw.clone(), "raw", false)
             }
-        }
-        _ => Err(invalid("unsupported Claude request kind")),
+            other => Ok(Answer {
+                reply: UserReply::Error {
+                    code: -32601,
+                    message: match other {
+                        RequestResponse::Reject { message } => message.clone(),
+                        _ => "Rejected by user".into(),
+                    },
+                    summary: "rejected".into(),
+                },
+                denied: true,
+            }),
+        },
+        _ => Err(ChatError::invalid("unsupported request kind for Claude")),
     }
 }
+
+/// An app-registered hook (answers `hook_callback`). It is never a user approval.
+pub struct ClaudeHook {
+    pub event: String,
+    pub matcher: Option<String>,
+    pub callback_id: String,
+    pub handler: Box<dyn Fn(&OpaqueJson) -> std::result::Result<OpaqueJson, String> + Send + Sync>,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HookMatcher<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matcher: Option<&'a str>,
+    hook_callback_ids: [&'a str; 1],
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Initialize<'a> {
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    hooks: BTreeMap<&'a str, Vec<HookMatcher<'a>>>,
+    prompt_suggestions: bool,
+}
+/// `initialize` request fields: our hooks, no prompt suggestions and no dialog kinds.
+pub fn initialize(hooks: &[ClaudeHook]) -> OpaqueObject {
+    let mut grouped: BTreeMap<&str, Vec<HookMatcher>> = BTreeMap::new();
+    for h in hooks {
+        grouped.entry(&h.event).or_default().push(HookMatcher {
+            matcher: h.matcher.as_deref(),
+            hook_callback_ids: [&h.callback_id],
+        });
+    }
+    wire::project(&wire::encode(&Initialize {
+        hooks: grouped,
+        prompt_suggestions: false,
+    }))
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Source<'a> {
+    Base64 { media_type: &'a str, data: String },
+    Url { url: &'a str },
+}
+#[derive(Serialize)]
+struct Block<'a> {
+    #[serde(rename = "type")]
+    kind: &'a str,
+    source: Source<'a>,
+}
+#[derive(Serialize)]
+struct TextBlock<'a> {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    text: &'a str,
+}
+fn is_pdf(path: &str, mime: Option<&str>) -> bool {
+    mime == Some("application/pdf") || path.to_ascii_lowercase().ends_with(".pdf")
+}
+pub fn mime_for(path: &str) -> Option<&'static str> {
+    let ext = path.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
+    match ext.as_deref() {
+        Some("png") => Some("image/png"),
+        Some("jpg" | "jpeg") => Some("image/jpeg"),
+        Some("gif") => Some("image/gif"),
+        Some("webp") => Some("image/webp"),
+        Some("pdf") => Some("application/pdf"),
+        _ => None,
+    }
+}
+
+/// Neutral parts to Messages-API content blocks. Images and PDFs are inlined as base64; other
+/// files are referenced as `@path` so the CLI loads them itself.
+pub fn content(parts: &[UserPart], reader: &AttachmentReader, max: usize) -> Result<OpaqueJson> {
+    let mentions = parts
+        .iter()
+        .filter_map(|p| match p {
+            UserPart::File { path, mime_type } if !is_pdf(path, mime_type.as_deref()) => {
+                Some(format!("@{path}"))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let encode = |bytes: Vec<u8>| base64::engine::general_purpose::STANDARD.encode(bytes);
+    let mut mention_added = mentions.is_empty();
+    let mut out = Vec::new();
+    for part in parts {
+        match part {
+            UserPart::Text { text } => {
+                let text = if !mention_added {
+                    mention_added = true;
+                    format!("{text}\n\n{mentions}")
+                } else {
+                    text.clone()
+                };
+                out.push(wire::encode(&TextBlock {
+                    kind: "text",
+                    text: &text,
+                }));
+            }
+            UserPart::Image { path, mime_type } => out.push(wire::encode(&Block {
+                kind: "image",
+                source: Source::Base64 {
+                    media_type: mime_type
+                        .as_deref()
+                        .or_else(|| mime_for(path))
+                        .unwrap_or("image/png"),
+                    data: encode(reader(path, max)?),
+                },
+            })),
+            UserPart::File { path, mime_type } => {
+                if is_pdf(path, mime_type.as_deref()) {
+                    out.push(wire::encode(&Block {
+                        kind: "document",
+                        source: Source::Base64 {
+                            media_type: "application/pdf",
+                            data: encode(reader(path, max)?),
+                        },
+                    }));
+                }
+            }
+            UserPart::InlineData {
+                kind,
+                media_type,
+                base64,
+            } => out.push(wire::encode(&Block {
+                kind,
+                source: Source::Base64 {
+                    media_type: media_type.as_deref().unwrap_or("application/octet-stream"),
+                    data: base64.clone(),
+                },
+            })),
+            UserPart::ImageUrl { url } => out.push(wire::encode(&Block {
+                kind: "image",
+                source: Source::Url { url },
+            })),
+            UserPart::Reference { path, .. } => out.push(wire::encode(&TextBlock {
+                kind: "text",
+                text: &format!("@{path}"),
+            })),
+            UserPart::Unknown { raw } => out.push(raw.clone()),
+        }
+    }
+    if !mention_added {
+        out.push(wire::encode(&TextBlock {
+            kind: "text",
+            text: &mentions,
+        }));
+    }
+    Ok(wire::encode(&out))
+}
+
+#[derive(Serialize)]
+struct UserMessage<'a> {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    uuid: &'a str,
+    session_id: &'static str,
+    parent_tool_use_id: Option<()>,
+    message: MessageBody<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    priority: Option<&'a str>,
+}
+#[derive(Serialize)]
+struct MessageBody<'a> {
+    role: &'static str,
+    content: &'a OpaqueJson,
+}
+/// A stream-json user prompt whose `uuid` is the client message ID (and later the turn ID).
+pub fn user_message(
+    client_message_id: &str,
+    content: &OpaqueJson,
+    priority: Option<&str>,
+) -> OpaqueJson {
+    wire::encode(&UserMessage {
+        kind: "user",
+        uuid: client_message_id,
+        session_id: "",
+        parent_tool_use_id: None,
+        message: MessageBody {
+            role: "user",
+            content,
+        },
+        priority,
+    })
+}
+
+/// Strips terminal control sequences from vendor text shown on a card.
 pub fn sanitize(text: &str) -> String {
     let mut out = String::new();
     let mut chars = text.chars().peekable();

@@ -5,7 +5,7 @@ import java.math.BigInteger
 import java.math.BigDecimal
 import kotlinx.serialization.json.*
 
-const val ENGINE_CONTRACT_SHA256 = "697e05eba69bf41d93d58001601cdbfe9653c297d5f8e141eea9ab01ce4f2393"
+const val ENGINE_CONTRACT_SHA256 = "4a28dd64782de34f15091ff8b117d9802342d62a9efc2f53c24675c9e9f1b09a"
 
 class Activation private constructor(override val json: JsonElement) : WireValue {
     private val fields = Wire.obj(json)

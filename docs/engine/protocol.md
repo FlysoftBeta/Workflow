@@ -120,7 +120,7 @@ First use explicitly requests `environment.reconcile {retry?}`. Once enrolled, t
 
 ## Engine-managed tools
 
-`environment.tools.status {}` returns `{revision,tools:[...]}`. Each tool has `id`, `version`, `architecture`, `binary`, `phase`, `progress`, `error`, and `operationId`; unavailable values can be null. While the production Kotlin Chat service is retained, the catalog includes `codex`, `jre`, `chat` and optional `claude`. Removing JRE/JAR entries requires the [Chat cutover gate](chat.md#rust-port-and-cutover-gate). Phases are `not_installed`, `installing`, `verifying`, `ready` or `failed`. A ready chat artifact means the JAR is verified; the chat supervisor separately establishes service startup and protocol readiness.
+`environment.tools.status {}` returns `{revision,tools:[...]}`. Each tool has `id`, `version`, `architecture`, `binary`, `phase`, `progress`, `error`, and `operationId`; unavailable values can be null. The catalog still includes `codex`, `jre`, `chat` and optional `claude`; Server no longer runs the JRE or JAR, and removing those entries waits for the [Chat cutover gate](chat.md#rust-port-and-cutover-gate). Phases are `not_installed`, `installing`, `verifying`, `ready` or `failed`. A ready chat artifact means only that the retained JAR is verified.
 
 `environment.tools.install {toolId:"claude",retry?:boolean}` starts or observes an Engine-owned asynchronous job and returns the current tools projection. Failed unchanged work requires explicit retry. The Engine selects the pinned download, validates length and SHA-256, runs the measured version check, and publishes its outcome. Android does not supply an executable path, release version, URL or script. A restart marks interrupted install/verification work failed rather than inventing completion.
 
@@ -138,7 +138,7 @@ A send includes `{id,text,attachments,settings,mode,operationId,submitted}`. Att
 
 `respond` includes `{key,response,processEpoch}`. The service checks that the process epoch matches and the original request is still open before forwarding the user's choice. Neither the Rust supervisor nor the shared client reducer auto-approves vendor requests. Service epoch changes and per-backend process epoch changes are distinct.
 
-Until the Rust adapter/service parity and device gate passes, the production guest JVM service communicates privately with Rust over bidirectional JSON-RPC. Callbacks permit the Workspace handshake, snapshots, watches, commands, file reads, tool status/install and `chat` document reads/writes/quarantine. Other methods, including recursive chat and generic process spawn, are rejected. Private state is not mounted writable into the service; persistence uses those callbacks.
+The Rust Chat service runs inside Server; there is no private chat RPC. Its errors keep the retained codes: invalid arguments, undecodable arguments and unoffered decisions are `-32602`, other failures `-32000`, both with error kind `chat`. Object members of vendor JSON are re-encoded in canonical key order; values, unknown members and exact number tokens are preserved.
 
 ## Terminal resources
 
