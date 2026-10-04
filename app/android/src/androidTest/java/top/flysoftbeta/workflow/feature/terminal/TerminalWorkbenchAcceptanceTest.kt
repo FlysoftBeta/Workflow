@@ -4,9 +4,11 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.ViewModelProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -24,6 +26,22 @@ import top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionManager
 /** Real Engine cwd resolution → production panel → Sora, with stale generations rejected. */
 class TerminalWorkbenchAcceptanceTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+
+    /**
+     * The model MainActivity bound for the connection. `Connected` is published on the Engine's thread
+     * before the activity recomposes and binds. A ViewModelProvider read in between creates an orphan
+     * model in the activity's store; the bind then clears that store and creates the real model, so the
+     * tile click navigates the real Shell while the orphan's Shell stays on the Launcher. Both read the
+     * same session store, so only the order proves which one is bound: the Launcher tile is composed from
+     * the bound model, and the read happens on the main thread after it appears.
+     */
+    private fun boundModel(): ShellViewModel {
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("工作台").fetchSemanticsNodes().isNotEmpty() }
+        var model: ShellViewModel? = null
+        compose.runOnUiThread { model = ViewModelProvider(compose.activity)[ShellViewModel::class.java] }
+        return checkNotNull(model)
+    }
+
     @Test fun engineResolvedOutputPathOpensWorkbenchEditorAtCursor() {
         check(Build.HARDWARE in setOf("ranchu", "goldfish"))
         val manager = WorkspaceConnectionManager.get(compose.activity)
@@ -31,7 +49,7 @@ class TerminalWorkbenchAcceptanceTest {
         if (manager.status.value is ConnectionStatus.Configure) compose.onNodeWithText("使用此设备").performClick()
         compose.waitUntil(60_000) { manager.status.value is ConnectionStatus.Connected || manager.status.value is ConnectionStatus.Failed }
         assertTrue(manager.status.value.toString(), manager.status.value is ConnectionStatus.Connected)
-        val model = ViewModelProvider(compose.activity)[ShellViewModel::class.java]
+        val model = boundModel()
         val session = manager.requireSession()
         val store = session.store
         compose.onNodeWithText("工作台").performClick()
@@ -66,7 +84,7 @@ class TerminalWorkbenchAcceptanceTest {
         val stale = runBlocking { runCatching { session.rpc.request("terminal.resolvePaths", mapOf("terminalId" to terminal.id,
             "generation" to terminal.generation.value - 1, "candidates" to listOf("target.txt"))) }.exceptionOrNull() }
         assertNotNull("Stale terminal generation must be refused", stale)
-        // Copy uses the actual panel toolbar and system clipboard, not a test clipboard implementation.
+        // Copy uses the platform floating toolbar of the actual panel and the system clipboard.
         fun web(view: View): TerminalWebView? = when (view) {
             is TerminalWebView -> view
             is ViewGroup -> (0 until view.childCount).firstNotNullOfOrNull { web(view.getChildAt(it)) }
@@ -75,9 +93,9 @@ class TerminalWorkbenchAcceptanceTest {
         var page: TerminalWebView? = null
         compose.runOnUiThread { page = web(compose.activity.window.decorView); page?.selectAll() }
         assertNotNull(page)
-        compose.waitForIdle()
-        compose.onNodeWithText("复制").performClick()
+        compose.waitUntil(10_000) { page!!.selectionChrome.actionMode?.type == android.view.ActionMode.TYPE_FLOATING }
+        TerminalDeviceProbe(InstrumentationRegistry.getInstrumentation()).tapToolbarItem(compose.activity.getString(android.R.string.copy))
         val clipboard = compose.activity.getSystemService(android.content.ClipboardManager::class.java)
-        assertTrue(clipboard.primaryClip!!.getItemAt(0).text.contains("target.txt:3:2"))
+        compose.waitUntil(10_000) { clipboard.primaryClip?.getItemAt(0)?.text?.contains("target.txt:3:2") == true }
     }
 }

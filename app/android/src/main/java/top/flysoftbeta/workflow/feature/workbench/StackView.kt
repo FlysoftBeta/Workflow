@@ -123,11 +123,11 @@ internal fun StackHeader(
     val focused = wb.focusedStack == stackId
     val titleOf = { id: String -> wb.panels[id]?.let { env.controller(it).tab.title } }
     val actions = shellActions + activeController?.actions.orEmpty()
-    val more = buildList {
+    val more = moreMenu(actions, buildList {
         activeController?.resourceMenu?.takeIf { it.isNotEmpty() }?.let { add(MenuGroup("resource", it)) }
         add(layoutGroup(env, wb, stackId, active?.id, titleOf))
         add(sessionGroup(env, session, wb))
-    }
+    })
     if (headerStyle == HeaderStyle.Title && panels.size <= 1) {
         TitleHeader(
             title = activeController?.tab?.title ?: "",

@@ -40,8 +40,10 @@ test('scroll gestures, cancellation, viewport changes and replaced text never ac
   h.term.scrollToTop();
   const p = h.position(4);
   h.touch('touchstart', p);
-  assert.equal(h.touch('touchmove', { x: p.x, y: p.y + 30 }).defaultPrevented, false);
+  // A vertical move past the slop becomes the adapter's own scroll, never a browser pan.
+  assert.equal(h.touch('touchmove', { x: p.x, y: p.y + 30 }).defaultPrevented, true);
   h.touch('touchend', { x: p.x, y: p.y + 30 });
+  await h.settle();
   h.touch('touchstart', p); h.touch('touchcancel', p); h.touch('touchend', p);
   h.touch('touchstart', p); h.term.scrollLines(2); h.touch('touchend', p);
   h.term.scrollToTop();

@@ -2,8 +2,10 @@ package top.flysoftbeta.workflow.feature.terminal
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
 import android.util.Log
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
@@ -28,7 +30,8 @@ internal interface TerminalPageListener {
     fun onOpenUrl(url: String)
     fun onOpenPath(text: String)
     fun onCheckLinks(requestId: Int, texts: List<String>)
-    fun onSelection(text: String, x: Int, y: Int)
+    /** The settled selection text and toolbar anchor in CSS px; `('', 0, 0)` while hidden. The view draws the chrome. */
+    fun onSelection(text: String, x: Int, y: Int) {}
     fun onGone()
 }
 
@@ -36,12 +39,17 @@ internal interface TerminalPageListener {
  * The offline xterm page (assets/web/terminal.html). Kept by its panel controller across compositions;
  * created with a context wrapper, never an Activity. Only app assets load; the bridge is removed on
  * [release]. Calls before the page is ready are queued.
+ *
+ * Every gesture that starts on the terminal belongs to it: the page scrolls, selects and opens links itself,
+ * so ancestors (Compose interop included) are asked not to intercept, which would cancel the touch stream.
+ * Selection handles and the floating toolbar are platform chrome ([TerminalSelectionChrome]).
  */
 @SuppressLint("SetJavaScriptEnabled", "ViewConstructor")
 internal class TerminalWebView(context: Context, private val listener: TerminalPageListener) : WebView(context) {
     private var ready = false
     private var released = false
     private val queued = ArrayList<String>()
+    internal val selectionChrome = TerminalSelectionChrome(this)
 
     init {
         val loader = WebViewAssetLoader.Builder().addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context)).build()
@@ -51,8 +59,8 @@ internal class TerminalWebView(context: Context, private val listener: TerminalP
         isVerticalScrollBarEnabled = false
         isHorizontalScrollBarEnabled = false
         overScrollMode = OVER_SCROLL_NEVER
-        // The page does its own long-press selection (with the app's 复制 · 粘贴 · 全选 bar): no native
-        // text-selection action mode on xterm's hidden textarea.
+        // The page does its own long-press selection in xterm's buffer, with platform chrome drawn by this view:
+        // no WebView text-selection action mode on xterm's hidden textarea.
         isLongClickable = false
         setOnLongClickListener { true }
         isHapticFeedbackEnabled = false
@@ -103,7 +111,10 @@ internal class TerminalWebView(context: Context, private val listener: TerminalP
     fun key(normal: String, application: String?) =
         call("key(${JSONObject.quote(normal)}, ${application?.let(JSONObject::quote) ?: "null"})")
     fun paste(text: String) = call("paste(${JSONObject.quote(text)})")
-    fun theme(theme: JSONObject, link: String) = call("theme($theme, ${JSONObject.quote(link)})")
+    fun theme(theme: JSONObject, link: String) {
+        selectionChrome.setTint(cssColor(link))
+        call("theme($theme, ${JSONObject.quote(link)})")
+    }
     fun font(size: Float) = call("font($size)")
     fun linksChecked(id: Int, results: List<Boolean>) = call("linksChecked($id, ${JSONArray(results)})")
     fun invalidateLinks() = call("invalidateLinks()")
@@ -111,6 +122,26 @@ internal class TerminalWebView(context: Context, private val listener: TerminalP
     fun selectAll() = call("selectAll()")
     fun clearSelection() = call("clearSelection()")
     fun clearScreen() = call("clear()")
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) parent?.requestDisallowInterceptTouchEvent(true)
+        return selectionChrome.onTouchEvent(event) || super.dispatchTouchEvent(event)
+    }
+
+    override fun onDrawForeground(canvas: Canvas) {
+        super.onDrawForeground(canvas)
+        selectionChrome.draw(canvas)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        selectionChrome.attached()
+    }
+
+    override fun onDetachedFromWindow() {
+        selectionChrome.detached()
+        super.onDetachedFromWindow()
+    }
 
     override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
         super.onSizeChanged(width, height, oldWidth, oldHeight)
@@ -122,6 +153,7 @@ internal class TerminalWebView(context: Context, private val listener: TerminalP
         released = true
         ready = false
         queued.clear()
+        selectionChrome.release()
         stopLoading()
         removeJavascriptInterface("Workflow")
         (parent as? ViewGroup)?.removeView(this)
@@ -146,6 +178,20 @@ internal class TerminalWebView(context: Context, private val listener: TerminalP
             val texts = runCatching { JSONArray(json).let { array -> List(array.length()) { array.getString(it) } } }.getOrDefault(emptyList())
             post { if (!released) listener.onCheckLinks(id, texts.take(128)) }
         }
-        @JavascriptInterface fun selection(text: String, x: Int, y: Int) { post { if (!released) listener.onSelection(text, x, y) } }
+        @JavascriptInterface fun selection(text: String, x: Int, y: Int) {
+            post { if (!released) { selectionChrome.onSelectionText(text); listener.onSelection(text, x, y) } }
+        }
+        @JavascriptInterface fun selectionState(json: String) { post { if (!released) selectionChrome.update(json) } }
+    }
+
+    private companion object {
+        /** `#RRGGBB` or CSS `#RRGGBBAA`, as produced by [TerminalTheme]. */
+        fun cssColor(value: String): Int? = runCatching {
+            when (value.length) {
+                7 -> Color.parseColor(value)
+                9 -> Color.parseColor("#" + value.substring(7) + value.substring(1, 7))
+                else -> null
+            }
+        }.getOrNull()
     }
 }

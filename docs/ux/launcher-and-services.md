@@ -39,7 +39,7 @@ At panel widths of at least 720dp, Settings has a 220dp category column and a de
 | Category | Content |
 | --- | --- |
 | Appearance | Theme, density, editor and terminal font sizes |
-| Accounts | One row each for Codex and Claude Code; account name and Log out when signed in, or Log in when signed out. Login opens a sheet with browser or device-code choices. |
+| Accounts | One row each for Codex and Claude Code; account name and Log out when signed in, or Log in when signed out. Login, or Continue while an attempt runs, opens a sheet with the conversation's sign-in content: the same phases, Cancel, Retry, Check again and resume re-checks described in [Signing in](conversations.md#signing-in). |
 | Environment | Ready, Building n%, or Restart needed. Restart environment appears when a verified pending environment exists. |
 | Floating control | Enablement reflecting actual permission, extra apps, reset position |
 | Default Home | Current status and Set as default |

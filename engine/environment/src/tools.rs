@@ -1,6 +1,6 @@
 //! Engine-owned payload installation and measured tool availability.
 use crate::{
-    Environment, Error, Options, Result, Store,
+    Environment, Error, Options, Result, Store, access,
     json::OpaqueObject,
     persist,
     runtime::{self, Processes, SpawnOptions},
@@ -20,6 +20,10 @@ use std::{
 };
 const PREFIX: &str = "/opt/workflow/tools";
 const CLAUDE: &str = "/opt/workflow/tools/claude/bin/claude";
+/// Host directory of the visible, read-only agent tools below `.workspace/`.
+fn agent_tools(opts: &Options) -> PathBuf {
+    opts.root.join(access::DIRECTORY).join(access::AGENT_TOOLS)
+}
 static VERIFIED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
 static STATES: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<ToolState>>>>> = OnceLock::new();
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -354,10 +358,7 @@ fn prepare(opts: &Options) -> Result<(PathBuf, ToolCatalog)> {
     if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(err("invalid payload digest"));
     }
-    let target = opts
-        .root
-        .join(".workspace/environment/tools/payloads")
-        .join(digest);
+    let target = agent_tools(opts).join("payload").join(digest);
     let mut verified = VERIFIED.get_or_init(Default::default).lock().unwrap();
     if !verified.contains(&target) {
         let valid = target.is_dir()
@@ -428,7 +429,7 @@ pub(crate) fn bind(opts: &Options, command: &mut Command) -> Result<()> {
     command
         .arg("--bind")
         .arg(format!("{}:{PREFIX}", tree.display()));
-    let launcher = opts.root.join(".workspace/environment/launchers/codex");
+    let launcher = agent_tools(opts).join("launchers/codex");
     let script = include_bytes!("../guest/codex");
     if fs::read(&launcher).ok().as_deref() != Some(script) {
         persist::atomic(&launcher, script)?;
@@ -454,10 +455,7 @@ pub(crate) fn bind(opts: &Options, command: &mut Command) -> Result<()> {
 fn optional_dir(opts: &Options, catalog: &ToolCatalog) -> Result<PathBuf> {
     let version = catalog.optional.claude.version.as_str();
     persist::identifier(version)?;
-    Ok(opts
-        .root
-        .join(".workspace/environment/tools/optional/claude")
-        .join(version))
+    Ok(agent_tools(opts).join("claude").join(version))
 }
 
 fn state(opts: &Options) -> Result<Arc<Mutex<ToolState>>> {

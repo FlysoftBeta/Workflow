@@ -2,20 +2,38 @@ package top.flysoftbeta.workflow.feature.settings
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import top.flysoftbeta.workflow.agent.model.*
+import top.flysoftbeta.workflow.platform.agent.AgentHub
 import top.flysoftbeta.workflow.platform.engine.EnvironmentHealth
+import top.flysoftbeta.workflow.ui.design.AccountCommands
 import top.flysoftbeta.workflow.ui.design.InlineError
+import top.flysoftbeta.workflow.ui.design.SignInContent
+import top.flysoftbeta.workflow.ui.design.SignInState
+import top.flysoftbeta.workflow.ui.design.SignInText
+import top.flysoftbeta.workflow.ui.design.openSignInLink
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
 
+/** The hub's account commands for the shared sign-in. The returned flow is unused: the hub's projection shows it. */
+internal class HubAccountCommands(private val hub: AgentHub) : AccountCommands {
+    override suspend fun login(kind: BackendKind, method: LoginMethod, secret: String?) { hub.login(kind, method, secret) }
+    override suspend fun cancelLogin(kind: BackendKind, loginId: String) = hub.cancelLogin(kind, loginId)
+    override suspend fun refreshAccount(kind: BackendKind) = hub.refreshAccount(kind)
+}
+
+/**
+ * Accounts (docs/ux/launcher-and-services.md "Settings"): a row per backend and a sign-in sheet. The sheet is
+ * the conversation's sign-in ([SignInContent] over [SignInState]), showing [LoginView] phases of the hub's
+ * account projection, so both surfaces have the same phases, actions and resume re-checks.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun AccountSettings(c: SettingsController) {
     val hub = remember(c.services) { c.services.hub }
@@ -23,93 +41,58 @@ import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
     val available by hub.available.collectAsState()
     val chatConfiguration by hub.configuration.collectAsState()
     val health by c.services.environment.collectAsState()
+    val signIns = remember(hub) {
+        val commands = HubAccountCommands(hub)
+        BackendKind.entries.associateWith { kind -> SignInState(kind, commands, c.context.scope) { hub.state.value.backend(kind).account } }
+    }
     var selected by remember { mutableStateOf<BackendKind?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var secretMethod by remember { mutableStateOf<LoginMethod?>(null) }
-    var secret by remember { mutableStateOf("") }
-    var flow by remember { mutableStateOf<LoginFlow?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    fun task(action: suspend () -> Unit) { c.context.scope.launch {
-        busy = true; error = null
-        try { action() } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = "操作未完成，请重试" } finally { busy = false }
-    } }
     LaunchedEffect(available, health.usable) { if (health.usable) available.forEach(hub::warmUp) }
     BackendKind.entries.forEach { kind ->
         val account = state.backend(kind).account
+        val signedIn = LoginView.phase(account) == LoginPhase.SignedIn
         val enabled = kind in available && health.usable
-        SettingRow(if (kind == BackendKind.CODEX) "Codex" else "Claude Code", when {
+        SettingRow(SignInText.backendName(kind), when {
             !health.usable -> "等待环境"
             !enabled -> "尚未就绪"
-            account.state == LoginState.LOGGED_IN -> account.email ?: account.organization ?: "已登录"
-            account.state == LoginState.LOGGING_IN -> "登录中"
-            account.state == LoginState.UNKNOWN -> "检查中"
-            else -> "未登录"
+            else -> SignInText.summary(account)
         }, trailing = {
             TextButton(enabled = enabled && !busy, onClick = {
-                if (account.state == LoginState.LOGGED_IN) task { hub.logout(kind) }
-                else { selected = kind; flow = account.login; secretMethod = null; secret = ""; error = null }
-            }) { Text(if (account.state == LoginState.LOGGED_IN) "退出" else "登录") }
+                error = null
+                if (signedIn) c.context.scope.launch {
+                    busy = true
+                    try { hub.logout(kind) }
+                    catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; error = "退出未完成，请重试" }
+                    finally { busy = false }
+                } else selected = kind
+            }) { Text(when {
+                signedIn -> "退出"
+                SignInText.inProgress(account) -> "继续"
+                else -> "登录"
+            }) }
         })
     }
     error?.let { InlineError(it) }
-    val kind = selected
-    if (kind != null) ModalBottomSheet(onDismissRequest = { selected = null; secret = "" }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        val current = state.backend(kind).account
-        LaunchedEffect(current.login, current.state) { flow = current.login }
-        LaunchedEffect(current.state) { if (current.state == LoginState.LOGGED_IN) { selected = null; secret = "" } }
-        fun browse(url: String) { runCatching {
-            require(Uri.parse(url).scheme in listOf("https", "http"))
-            c.context.appContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }.onFailure { error = "无法打开浏览器" } }
-        Column(Modifier.fillMaxWidth().padding(24.dp)) {
-            Text(if (kind == BackendKind.CODEX) "登录 Codex" else "登录 Claude Code", style = WorkflowTheme.text.titleMd)
-            Spacer(Modifier.height(12.dp))
-            when (val active = flow) {
-                is LoginFlow.DeviceCode -> {
-                    Text(active.userCode, style = WorkflowTheme.text.titleMd)
-                    Row {
-                        TextButton(onClick = { browse(active.verificationUrl) }) { Text("打开验证页面") }
-                        TextButton(onClick = { c.context.appContext.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("设备码", active.userCode)) }) { Text("复制代码") }
-                    }
-                    active.loginId?.let { id -> TextButton(onClick = { task { hub.cancelLogin(kind, id); flow = null } }) { Text("取消登录") } }
-                }
-                is LoginFlow.Browser -> {
-                    Button(onClick = { browse(active.authUrl) }) { Text("在浏览器中继续") }
-                    active.loginId?.let { id -> TextButton(onClick = { task { hub.cancelLogin(kind, id); flow = null } }) { Text("取消登录") } }
-                }
-                is LoginFlow.Terminal -> {
-                    Text(active.argv.joinToString(" "), style = WorkflowTheme.text.mono)
-                    Row {
-                        TextButton(onClick = {
-                            c.context.appContext.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("登录命令", active.argv.joinToString(" ")))
-                            c.context.commands.newTerminal(); selected = null
-                        }) { Text("复制并打开终端") }
-                        TextButton(onClick = { task { hub.refreshAccount(kind) } }) { Text("我已完成登录") }
-                    }
-                }
-                else -> {
-                    if ((active as? LoginFlow.Completed)?.success == false) InlineError("登录未完成")
-                    if (secretMethod != null) {
-                        OutlinedTextField(secret, { secret = it }, label = { Text(if (secretMethod == LoginMethod.CLAUDE_SETUP_TOKEN) "访问令牌" else "API Key") },
-                            singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                        Button(onClick = { val value = secret; secret = ""; val method = secretMethod!!; secretMethod = null; task { flow = hub.login(kind, method, value) } }, enabled = secret.isNotBlank() && !busy) { Text("登录") }
-                    } else chatConfiguration.loginMethods[kind].orEmpty().forEach { method ->
-                        TextButton(enabled = !busy, onClick = {
-                            if (method in listOf(LoginMethod.CODEX_API_KEY, LoginMethod.CLAUDE_API_KEY, LoginMethod.CLAUDE_SETUP_TOKEN)) secretMethod = method
-                            else task { flow = hub.login(kind, method) }
-                        }) { Text(when (method) {
-                            LoginMethod.CODEX_DEVICE_CODE -> "设备码登录"
-                            LoginMethod.CODEX_BROWSER -> "浏览器登录"
-                            LoginMethod.CLAUDE_TERMINAL_LOGIN -> "浏览器登录（终端）"
-                            LoginMethod.CLAUDE_SETUP_TOKEN -> "访问令牌登录"
-                            else -> "API Key 登录"
-                        }) }
-                    }
-                }
-            }
-            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            error?.let { InlineError(it) }
-            Spacer(Modifier.height(12.dp))
+    val kind = selected ?: return
+    val backend = state.backend(kind)
+    val signedIn = LoginView.phase(backend.account) == LoginPhase.SignedIn
+    LaunchedEffect(signedIn) { if (signedIn) selected = null }
+    if (!signedIn) ModalBottomSheet(onDismissRequest = { selected = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        val appContext = c.context.appContext
+        fun clip(label: String, text: String) =
+            appContext.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(label, text))
+        Text("登录 ${SignInText.backendName(kind)}", Modifier.padding(horizontal = 24.dp), style = WorkflowTheme.text.titleMd)
+        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.TopCenter) {
+            SignInContent(
+                state = signIns.getValue(kind),
+                account = backend.account,
+                methods = chatConfiguration.loginMethods[kind].orEmpty(),
+                ready = kind in available && health.usable && backend.process is ProcessState.Ready,
+                openUrl = { url -> openSignInLink(appContext, url) },
+                copy = ::clip,
+                openTerminal = { command -> clip("登录命令", command); c.context.commands.newTerminal(); selected = null },
+            )
         }
     }
 }

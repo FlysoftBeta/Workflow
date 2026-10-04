@@ -2,30 +2,16 @@
 use crate::model::*;
 use std::collections::{HashMap, HashSet};
 
+/// Panel targets and explorer state use FileWork's path rule: user paths and the `.workspace`
+/// entries Environment's allowlist makes visible.
 pub fn valid_path(p: &str) -> bool {
     !p.is_empty()
         && !p.starts_with('/')
         && !p.contains('\0')
         && !p.contains('\\')
         && p.split('/').all(|s| !s.is_empty() && s != "." && s != "..")
-        && p != ".workspace"
-        && (!p.starts_with(".workspace/")
-            || matches!(p, ".workspace/config.json" | ".workspace/env.json")
-            || service_path(p))
-}
-fn service_path(path: &str) -> bool {
-    path.strip_prefix(".workspace/services/")
-        .is_some_and(|tail| {
-            tail.split('/').count() >= 2
-                && tail.split('/').all(|p| {
-                    !p.is_empty()
-                        && p != "."
-                        && p != ".."
-                        && p.len() <= 160
-                        && p.bytes()
-                            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
-                })
-        })
+        && workflow_environment::access::key(p)
+            .is_none_or(|key| workflow_environment::access::classify(key).is_some())
 }
 pub fn valid_target(t: &Target) -> bool {
     match t.kind.as_str() {

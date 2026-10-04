@@ -70,13 +70,13 @@ Results are tagged by `kind`:
 
 An archive with dirty resources and no decision returns `needsDecision`. A configuration revision conflict is a successful command envelope containing a conflict value: the client first accepts its authoritative snapshot, then reapplies the user's transformation to that configuration before retrying. It must not resend a stale full document unchanged.
 
-`ResourceRef` is `{kind:"file",path}` or `{kind:"conversation",id}`. `openFile` returns `{path,disk,diskText,binary,tooLarge,draft}`. `listDirectory` returns an array of `{path,isDirectory,size,modifiedAt}` entries.
+`ResourceRef` is `{kind:"file",path}` or `{kind:"conversation",id}`. `openFile` returns `{path,disk,diskText,binary,tooLarge,draft}`. `listDirectory` returns an array of `{path,isDirectory,size,modifiedAt}` entries. Listing the root always includes the protected `.workspace` folder, regardless of `showHidden`. A `.workspace` listing contains only entries that Environment's allowlist makes visible; private state and agent credentials never appear, even with `showHidden`. The entry shape is unchanged, and the [FileWork reference](filework.md#paths-and-explicit-configuration) lists which visible entries are editable, read-only or fixed folders.
 
 Layout operation `type` values use lower camel case: `open`, `focus`, `focusStack`, `close`, `move`, `splitStack`, `resizeSplit`, `resetSplit`, `resizeRegion`, `setRegionCollapsed`, `toggleRegion`, `setMaximized`, `switchParadigm`, `promoteConversation`, `returnToFiles`, `enterSolo`, `setChatSideStack`, `retarget`, `updateView`, `updateExplorer`, and `renamePath`. Fields follow the corresponding Kotlin constructor parameters; enum values are lowercase. Placement tags are `auto`, `inStack`, and `splitEdge`; drop tags are `center`, `tab`, `edge`, and `editorEdge`. The Server must preserve the [layout invariants and archive protections](workspace.md) rather than trust a client-computed layout.
 
 ## Files and uploads
 
-`files.read {path,offset,length}` returns `{data,nextOffset,eof,size}`, with `length` at most 65,536. Paths must remain beneath the workspace root and cannot traverse symlinks or private state. Explicit configuration editing permits `.workspace/config.json`, `.workspace/env.json`, safe paths beneath `.workspace/proxy/` and the classified directories of other services.
+`files.read {path,offset,length}` returns `{data,nextOffset,eof,size}`, with `length` at most 65,536. Paths must remain beneath the workspace root and cannot traverse symlinks or private state. File commands accept visible `.workspace` entries. Writes are limited to editable configuration: `.workspace/config.json`, `.workspace/env.json`, safe paths beneath `.workspace/proxy/`, the classified directories of other services and the allowlisted entries of the Codex and Claude Code homes below `.workspace/agents/`. Writing read-only agent tools fails with `read_only`; private paths fail as invalid parameters.
 
 `files.upload.begin` accepts `{directory,name,size}` for an import whose final destination must be allocated by the Engine. `directory` is workspace-relative and `name` is a single filename. The Engine validates both and returns `{uploadId}`. The exact-destination form `{path,size}` remains available for file creation and explicit service assets; it rejects an existing destination rather than allocating a variant.
 
@@ -120,7 +120,7 @@ First use explicitly requests `environment.reconcile {retry?}`. Once enrolled, t
 
 ## Engine-managed tools
 
-`environment.tools.status {}` returns `{revision,tools:[...]}`. Each tool has `id`, `version`, `architecture`, `binary`, `phase`, `progress`, `error`, and `operationId`; unavailable values can be null. While the production Kotlin Chat service is retained, the catalog includes `codex`, `jre`, `chat` and optional `claude`. Removing JRE/JAR entries requires the [Chat cutover gate](chat.md#rust-port-and-cutover-gate). Phases are `not_installed`, `installing`, `verifying`, `ready` or `failed`. A ready chat artifact means the JAR is verified; the chat supervisor separately establishes service startup and protocol readiness.
+`environment.tools.status {}` returns `{revision,tools:[...]}`. Each tool has `id`, `version`, `architecture`, `binary`, `phase`, `progress`, `error`, and `operationId`; unavailable values can be null. The catalog still includes `codex`, `jre`, `chat` and optional `claude`; Server no longer runs the JRE or JAR, and removing those entries waits for the [Chat cutover gate](chat.md#rust-port-and-cutover-gate). Phases are `not_installed`, `installing`, `verifying`, `ready` or `failed`. A ready chat artifact means only that the retained JAR is verified.
 
 `environment.tools.install {toolId:"claude",retry?:boolean}` starts or observes an Engine-owned asynchronous job and returns the current tools projection. Failed unchanged work requires explicit retry. The Engine selects the pinned download, validates length and SHA-256, runs the measured version check, and publishes its outcome. Android does not supply an executable path, release version, URL or script. A restart marks interrupted install/verification work failed rather than inventing completion.
 
@@ -138,7 +138,7 @@ A send includes `{id,text,attachments,settings,mode,operationId,submitted}`. Att
 
 `respond` includes `{key,response,processEpoch}`. The service checks that the process epoch matches and the original request is still open before forwarding the user's choice. Neither the Rust supervisor nor the shared client reducer auto-approves vendor requests. Service epoch changes and per-backend process epoch changes are distinct.
 
-Until the Rust adapter/service parity and device gate passes, the production guest JVM service communicates privately with Rust over bidirectional JSON-RPC. Callbacks permit the Workspace handshake, snapshots, watches, commands, file reads, tool status/install and `chat` document reads/writes/quarantine. Other methods, including recursive chat and generic process spawn, are rejected. Private state is not mounted writable into the service; persistence uses those callbacks.
+The Rust Chat service runs inside Server; there is no private chat RPC. Its errors keep the retained codes: invalid arguments, undecodable arguments and unoffered decisions are `-32602`, other failures `-32000`, both with error kind `chat`. Object members of vendor JSON are re-encoded in canonical key order; values, unknown members and exact number tokens are preserved.
 
 ## Terminal resources
 

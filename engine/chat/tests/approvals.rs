@@ -7,20 +7,20 @@ use workflow_chat::{
     },
     error::ErrorKind,
     model::*,
-    transport::raw::{RawJson, RequestId},
+    wire,
 };
 use workflow_environment::json::strict_json;
 #[derive(Deserialize)]
 struct Case {
     case: String,
     backend: String,
-    id: RawJson,
+    id: OpaqueJson,
     method: String,
-    params: RawJson,
-    raw: RawJson,
+    params: OpaqueJson,
+    raw: OpaqueJson,
     disposition: String,
     expected: PendingRequest,
-    result: Option<RawJson>,
+    result: Option<OpaqueJson>,
     code: Option<i64>,
     message: Option<String>,
 }
@@ -30,15 +30,7 @@ fn kotlin_approval_card_goldens() {
     assert_eq!(cases.len(), 18);
     for case in cases {
         if case.backend == "codex" {
-            match requests::pending(
-                RequestId(case.id),
-                &case.method,
-                Some(&case.params),
-                &case.raw,
-                17000,
-            )
-            .unwrap()
-            {
+            match requests::pending(&case.id, &case.method, Some(&case.params), &case.raw, 17000) {
                 Disposition::Ask(actual) => {
                     assert_eq!(case.disposition, "ask", "{}", case.case);
                     assert_eq!(actual, case.expected, "{}", case.case);
@@ -46,12 +38,7 @@ fn kotlin_approval_card_goldens() {
                 Disposition::Fact { record, result } => {
                     assert_eq!(case.disposition, "fact", "{}", case.case);
                     assert_eq!(record, case.expected, "{}", case.case);
-                    assert_eq!(
-                        result.opaque().unwrap(),
-                        case.result.unwrap().opaque().unwrap(),
-                        "{}",
-                        case.case
-                    );
+                    assert_eq!(result, case.result.unwrap(), "{}", case.case);
                 }
                 Disposition::Unsupported {
                     record,
@@ -65,7 +52,7 @@ fn kotlin_approval_card_goldens() {
                 }
             }
         } else {
-            let id: String = case.id.decode().unwrap();
+            let id: String = wire::decode(&case.id).unwrap();
             assert_eq!(
                 claude::requests::pending(
                     &id,
@@ -75,8 +62,7 @@ fn kotlin_approval_card_goldens() {
                     Some("s"),
                     Some("t"),
                     17000
-                )
-                .unwrap(),
+                ),
                 case.expected,
                 "{}",
                 case.case
@@ -84,17 +70,12 @@ fn kotlin_approval_card_goldens() {
         }
     }
 }
+fn parse(text: &str) -> OpaqueJson {
+    strict_json(text.as_bytes()).unwrap()
+}
 fn codex_card(method: &str, body: &str) -> PendingRequest {
-    let body = RawJson::parse(body).unwrap();
-    match requests::pending(
-        RequestId::number(1),
-        method,
-        Some(&body),
-        &RawJson::parse("{}").unwrap(),
-        0,
-    )
-    .unwrap()
-    {
+    let body = parse(body);
+    match requests::pending(&parse("1"), method, Some(&body), &parse("{}"), 0) {
         Disposition::Ask(card) => card,
         _ => panic!("permission must require a user"),
     }
@@ -147,53 +128,61 @@ fn codex_raw_settings_force_user_reviewer_and_preserve_extensions() {
     for method in params::REVIEWER_METHODS {
         let guarded = params::enforce_reviewer(
             method,
-            Some(
-                &RawJson::parse(
-                    r#"{"approvalsReviewer":"auto_review","future":{"n":9007199254740993}}"#,
-                )
-                .unwrap(),
-            ),
+            Some(parse(
+                r#"{"approvalsReviewer":"auto_review","future":{"n":9007199254740993}}"#,
+            )),
         )
-        .unwrap()
         .unwrap();
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Check {
-            approvals_reviewer: String,
-            future: RawJson,
-        }
-        let parsed: Check = guarded.decode().unwrap();
-        assert_eq!(parsed.approvals_reviewer, "user");
-        assert_eq!(parsed.future.text(), r#"{"n":9007199254740993}"#);
+        assert_eq!(
+            wire::text(&guarded),
+            r#"{"approvalsReviewer":"user","future":{"n":9007199254740993}}"#
+        );
+        assert_eq!(
+            wire::text(&params::enforce_reviewer(method, None).unwrap()),
+            r#"{"approvalsReviewer":"user"}"#
+        );
     }
-    let mut guard = params::ReviewerGuard::default();
-    guard.observe("thread", Some("auto_review"));
-    assert!(guard.validate_send("thread").is_err());
-    guard.observe("thread", Some("user"));
-    guard.validate_send("thread").unwrap();
+    assert!(params::enforce_reviewer("model/list", None).is_none());
+    assert_eq!(
+        wire::text(&params::enforce_reviewer("model/list", Some(parse("{}"))).unwrap()),
+        "{}"
+    );
+}
+fn launch_config(extra: &[&str]) -> claude::launch::LaunchConfig {
+    claude::launch::LaunchConfig {
+        executable: claude::launch::EXECUTABLE.into(),
+        config_dir: "/home/work/.claude".into(),
+        tmp_dir: "/tmp".into(),
+        base_env: std::collections::BTreeMap::from([
+            ("OPENAI_API_KEY".into(), "fixture".into()),
+            ("CLAUDECODE".into(), "1".into()),
+            ("LD_PRELOAD".into(), "fixture".into()),
+            ("LANG".into(), "C.UTF-8".into()),
+        ]),
+        credentials: Default::default(),
+        default_permissions: PermissionPreset::Ask,
+        extra_args: extra.iter().map(|s| s.to_string()).collect(),
+    }
 }
 #[test]
 fn claude_launch_filters_inherited_credentials_and_rejects_permission_override_spellings() {
-    let base = std::collections::BTreeMap::from([
-        ("OPENAI_API_KEY".into(), "fixture".into()),
-        ("CLAUDECODE".into(), "1".into()),
-        ("LD_PRELOAD".into(), "fixture".into()),
-        ("LANG".into(), "C.UTF-8".into()),
-    ]);
     let spec = claude::launch::spec(
-        &base,
-        &Default::default(),
-        Session::Resume("s"),
+        &launch_config(&[]),
+        "/workspace",
+        &Session::Resume("s"),
         Some("model"),
         Some("high"),
-        PermissionPreset::AutoEdit,
-        &[],
+        Some(PermissionPreset::AutoEdit),
     )
     .unwrap();
     assert!(!spec.env.contains_key("OPENAI_API_KEY"));
     assert!(!spec.env.contains_key("LD_PRELOAD"));
     assert!(!spec.env.contains_key("CLAUDECODE"));
     assert_eq!(spec.env.get("LANG").unwrap(), "C.UTF-8");
+    assert_eq!(
+        spec.env.get("CLAUDE_CONFIG_DIR").unwrap(),
+        "/home/work/.claude"
+    );
     assert!(
         spec.argv
             .windows(2)
@@ -203,43 +192,44 @@ fn claude_launch_filters_inherited_credentials_and_rejects_permission_override_s
         "--dangerously-skip-permissions",
         "--permission-mode=auto",
         "--permission-mode=bypassPermissions",
+        "--permission-mode",
         "--permission-prompt-tool=custom",
         "--allow-dangerously-skip-permissions=true",
+        "bypassPermissions",
+        "auto",
     ] {
         assert!(
             claude::launch::spec(
-                &base,
-                &Default::default(),
-                Session::New("s"),
+                &launch_config(&[flag]),
+                "/workspace",
+                &Session::New("s"),
                 None,
                 None,
-                PermissionPreset::Ask,
-                &[flag.into()]
+                None
             )
             .is_err(),
             "{flag}"
         );
     }
-    assert!(claude::launch::transcript_path("/workspace", "../../secret").is_err());
+    assert!(
+        claude::launch::transcript_path("/home/work/.claude", "/workspace", "../../secret")
+            .is_err()
+    );
+    assert_eq!(
+        claude::launch::transcript_path("/home/work/.claude", "/workspace", "s1").unwrap(),
+        "/home/work/.claude/projects/-workspace/s1.jsonl"
+    );
 }
 #[test]
 fn claude_undeclared_dialogs_and_unoffered_persistent_decisions_cannot_be_answered() {
-    let raw=RawJson::parse(r#"{"type":"control_request","request_id":"r","request":{"subtype":"can_use_tool","tool_name":"Edit","input":{},"requires_user_interaction":true}}"#).unwrap();
-    #[derive(Deserialize)]
-    struct Frame {
-        request: RawJson,
-    }
-    let request: Frame = raw.decode().unwrap();
-    let card = claude::requests::pending(
-        "r",
-        "can_use_tool",
-        &request.request,
-        &raw,
-        Some("s"),
-        Some("t"),
-        0,
-    )
-    .unwrap();
+    let raw = parse(
+        r#"{"type":"control_request","request_id":"r","request":{"subtype":"can_use_tool","tool_name":"Edit","input":{},"requires_user_interaction":true}}"#,
+    );
+    let request = parse(
+        r#"{"subtype":"can_use_tool","tool_name":"Edit","input":{},"requires_user_interaction":true}"#,
+    );
+    let card =
+        claude::requests::pending("r", "can_use_tool", &request, &raw, Some("s"), Some("t"), 0);
     for id in ["allow", "allowAlways:0"] {
         assert!(
             claude::requests::answer(
@@ -255,18 +245,18 @@ fn claude_undeclared_dialogs_and_unoffered_persistent_decisions_cannot_be_answer
     let dialog = claude::requests::pending(
         "r",
         "request_user_dialog",
-        &RawJson::parse(r#"{"dialog_kind":"future"}"#).unwrap(),
+        &parse(r#"{"dialog_kind":"future"}"#),
         &raw,
         None,
         None,
         0,
-    )
-    .unwrap();
+    );
+    assert!(dialog.decisions.is_empty());
     assert!(
         claude::requests::answer(
             &dialog,
             &RequestResponse::RawResult {
-                result: strict_json(b"{}").unwrap()
+                result: parse("{}")
             }
         )
         .is_err()

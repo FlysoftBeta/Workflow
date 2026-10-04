@@ -1,16 +1,54 @@
-use std::{io::Cursor, time::Duration};
+//! Transport parity with the retained Kotlin `TransportTest`, over in-memory guest stdio.
+use serde_json::{Value, json};
+use std::{
+    io::Cursor,
+    sync::{Arc, Mutex, mpsc},
+    time::Duration,
+};
 use workflow_chat::{
     error::ErrorKind,
+    model::OpaqueJson,
+    ports::SpawnSpec,
+    testing::{FakeProcess, React, opaque},
     transport::{
-        control::{ControlRouter, Inbound as ControlInbound},
-        jsonrpc::{Inbound, RpcRouter},
+        control::{ControlConnection, ControlInbound},
+        jsonrpc::{RpcConnection, RpcInbound},
         lines::{Line, LineReader},
-        raw::{RawJson, RequestId},
     },
+    wire,
 };
-fn raw(s: &str) -> RawJson {
-    RawJson::parse(s).unwrap()
+
+fn spec() -> SpawnSpec {
+    SpawnSpec {
+        argv: vec!["x".into()],
+        cwd: "/".into(),
+        env: Default::default(),
+        label: "t".into(),
+    }
 }
+fn process(react: impl Fn(&FakeProcess, &Value) + Send + Sync + 'static) -> Arc<FakeProcess> {
+    let react: React = Arc::new(react);
+    FakeProcess::new(spec(), react)
+}
+fn text(v: &OpaqueJson) -> String {
+    wire::text(v)
+}
+fn rpc(p: &FakeProcess) -> (Arc<RpcConnection>, mpsc::Receiver<RpcInbound>) {
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    let c = RpcConnection::open(
+        p.take_stdio(),
+        Box::new(move |_, m| {
+            let _ = tx.lock().unwrap().send(m);
+        }),
+    );
+    (c, rx)
+}
+fn recv<T>(rx: &mpsc::Receiver<T>) -> T {
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("inbound message")
+}
+
 #[test]
 fn line_reader_handles_crlf_oversize_invalid_utf8_and_final_unterminated_line() {
     let mut bytes = b"{\"a\":1}\r\n\n".to_vec();
@@ -28,156 +66,206 @@ fn line_reader_handles_crlf_oversize_invalid_utf8_and_final_unterminated_line() 
     );
     assert_eq!(reader.next_line().unwrap(), Line::Eof);
 }
+
 #[test]
-fn jsonrpc_separates_directions_and_echoes_raw_ids_without_auto_answering() {
-    let mut router = RpcRouter::default();
-    let (_, _, waiter) = router.begin("thread/start", Some(&raw("{}"))).unwrap();
-    let first=router.route(raw(r#"{"id":1,"method":"item/commandExecution/requestApproval","params":{"threadId":"t"}}"#)).unwrap();
-    assert!(matches!(first, Some(Inbound::Request { .. })));
-    let second = router
-        .route(raw(
-            r#"{"id":"srv-7","method":"item/tool/requestUserInput","params":{}}"#,
-        ))
+fn jsonrpc_keeps_directions_apart_and_echoes_server_ids_verbatim() {
+    let fake = process(|p, frame| {
+        // Before answering our request 1, the server sends its own request with the same ID 1.
+        if frame["method"] == "thread/start" {
+            p.emit(&json!({"id":1,"method":"item/commandExecution/requestApproval","params":{"threadId":"t"}}));
+            p.emit(&json!({"id":"srv-7","method":"item/tool/requestUserInput","params":{}}));
+            p.emit(&json!({"id":99,"result":{}}));
+            p.emit_raw("{\"method\":\"future/notification\",\"params\":{\"x\":[1,{\"y\":null}]},\"extra\":true}\n");
+            p.emit(&json!({"id":1,"result":{"thread":{"id":"t"}}}));
+        }
+    });
+    let (c, rx) = rpc(&fake);
+    let result = c
+        .request("thread/start", Some(opaque(json!({"cwd":"/workspace"}))))
         .unwrap();
-    assert!(matches!(second, Some(Inbound::Request { .. })));
-    assert!(matches!(
-        router.route(raw(r#"{"id":99,"result":{}}"#)).unwrap(),
-        Some(Inbound::Stray { .. })
-    ));
-    let unknown =
-        r#"{ "method":"future/notification", "params":{"x":[1,{"y":null}]}, "extra":true }"#;
-    let Some(Inbound::Notification { raw: preserved, .. }) = router.route(raw(unknown)).unwrap()
+    assert_eq!(text(&result), r#"{"thread":{"id":"t"}}"#);
+    let RpcInbound::Request {
+        id: numeric,
+        method,
+        ..
+    } = recv(&rx)
     else {
         panic!()
     };
-    assert_eq!(preserved.text(), unknown);
-    router
-        .route(raw(r#"{"id":1,"result":{"thread":{"id":"t"}}}"#))
-        .unwrap();
+    assert_eq!(text(&numeric), "1");
+    assert_eq!(method, "item/commandExecution/requestApproval");
+    let RpcInbound::Request { id: string, .. } = recv(&rx) else {
+        panic!()
+    };
+    assert_eq!(text(&string), r#""srv-7""#);
+    assert!(matches!(recv(&rx), RpcInbound::Stray { .. }));
+    let RpcInbound::Notification { raw, method, .. } = recv(&rx) else {
+        panic!()
+    };
+    assert_eq!(method, "future/notification");
+    // Every member of an unknown notification is preserved.
     assert_eq!(
-        waiter
-            .recv_timeout(Duration::from_millis(100))
-            .unwrap()
-            .unwrap()
-            .text(),
-        r#"{"thread":{"id":"t"}}"#
-    );
-    assert_eq!(router.open_requests().len(), 2);
-    assert_eq!(
-        router
-            .respond(&RequestId::string("srv-7"), &raw(r#"{"answers":{}}"#))
-            .unwrap()
-            .text(),
-        r#"{"id":"srv-7","result":{"answers":{}}}"#
+        raw.0,
+        json!({"method":"future/notification","params":{"x":[1,{"y":null}]},"extra":true})
     );
     assert_eq!(
-        router
-            .reject(&RequestId::number(1), -32601, "no")
-            .unwrap()
-            .text(),
-        r#"{"id":1,"error":{"code":-32601,"message":"no"}}"#
+        c.open_server_requests(),
+        vec!["\"srv-7\"".to_string(), "1".to_string()]
     );
-    assert!(
-        router
-            .respond(&RequestId::string("srv-7"), &raw("{}"))
-            .is_err()
+    c.respond(&string, &opaque(json!({"answers":{}}))).unwrap();
+    c.respond_error(&numeric, -32601, "no", None).unwrap();
+    let written: Vec<String> = fake.written().iter().map(|v| v.to_string()).collect();
+    assert!(written.contains(&r#"{"id":"srv-7","result":{"answers":{}}}"#.to_string()));
+    assert!(written.contains(&r#"{"error":{"code":-32601,"message":"no"},"id":1}"#.to_string()));
+    assert_eq!(
+        c.respond(&string, &opaque(json!({}))).unwrap_err().kind,
+        ErrorKind::RequestExpired
     );
-    assert!(router.open_requests().is_empty());
+    assert!(c.open_server_requests().is_empty());
 }
+
 #[test]
 fn huge_numeric_ids_string_ids_and_null_results_remain_distinct() {
-    let mut router = RpcRouter::default();
+    let fake = process(|p, frame| {
+        if frame["method"] == "x" {
+            p.emit(&json!({"id": frame["id"], "result": null}));
+        }
+    });
+    let (c, rx) = rpc(&fake);
     for token in [
         "900719925474099312345678901",
         r#""900719925474099312345678901""#,
         "1.2300e+20",
+        "-0",
     ] {
-        let Some(Inbound::Request { id, .. }) = router
-            .route(raw(&format!("{{\"id\":{token},\"method\":\"future\"}}")))
-            .unwrap()
-        else {
+        fake.emit_raw(&format!("{{\"id\":{token},\"method\":\"future\"}}\n"));
+        let RpcInbound::Request { id, .. } = recv(&rx) else {
             panic!()
         };
-        let response = router.respond(&id, &RawJson::null()).unwrap();
-        assert_eq!(
-            response.text(),
-            format!("{{\"id\":{token},\"result\":null}}")
-        );
+        assert_eq!(text(&id), token);
+        c.respond(&id, &OpaqueJson::default()).unwrap();
     }
-    let (_, _, waiter) = router.begin("x", None).unwrap();
-    router.route(raw(r#"{"id":1,"result":null}"#)).unwrap();
-    assert_eq!(waiter.recv().unwrap().unwrap().text(), "null");
+    let answers: Vec<String> = fake
+        .written()
+        .iter()
+        .map(|v| serde_json::to_string(v).unwrap())
+        .collect();
+    assert_eq!(
+        answers,
+        [
+            r#"{"id":900719925474099312345678901,"result":null}"#,
+            r#"{"id":"900719925474099312345678901","result":null}"#,
+            r#"{"id":1.2300e+20,"result":null}"#,
+            r#"{"id":-0,"result":null}"#,
+        ]
+    );
+    assert_eq!(text(&c.request("x", None).unwrap()), "null");
 }
+
 #[test]
-fn pending_requests_fail_on_exit_and_errors_retain_vendor_data() {
-    let mut router = RpcRouter::default();
-    let (_, _, waiter) = router.begin("slow", None).unwrap();
-    router.close();
-    assert_eq!(waiter.recv().unwrap().unwrap_err().kind, ErrorKind::Closed);
-    let mut router = RpcRouter::default();
-    let (_, _, waiter) = router.begin("x", None).unwrap();
-    let failure =
-        r#"{"id":1,"error":{"code":-32602,"message":"bad params","data":{"f":1}},"future":true}"#;
-    router.route(raw(failure)).unwrap();
-    let error = waiter.recv().unwrap().unwrap_err();
+fn pending_requests_fail_when_the_process_exits_and_errors_keep_vendor_data() {
+    let fake = process(|p, frame| {
+        if frame["method"] == "slow" {
+            p.exit(1)
+        } else {
+            p.emit(&json!({"id":frame["id"],"error":{"code":-32602,"message":"bad params","data":{"f":1}},"future":true}))
+        }
+    });
+    let (c, _rx) = rpc(&fake);
+    let error = c.request("x", None).unwrap_err();
+    assert_eq!(error.code, Some(-32602));
     assert_eq!(error.message, "bad params");
-    assert_eq!(error.vendor.unwrap().text(), failure);
+    assert_eq!(text(error.data.as_ref().unwrap()), r#"{"f":1}"#);
+    assert_eq!(c.request("slow", None).unwrap_err().kind, ErrorKind::Closed);
+    assert_eq!(
+        c.request("after", None).unwrap_err().kind,
+        ErrorKind::Closed
+    );
 }
+
+#[test]
+fn malformed_frames_are_reported_and_reading_continues() {
+    let fake = process(|_, _| {});
+    let (_c, rx) = rpc(&fake);
+    fake.emit_raw("not json\n[1,2]\n{\"method\":\"ok\"}\n");
+    assert!(matches!(recv(&rx), RpcInbound::Malformed { .. }));
+    assert!(matches!(recv(&rx), RpcInbound::Malformed { .. }));
+    assert!(matches!(recv(&rx), RpcInbound::Notification { .. }));
+}
+
+fn control(p: &FakeProcess) -> (Arc<ControlConnection>, mpsc::Receiver<ControlInbound>) {
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    let c = ControlConnection::open(
+        p.take_stdio(),
+        Box::new(|| "ours-1".to_string()),
+        Box::new(move |_, m| {
+            let _ = tx.lock().unwrap().send(m);
+        }),
+    );
+    (c, rx)
+}
+
 #[test]
 fn control_ignores_echoes_correlates_ids_and_forgets_cancelled_requests() {
-    let mut router = ControlRouter::default();
-    let (sent, waiter) = router
-        .begin("ours-1", &raw(r#"{"subtype":"interrupt"}"#))
-        .unwrap();
+    let fake = process(|p, frame| {
+        if frame["type"] == "control_request" {
+            let id = frame["request_id"].clone();
+            p.emit(&json!({"type":"keep_alive"}));
+            p.emit(&json!({"type":"control_response","response":{"subtype":"success","request_id":"someone-else","response":{}}}));
+            p.emit(&json!({"type":"control_request","request_id":"cli-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}));
+            p.emit(&json!({"type":"control_cancel_request","request_id":"cli-1"}));
+            p.emit(&json!({"type":"system","subtype":"brand_new","payload":1}));
+            p.emit(&json!({"type":"control_response","response":{"subtype":"success","request_id":id,"response":{"still_queued":[]}}}));
+        }
+        if frame["type"] == "control_response" {
+            p.emit(frame); // the CLI echoes our responses
+        }
+    });
+    let (c, rx) = control(&fake);
+    let result = c.control("interrupt", &Default::default()).unwrap();
+    assert_eq!(text(&result), r#"{"still_queued":[]}"#);
+    let ControlInbound::Request { id, subtype, .. } = recv(&rx) else {
+        panic!()
+    };
+    assert_eq!((id.as_str(), subtype.as_str()), ("cli-1", "can_use_tool"));
+    let ControlInbound::Cancel { id, .. } = recv(&rx) else {
+        panic!()
+    };
+    assert_eq!(id, "cli-1");
+    let ControlInbound::Message { kind, .. } = recv(&rx) else {
+        panic!()
+    };
+    assert_eq!(kind, "system");
+    assert_eq!(c.ignored_responses(), 1);
     assert_eq!(
-        sent.text(),
-        r#"{"type":"control_request","request_id":"ours-1","request":{"subtype":"interrupt"}}"#
+        c.respond("cli-1", None).unwrap_err().kind,
+        ErrorKind::RequestExpired
     );
-    assert!(
-        router
-            .route(raw(r#"{"type":"keep_alive"}"#))
-            .unwrap()
-            .is_none()
-    );
-    router.route(raw(r#"{"type":"control_response","response":{"subtype":"success","request_id":"someone-else","response":{}}}"#)).unwrap();
-    assert!(matches!(router.route(raw(r#"{"type":"control_request","request_id":"cli-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}"#)).unwrap(),Some(ControlInbound::Request {..})));
-    assert_eq!(router.open_requests(), vec!["cli-1"]);
-    assert!(matches!(
-        router
-            .route(raw(
-                r#"{"type":"control_cancel_request","request_id":"cli-1"}"#
-            ))
-            .unwrap(),
-        Some(ControlInbound::Cancel { .. })
-    ));
-    assert!(matches!(
-        router
-            .route(raw(
-                r#"{"type":"system","subtype":"brand_new","payload":1}"#
-            ))
-            .unwrap(),
-        Some(ControlInbound::Message { .. })
-    ));
-    router.route(raw(r#"{"type":"control_response","response":{"subtype":"success","request_id":"ours-1","response":{"still_queued":[]}}}"#)).unwrap();
     assert_eq!(
-        waiter.recv().unwrap().unwrap().text(),
-        r#"{"still_queued":[]}"#
+        fake.written()[0],
+        json!({"type":"control_request","request_id":"ours-1","request":{"subtype":"interrupt"}})
     );
-    assert_eq!(router.ignored_responses, 1);
-    assert!(router.respond("cli-1", None).is_err());
 }
+
 #[test]
-fn control_errors_preserve_raw_frame_and_undeclared_dialogs_can_be_forgotten() {
-    let mut router = ControlRouter::default();
-    let (_, waiter) = router
-        .begin("ours", &raw(r#"{"subtype":"set_model"}"#))
-        .unwrap();
-    let failure = r#"{"type":"control_response","response":{"subtype":"error","request_id":"ours","error":"nope","future":42}}"#;
-    router.route(raw(failure)).unwrap();
-    let error = waiter.recv().unwrap().unwrap_err();
+fn control_errors_surface_and_undeclared_dialogs_can_be_forgotten() {
+    let fake = process(|p, frame| {
+        if frame["type"] == "control_request" {
+            p.emit(&json!({"type":"control_response","response":{"subtype":"error","request_id":frame["request_id"],"error":"nope","future":42}}));
+            p.emit(&json!({"type":"control_request","request_id":"dialog","request":{"subtype":"request_user_dialog"}}));
+        }
+    });
+    let (c, rx) = control(&fake);
+    let fields =
+        workflow_chat::model::OpaqueObject::from([("model".into(), wire::string_value("x"))]);
+    let error = c.control("set_model", &fields).unwrap_err();
     assert_eq!(error.message, "nope");
-    assert_eq!(error.vendor.unwrap().text(), failure);
-    router.route(raw(r#"{"type":"control_request","request_id":"dialog","request":{"subtype":"request_user_dialog"}}"#)).unwrap();
-    router.forget("dialog");
-    assert!(router.respond("dialog", Some(&raw("{}"))).is_err());
+    assert!(matches!(recv(&rx), ControlInbound::Request { .. }));
+    c.forget("dialog");
+    assert!(c.respond("dialog", Some(&opaque(json!({})))).is_err());
+    assert_eq!(
+        fake.written()[0],
+        json!({"type":"control_request","request_id":"ours-1","request":{"subtype":"set_model","model":"x"}})
+    );
 }

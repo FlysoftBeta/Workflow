@@ -12,6 +12,7 @@ import top.flysoftbeta.workflow.core.layout.Workbench
 import top.flysoftbeta.workflow.core.session.Session
 import top.flysoftbeta.workflow.ui.design.MenuEntry
 import top.flysoftbeta.workflow.ui.design.MenuGroup
+import top.flysoftbeta.workflow.ui.design.ToolAction
 import top.flysoftbeta.workflow.ui.design.icons.Sym
 
 /** Human name of a stack for "移动到 ▸" and the `[1/3 ▾]` switcher. */
@@ -23,6 +24,18 @@ internal fun stackName(wb: Workbench, stackId: StackId, titleOf: (PanelId) -> St
         val active = wb.stacks[stackId]?.active?.let(titleOf)
         if (active != null) "编辑器 $index · $active" else "编辑器 $index"
     }
+}
+
+/**
+ * The More menu of a stack header. A key names one command: surfaced [actions] already offer theirs
+ * (and collapse into the top of More on a narrow header), so [groups] drop those entries, and a key
+ * shared by several groups is kept only in the first. Every action therefore appears once.
+ */
+internal fun moreMenu(actions: List<ToolAction>, groups: List<MenuGroup>): List<MenuGroup> {
+    val seen = actions.mapTo(HashSet()) { it.key }
+    return groups
+        .map { group -> group.copy(entries = group.entries.filter { seen.add(it.key) }) }
+        .filter { it.entries.isNotEmpty() }
 }
 
 /**
@@ -70,12 +83,7 @@ internal fun layoutGroup(env: WorkbenchEnv, wb: Workbench, stackId: StackId, pan
         }
         entries += MenuEntry.Submenu("moveTo", "移动到", Sym.MoveItem, listOf(MenuGroup("editors", editors), MenuGroup("fixed", fixed), MenuGroup("new", fresh)))
     }
-    if (editor && wb.paradigm == Paradigm.FILES) {
-        val maximized = wb.files.maximized == stackId
-        entries += MenuEntry.Action("maximize", if (maximized) "还原" else "最大化", if (maximized) Sym.CloseFullscreen else Sym.OpenInFull) {
-            env.layout(LayoutOp.SetMaximized(if (maximized) null else stackId))
-        }
-    }
+    maximizeEntry(wb, stackId) { env.layout(LayoutOp.SetMaximized(it)) }?.let { entries += it }
     if (panelId != null) {
         val others = wb.otherPanels(panelId)
         val after = wb.panelsAfter(panelId)
@@ -93,7 +101,7 @@ internal fun layoutGroup(env: WorkbenchEnv, wb: Workbench, stackId: StackId, pan
             entries += MenuEntry.Action("collapseAux", "收起面板", Sym.RightPanelClose) { hideRegion(env, Region.AUX) }
         }
         stackId == Workbench.AUX && wb.paradigm == Paradigm.CHAT -> {
-            entries += MenuEntry.Action("returnFiles", "回到 Files", Sym.SwapHoriz) { env.layout(LayoutOp.ReturnToFiles) }
+            entries += MenuEntry.Action("toFiles", "回到 Files", Sym.SwapHoriz) { env.layout(LayoutOp.ReturnToFiles) }
             entries += MenuEntry.Toggle("fileSide", "文件侧栏", checked = !wb.chat.side.collapsed || runtime.presence.auxOverlay) {
                 runtime.toggleRegion(Region.CHAT_SIDE)
             }
@@ -105,11 +113,25 @@ internal fun layoutGroup(env: WorkbenchEnv, wb: Workbench, stackId: StackId, pan
             }
         }
         chatSide -> {
-            entries += MenuEntry.Action("returnFiles", "回到 Files", Sym.OpenInFull) { env.layout(LayoutOp.ReturnToFiles) }
+            entries += MenuEntry.Action("toFiles", "回到 Files", Sym.OpenInFull) { env.layout(LayoutOp.ReturnToFiles) }
         }
     }
     return MenuGroup("layout", entries)
 }
+
+private const val MAXIMIZE = "maximize"
+
+/** "最大化" / "还原" of a Files editor stack; null where maximizing does not apply. */
+internal fun maximizeEntry(wb: Workbench, stackId: StackId, setMaximized: (StackId?) -> Unit): MenuEntry.Action? {
+    if (!wb.isEditorStack(stackId) || wb.paradigm != Paradigm.FILES) return null
+    val maximized = wb.files.maximized == stackId
+    return MenuEntry.Action(MAXIMIZE, if (maximized) "还原" else "最大化", if (maximized) Sym.CloseFullscreen else Sym.OpenInFull) {
+        setMaximized(if (maximized) null else stackId)
+    }
+}
+
+/** The maximized stack's surfaced "还原"; it shares [maximizeEntry]'s key, so More lists it once. */
+internal fun restoreAction(restore: () -> Unit) = ToolAction(MAXIMIZE, Sym.CloseFullscreen, "还原", onClick = restore)
 
 internal fun hideRegion(env: WorkbenchEnv, region: Region) {
     val presence = env.runtime.presence

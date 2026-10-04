@@ -11,9 +11,10 @@ use std::{
     path::{Path, PathBuf},
 };
 use workflow_environment::{
+    access::{self, Access},
     error::{Error, Result},
     persist::{hash, now, publish_new},
-    store::{Store, UploadStage},
+    store::{Store, StoredMetadata, UploadStage},
 };
 
 #[derive(Clone)]
@@ -23,7 +24,8 @@ pub struct FileWork {
 }
 enum Location {
     User(PathBuf),
-    Stored(String),
+    /// A visible `.workspace/` entry; the key is store-relative and empty for `.workspace` itself.
+    Stored(String, Access),
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExistingPathKind {
@@ -50,12 +52,39 @@ impl FileWork {
         if !valid_path(raw) {
             return Err(Error::invalid("not an editable workspace path"));
         }
-        if let Some(key) = raw.strip_prefix(".workspace/") {
-            self.store.metadata(key)?;
-            Ok(Location::Stored(key.into()))
+        if let Some(key) = access::key(raw) {
+            let access = access::classify(key)
+                .ok_or_else(|| Error::invalid("not an editable workspace path"))?;
+            if !key.is_empty() {
+                // Rejects symbolic-link components below `.workspace`.
+                self.store.metadata(key)?;
+            }
+            Ok(Location::Stored(key.into(), access))
         } else {
             Ok(Location::User(fs::user_path(&self.root, raw, false)?))
         }
+    }
+    /// A location that may be written: a user path or editable `.workspace` configuration.
+    fn writable(&self, raw: &str) -> Result<Location> {
+        match self.location(raw)? {
+            Location::Stored(_, access) if !access.writable() => Err(Error::business(
+                "read_only",
+                "this .workspace entry is protected and read-only",
+            )),
+            location => Ok(location),
+        }
+    }
+    fn stored_metadata(&self, key: &str) -> Result<Option<StoredMetadata>> {
+        if key.is_empty() {
+            // Store::open created `.workspace` as a real directory.
+            return Ok(Some(StoredMetadata {
+                is_file: false,
+                is_dir: true,
+                len: 0,
+                modified_at: 0,
+            }));
+        }
+        self.store.metadata(key)
     }
     pub fn validate_path(&self, raw: &str) -> Result<()> {
         self.location(raw).map(|_| ())
@@ -78,7 +107,7 @@ impl FileWork {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
                 Err(e) => return Err(e.into()),
             },
-            Location::Stored(key) => match self.store.metadata(&key)? {
+            Location::Stored(key, _) => match self.stored_metadata(&key)? {
                 Some(meta) => (meta.is_file, meta.is_dir),
                 None => return Ok(None),
             },
@@ -94,8 +123,8 @@ impl FileWork {
     pub fn version(&self, raw: &str) -> Result<FileVersion> {
         match self.location(raw)? {
             Location::User(p) => fs::version(&p),
-            Location::Stored(key) => {
-                let Some(m) = self.store.metadata(&key)? else {
+            Location::Stored(key, _) => {
+                let Some(m) = self.stored_metadata(&key)? else {
                     return Ok(FileVersion::default());
                 };
                 if !m.is_file {
@@ -135,16 +164,19 @@ impl FileWork {
                 }
                 Ok(out)
             }
-            Location::Stored(key) => self
+            Location::Stored(key, _) if key.is_empty() => {
+                Err(Error::business("io", "not a file"))
+            }
+            Location::Stored(key, _) => self
                 .store
                 .read_bytes(&key, limit)?
                 .ok_or_else(|| Error::business("io", "file does not exist")),
         }
     }
     pub fn write_text(&self, raw: &str, text: &str) -> Result<()> {
-        match self.location(raw)? {
+        match self.writable(raw)? {
             Location::User(p) => fs::atomic(&p, text.as_bytes()),
-            Location::Stored(key) => self.store.write_text(&key, text),
+            Location::Stored(key, _) => self.store.write_text(&key, text),
         }
     }
     pub fn open(&self, state: &mut FileWorkState, raw: &str) -> Result<OpenFile> {
@@ -198,7 +230,7 @@ impl FileWork {
         text: &str,
         shown: &FileVersion,
     ) -> Result<()> {
-        self.validate_path(path)?;
+        self.writable(path)?;
         if text.len() > 16 * 1024 * 1024 {
             return Err(Error::invalid("editable text exceeds 16 MiB"));
         }
@@ -342,8 +374,8 @@ impl FileWork {
                             v.exists && v.size == m.len() && v.modified_at == fs::modified_at(&m)
                         })
                 }),
-                Ok(Location::Stored(key)) => {
-                    self.store.metadata(&key).ok().flatten().is_some_and(|m| {
+                Ok(Location::Stored(key, _)) => {
+                    self.stored_metadata(&key).ok().flatten().is_some_and(|m| {
                         m.is_file
                             && state.disk.get(&p).is_some_and(|v| {
                                 v.exists && v.size == m.len && v.modified_at == m.modified_at
@@ -449,15 +481,17 @@ impl FileWork {
         }
         Ok(ArchiveOutcome::Archived { saved_paths })
     }
+    /// Lists a directory. The workspace root always shows `.workspace` as a protected folder,
+    /// and a `.workspace` listing contains only entries Environment's allowlist makes visible.
     pub fn list_directory(&self, raw: &str, show_hidden: bool) -> Result<Vec<DirectoryEntry>> {
         let mut entries = vec![];
-        if raw.starts_with(".workspace/") {
-            let Location::Stored(key) = self.location(raw)? else {
+        if access::is_internal(raw) {
+            let Location::Stored(key, _) = self.location(raw)? else {
                 unreachable!()
             };
-            for (key, m) in self.store.list_entries(&key)? {
-                let name = key.rsplit('/').next().unwrap();
-                if name == ".workspace" || (!show_hidden && name.starts_with('.')) {
+            for (child, m) in self.store.list_entries(&key)? {
+                let name = child.rsplit('/').next().unwrap();
+                if access::classify(&child).is_none() || (!show_hidden && name.starts_with('.')) {
                     continue;
                 }
                 entries.push(DirectoryEntry {
@@ -472,8 +506,9 @@ impl FileWork {
             for e in stdfs::read_dir(path)? {
                 let e = e?;
                 let name = e.file_name().to_string_lossy().into_owned();
-                if name == ".workspace"
-                    || (!show_hidden && name.starts_with('.'))
+                let protected = raw.is_empty() && name == access::DIRECTORY;
+                if (name == access::DIRECTORY && !protected)
+                    || (!show_hidden && !protected && name.starts_with('.'))
                     || e.file_type()?.is_symlink()
                 {
                     continue;
@@ -516,9 +551,9 @@ impl FileWork {
                 if data.len() > 65536 {
                     return Err(Error::invalid("blob exceeds 65536 bytes"));
                 }
-                match self.location(path)? {
+                match self.writable(path)? {
                     Location::User(p) => fs::create_atomic(&p, data)?,
-                    Location::Stored(key) => {
+                    Location::Stored(key, _) => {
                         let mut stage = self.store.begin_upload()?;
                         stage.append(data)?;
                         stage.sync()?;
@@ -526,12 +561,12 @@ impl FileWork {
                     }
                 }
             }
-            FileOperation::CreateDirectory { path } => match self.location(path)? {
+            FileOperation::CreateDirectory { path } => match self.writable(path)? {
                 Location::User(path) => stdfs::create_dir(path)?,
-                Location::Stored(key) => self.store.create_directory(&key)?,
+                Location::Stored(key, _) => self.store.create_directory(&key)?,
             },
             FileOperation::Delete { path } | FileOperation::Trash { path } => {
-                if path.starts_with(".workspace/") {
+                if access::is_internal(path) {
                     return Err(Error::invalid("configuration cannot be deleted"));
                 }
                 let p = fs::user_path(&self.root, path, false)?;
@@ -556,7 +591,7 @@ impl FileWork {
                 }
             }
             FileOperation::Move { from, to } | FileOperation::Copy { from, to } => {
-                if from.starts_with(".workspace/") || to.starts_with(".workspace/") {
+                if access::is_internal(from) || access::is_internal(to) {
                     return Err(Error::invalid("configuration cannot be moved or copied"));
                 }
                 let src = fs::user_path(&self.root, from, false)?;
@@ -671,7 +706,10 @@ impl FileWork {
                 f.take(length as u64).read_to_end(&mut data)?;
                 (data, size)
             }
-            Location::Stored(key) => self.store.read_range(&key, offset, length)?,
+            Location::Stored(key, _) if key.is_empty() => {
+                return Err(Error::business("io", "not a file"));
+            }
+            Location::Stored(key, _) => self.store.read_range(&key, offset, length)?,
         };
         let next_offset = offset + data.len() as u64;
         Ok(FileChunk {
@@ -692,7 +730,7 @@ impl FileWork {
                 imports::validate(&self.root, directory, name)?
             }
             UploadDestination::Exact { path } => {
-                if path.starts_with(".workspace/")
+                if access::is_internal(path)
                     && !path.starts_with(".workspace/services/")
                     && !path.starts_with(".workspace/proxy/")
                 {
@@ -700,9 +738,9 @@ impl FileWork {
                         "upload is only for user files and explicit service assets",
                     ));
                 }
-                let exists = match self.location(path)? {
+                let exists = match self.writable(path)? {
                     Location::User(p) => p.exists(),
-                    Location::Stored(key) => self.store.exists(&key)?,
+                    Location::Stored(key, _) => self.store.exists(&key)?,
                 };
                 if exists {
                     return Err(Error::business("exists", "destination already exists"));
@@ -771,7 +809,7 @@ impl FileWork {
                 imports::publish(&self.root, &mut upload.stage, directory, name)?
             }
             UploadDestination::Exact { path } => {
-                let result = match self.location(path)? {
+                let result = match self.writable(path)? {
                     Location::User(p) => {
                         stdfs::create_dir_all(p.parent().unwrap())?;
                         upload.stage.publish_new(&p).and_then(|()| {
@@ -779,7 +817,7 @@ impl FileWork {
                             Ok(())
                         })
                     }
-                    Location::Stored(key) => self.store.publish_upload(&mut upload.stage, &key),
+                    Location::Stored(key, _) => self.store.publish_upload(&mut upload.stage, &key),
                 };
                 if let Err(e) = result {
                     return Ok(UploadOutcome::Failed { message: e.message });

@@ -8,7 +8,6 @@ import top.flysoftbeta.workflow.agent.model.BackendKind
 import top.flysoftbeta.workflow.agent.model.Decision
 import top.flysoftbeta.workflow.agent.model.DecisionKind
 import top.flysoftbeta.workflow.agent.model.ItemStatus
-import top.flysoftbeta.workflow.agent.model.LoginMethod
 import top.flysoftbeta.workflow.agent.model.MarkerKind
 import top.flysoftbeta.workflow.agent.model.Notice
 import top.flysoftbeta.workflow.agent.model.PendingRequest
@@ -36,15 +35,6 @@ object ChatText {
         PermissionPreset.AUTO_EDIT -> "可直接修改工作区文件，命令仍需确认"
         PermissionPreset.PLAN -> "只讨论与规划，不执行"
         PermissionPreset.DENY_UNLISTED -> "不询问，未允许的操作一律拒绝"
-    }
-
-    fun loginLabel(method: LoginMethod) = when (method) {
-        LoginMethod.CODEX_DEVICE_CODE -> "使用设备码登录"
-        LoginMethod.CODEX_BROWSER -> "在浏览器中登录"
-        LoginMethod.CODEX_API_KEY -> "使用 API Key"
-        LoginMethod.CLAUDE_TERMINAL_LOGIN -> "在终端中登录"
-        LoginMethod.CLAUDE_SETUP_TOKEN -> "使用长期令牌"
-        LoginMethod.CLAUDE_API_KEY -> "使用 API Key"
     }
 
     private val EFFORTS = linkedMapOf(

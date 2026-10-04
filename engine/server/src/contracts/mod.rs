@@ -198,8 +198,8 @@ pub fn artifacts() -> BTreeMap<&'static str, String> {
         compatibility: "Exact protocol match is mandatory. No legacy migration or protocol fallback.",
         ownership: Ownership {
             android: "Workbench presentation, connection profiles, workspace-delivered local configuration, disposable projections and local Android capability execution",
-            engine: "Typed Environment, Workspace, FileWork and Terminal domains composed by Server; chat adapters and send ledger remain in the supervised guest service until round 2",
-            guest_chat: "Engine-supervised JVM service; opaque ChatWire bodies inside typed private RPC, no writable private-state mount",
+            engine: "Typed Environment, Workspace, FileWork, Terminal and Chat domains composed by Server; Rust chat adapters, journal, index and send ledger run in-process",
+            guest_chat: "In-process Rust Chat; agents run only through the Environment runtime; chat.* results carry opaque ChatWire bodies",
             local_services: "Boot-bound executor epochs and measured operation receipts; no automatic replay of unknown outcomes",
         },
         embedded_lifetime: "Stdio transport closure stops the Server and owned processes. Reconnect rehydrates committed state; there is no detached or remote execution promise.",

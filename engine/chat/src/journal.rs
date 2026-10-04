@@ -124,6 +124,23 @@ impl Journal {
             metadata: (*i.metadata).clone(),
         }
     }
+    /// One thread of the reduced state, without copying the rest.
+    pub fn thread(&self, key: &ThreadKey) -> Option<ThreadState> {
+        self.inner.lock().unwrap().state.threads.get(key).cloned()
+    }
+    pub fn backend(&self, kind: BackendKind) -> BackendStatus {
+        self.inner
+            .lock()
+            .unwrap()
+            .state
+            .backends
+            .get(&kind)
+            .cloned()
+            .unwrap_or_default()
+    }
+    pub fn epoch(&self) -> String {
+        self.inner.lock().unwrap().epoch.clone()
+    }
     pub fn process_epoch(&self, kind: BackendKind) -> Option<String> {
         self.inner
             .lock()

@@ -2,7 +2,12 @@ package top.flysoftbeta.workflow.engine.chat
 
 import top.flysoftbeta.workflow.core.io.WorkspacePaths
 
-/** Translates workspace-relative file paths to the sole production agent root, inside the container. */
+/**
+ * Translates workspace-relative file paths to the sole production agent root, inside the container.
+ * Agent homes are visible workspace configuration below `.workspace/agents/<id>`, but agents see them
+ * only at their guest homes (Environment masks that tree below `/workspace`), so both directions map
+ * between the two. The Engine's FileWork allowlist still decides what may be opened or attached.
+ */
 class AgentPaths(agentRoot: String = GUEST_ROOT) {
     init { require(agentRoot.trimEnd('/') == GUEST_ROOT) { "Agents require the container workspace" } }
     val root: String = GUEST_ROOT
@@ -11,6 +16,9 @@ class AgentPaths(agentRoot: String = GUEST_ROOT) {
     /** Agent-visible path of a workspace-relative path ("" = the root). */
     fun toAgent(relative: String): String {
         val clean = WorkspacePaths.normalize(relative)
+        HOMES.entries.firstOrNull { (_, visible) -> WorkspacePaths.isWithin(clean, visible) }?.let { (guest, visible) ->
+            return guest + clean.removePrefix(visible)
+        }
         return if (clean.isEmpty()) root else "$root/$clean"
     }
 
@@ -22,6 +30,13 @@ class AgentPaths(agentRoot: String = GUEST_ROOT) {
         var path = agentPath.trim()
         if (path.startsWith("file://")) path = path.removePrefix("file://")
         path = percentDecode(path)
+        if (path.startsWith("/")) {
+            HOMES.entries.firstOrNull { (guest, _) -> path == guest || path.startsWith("$guest/") }?.let { (guest, visible) ->
+                return WorkspacePaths.normalizeOrNull(path.removePrefix(guest).trimStart('/'))?.let { rest ->
+                    if (rest.isEmpty()) visible else "$visible/$rest"
+                }
+            }
+        }
         val relative = if (path.startsWith("/")) {
             val base = roots.firstOrNull { path == it || path.startsWith("$it/") } ?: return null
             path.removePrefix(base).trimStart('/')
@@ -66,6 +81,11 @@ class AgentPaths(agentRoot: String = GUEST_ROOT) {
 
     companion object {
         const val GUEST_ROOT = "/workspace"
+        /** Guest agent homes and their visible workspace paths, matching Environment's agent homes. */
+        private val HOMES = mapOf(
+            "/home/work/.codex" to ".workspace/agents/codex",
+            "/home/work/.claude" to ".workspace/agents/claude",
+        )
         private val HASH_LINE = Regex("#L(\\d+)(?:C(\\d+))?(?:-L?\\d+)?$")
         private val COLON_LINE = Regex(":(\\d+)(?::(\\d+))?$")
     }

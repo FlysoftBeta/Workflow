@@ -59,7 +59,7 @@ Queued messages appear as removable chips above the input. Pending approvals rem
 
 ## Signing in
 
-A new conversation shows sign-in below the backend choice when the selected backend is not signed in. An existing conversation shows a compact prompt above the composer that opens the same content in a dialog. The prompt reads Signing in to Codex while an attempt runs, so the dialog and its device code stay available until sign-in completes. Phases come from the shared `LoginView` projection described in the [Codex login state machine](../engine/chat.md#codex-login-state-machine).
+A new conversation shows sign-in below the backend choice when the selected backend is not signed in. An existing conversation shows a compact prompt above the composer that opens the same content in a dialog. The prompt reads Signing in to Codex while an attempt runs, so the dialog and its device code stay available until sign-in completes. Phases come from the shared `LoginView` projection described in the [Codex login state machine](../engine/chat.md#codex-login-state-machine). The same content, from the shared `ui.design` sign-in state and views, appears in the Settings Accounts sheet, which adds Copy and open terminal for a terminal login.
 
 | Phase | Presentation |
 | --- | --- |
