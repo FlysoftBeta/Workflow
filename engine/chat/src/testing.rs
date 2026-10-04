@@ -500,3 +500,64 @@ pub fn json_of<T: serde::Serialize>(value: &T) -> Value {
 pub fn opaque(value: Value) -> OpaqueJson {
     OpaqueJson(value)
 }
+
+/// Fixed clock and sequential IDs for deterministic replays.
+pub struct FixedClock(pub i64);
+impl crate::ports::Clock for FixedClock {
+    fn now_ms(&self) -> i64 {
+        self.0
+    }
+}
+pub struct SequenceIds {
+    prefix: String,
+    next: Mutex<usize>,
+    listed: Mutex<VecDeque<String>>,
+}
+impl SequenceIds {
+    /// `prefix-1`, `prefix-2`, ...
+    pub fn new(prefix: &str) -> Arc<Self> {
+        Arc::new(Self {
+            prefix: prefix.into(),
+            next: Mutex::new(0),
+            listed: Mutex::new(VecDeque::new()),
+        })
+    }
+    /// The given IDs in order, then `prefix-n`.
+    pub fn listed(ids: &[&str]) -> Arc<Self> {
+        let s = Self::new("id");
+        *s.listed.lock().unwrap() = ids.iter().map(|s| s.to_string()).collect();
+        s
+    }
+}
+impl crate::ports::IdSource for SequenceIds {
+    fn new_id(&self) -> String {
+        if let Some(id) = self.listed.lock().unwrap().pop_front() {
+            return id;
+        }
+        let mut n = self.next.lock().unwrap();
+        *n += 1;
+        format!("{}-{}", self.prefix, *n)
+    }
+}
+
+pub fn backend_status(state: &AgentState, kind: BackendKind) -> BackendStatus {
+    state.backends.get(&kind).cloned().unwrap_or_default()
+}
+pub fn thread<'a>(state: &'a AgentState, kind: BackendKind, id: &str) -> Option<&'a ThreadState> {
+    state.threads.get(&ThreadKey {
+        backend: kind,
+        id: id.into(),
+    })
+}
+pub fn turn<'a>(thread: &'a ThreadState, id: &str) -> Option<&'a Turn> {
+    thread.turns.iter().find(|t| t.id == id)
+}
+pub fn final_message(turn: &Turn) -> Option<&AgentMessageItem> {
+    turn.items.iter().rev().find_map(|i| match i {
+        Item::AgentMessage(m) if m.phase == MessagePhase::Final => Some(m),
+        _ => None,
+    })
+}
+pub fn request<'a>(state: &'a AgentState, key: &RequestKey) -> Option<&'a PendingRequest> {
+    state.requests.get(key)
+}
