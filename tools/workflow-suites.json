@@ -1,20 +1,19 @@
 {
   "version": 1,
   "suites": {
-    "agent": {
+    "chat": {
       "command": [
-        "./gradlew",
-        ":app:client:test",
-        ":agent:test",
-        ":engine-chat:test",
-        ":engine-chat:serviceJar"
+        "cargo",
+        "test",
+        "--manifest-path",
+        "engine/Cargo.toml",
+        "--locked",
+        "-p",
+        "workflow-chat",
+        "-j",
+        "2"
       ],
-      "heavy": true,
-      "reports": [
-        "app/client/build/test-results/test",
-        "agent/build/test-results/test",
-        "engine/chat/build/test-results/test"
-      ]
+      "heavy": true
     },
     "proxy": {
       "command": [
@@ -34,9 +33,7 @@
       "reports": [
         "app/android/build/test-results/testX86_64DebugUnitTest",
         "app/client/build/test-results/test",
-        "app/proxy/build/test-results/test",
-        "agent/build/test-results/test",
-        "engine/chat/build/test-results/test"
+        "app/proxy/build/test-results/test"
       ]
     },
     "lint": {

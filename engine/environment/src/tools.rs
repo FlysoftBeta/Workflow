@@ -292,10 +292,7 @@ fn extract(archive: &Path, catalog: &ToolCatalog, target: &Path) -> Result<()> {
     }
     for required in [
         "codex/bin/codex",
-        "jre/bin/java",
-        "chat/workflow-chat.jar",
         "notices/codex-LICENSE",
-        "notices/jre-LICENSE",
         "notices/claude-code-LICENSE",
     ] {
         if !seen.contains(required) {
@@ -323,10 +320,7 @@ fn validate_catalog(catalog: &ToolCatalog) -> Result<()> {
     }
     for path in [
         "codex/bin/codex",
-        "jre/bin/java",
-        "chat/workflow-chat.jar",
         "notices/codex-LICENSE",
-        "notices/jre-LICENSE",
         "notices/claude-code-LICENSE",
     ] {
         if !seen.contains(path) {
@@ -334,14 +328,10 @@ fn validate_catalog(catalog: &ToolCatalog) -> Result<()> {
         }
     }
     let tools = &catalog.tools;
-    if tools.len() != 3 {
+    if tools.len() != 1 {
         return Err(err("invalid mandatory tools"));
     }
-    for (id, binary) in [
-        ("codex", "/opt/workflow/tools/codex/bin/codex"),
-        ("jre", "/opt/workflow/tools/jre/bin/java"),
-        ("chat", "/opt/workflow/tools/chat/workflow-chat.jar"),
-    ] {
+    for (id, binary) in [("codex", "/opt/workflow/tools/codex/bin/codex")] {
         if !tools
             .iter()
             .any(|t| t.id == id && t.binary == binary && !t.version.is_empty())
@@ -398,25 +388,10 @@ pub fn verification_commands(opts: &Options) -> Result<Vec<(Vec<String>, String)
     let (_, catalog) = prepare(opts)?;
     let mut checks = vec![];
     for tool in &catalog.tools {
-        let id = tool.id.as_str();
-        if id == "chat" {
-            continue;
-        }
-        let mut argv = vec![tool.binary.clone()];
-        if id == "jre" {
-            argv.extend(
-                [
-                    "-Xms16m",
-                    "-Xmx256m",
-                    "-XX:ActiveProcessorCount=2",
-                    "-XX:+UseSerialGC",
-                    "-XX:-UsePerfData",
-                ]
-                .map(str::to_owned),
-            );
-        }
-        argv.push("--version".into());
-        checks.push((argv, tool.version.clone()));
+        checks.push((
+            vec![tool.binary.clone(), "--version".into()],
+            tool.version.clone(),
+        ));
     }
     Ok(checks)
 }
@@ -500,8 +475,6 @@ pub fn status(shared: &Arc<Mutex<Environment>>) -> Result<ToolsStatus> {
     let Some(active) = active else {
         let tools = [
             ("codex", "/opt/workflow/tools/codex/bin/codex"),
-            ("jre", "/opt/workflow/tools/jre/bin/java"),
-            ("chat", "/opt/workflow/tools/chat/workflow-chat.jar"),
             ("claude", CLAUDE),
         ]
         .into_iter()
@@ -524,28 +497,8 @@ pub fn status(shared: &Arc<Mutex<Environment>>) -> Result<ToolsStatus> {
                 Some(definition.version.clone()),
             );
             tool.extra = definition.extra.clone();
-            let mut argv = vec![definition.binary.clone()];
-            let result = if definition.id == "chat" {
-                Ok(())
-            } else {
-                if definition.id == "jre" {
-                    argv.extend(
-                        [
-                            "-Xms16m",
-                            "-Xmx256m",
-                            "-XX:ActiveProcessorCount=2",
-                            "-XX:+UseSerialGC",
-                            "-XX:-UsePerfData",
-                            "-version",
-                        ]
-                        .map(str::to_owned),
-                    );
-                } else {
-                    argv.push("--version".into());
-                }
-                runtime::probe(shared, argv, &definition.version)
-            };
-            tool.measured(result);
+            let argv = vec![definition.binary.clone(), "--version".into()];
+            tool.measured(runtime::probe(shared, argv, &definition.version));
             items.push(tool);
         }
         let pin = &catalog.optional.claude;
@@ -694,17 +647,17 @@ mod tests {
     #[test]
     fn unsafe_members_rejected() {
         for path in [
-            "/bin/java",
-            "../java",
-            "jre/../java",
-            "jre//java",
-            "jre/./java",
-            "jre\\java",
+            "/bin/codex",
+            "../codex",
+            "codex/../codex",
+            "codex//codex",
+            "codex/./codex",
+            "codex\\codex",
             "",
         ] {
             assert!(member(path).is_err(), "{path}");
         }
-        assert!(member("jre/bin/java").is_ok());
+        assert!(member("codex/bin/codex").is_ok());
     }
     #[test]
     fn catalog_and_extraction_enforce_complete_inventory() {
@@ -714,9 +667,12 @@ mod tests {
         let destination = temp.path().join("out");
         validate_catalog(&catalog).unwrap();
         extract(&archive, &catalog, &destination).unwrap();
-        assert_eq!(fs::read(destination.join("jre/bin/java")).unwrap(), b"test");
         assert_eq!(
-            fs::metadata(destination.join("jre/bin/java"))
+            fs::read(destination.join("codex/bin/codex")).unwrap(),
+            b"test"
+        );
+        assert_eq!(
+            fs::metadata(destination.join("codex/bin/codex"))
                 .unwrap()
                 .permissions()
                 .mode()
@@ -769,8 +725,7 @@ mod tests {
         let shared = Arc::new(Mutex::new(env));
         let result = status(&shared).unwrap();
         assert_eq!(result.tools[0].phase, ToolPhase::Failed);
-        assert_eq!(result.tools[1].phase, ToolPhase::Failed);
-        assert_eq!(result.tools[3].phase, ToolPhase::NotInstalled);
+        assert_eq!(result.tools[1].phase, ToolPhase::NotInstalled);
         assert_eq!(status(&shared).unwrap().revision, result.revision);
     }
     #[test]
@@ -816,10 +771,7 @@ pub(crate) fn fixture(directory: &Path) -> ToolCatalog {
     let mut files = vec![];
     for path in [
         "codex/bin/codex",
-        "jre/bin/java",
-        "chat/workflow-chat.jar",
         "notices/codex-LICENSE",
-        "notices/jre-LICENSE",
         "notices/claude-code-LICENSE",
     ] {
         zip.start_file(path, zip::write::SimpleFileOptions::default())
@@ -834,23 +786,15 @@ pub(crate) fn fixture(directory: &Path) -> ToolCatalog {
         });
     }
     zip.finish().unwrap();
-    let tools = [
-        ("codex", "test", "/opt/workflow/tools/codex/bin/codex"),
-        ("jre", "test", "/opt/workflow/tools/jre/bin/java"),
-        (
-            "chat",
-            "1.0.0",
-            "/opt/workflow/tools/chat/workflow-chat.jar",
-        ),
-    ]
-    .into_iter()
-    .map(|(id, version, binary)| ToolDefinition {
-        id: id.into(),
-        version: version.into(),
-        binary: binary.into(),
-        extra: OpaqueObject::new(),
-    })
-    .collect();
+    let tools = [("codex", "test", "/opt/workflow/tools/codex/bin/codex")]
+        .into_iter()
+        .map(|(id, version, binary)| ToolDefinition {
+            id: id.into(),
+            version: version.into(),
+            binary: binary.into(),
+            extra: OpaqueObject::new(),
+        })
+        .collect();
     let catalog = ToolCatalog {
         format: 1,
         architecture: architecture().into(),

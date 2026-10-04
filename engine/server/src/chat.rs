@@ -91,7 +91,7 @@ impl ChatHost {
         Ok(chat)
     }
     /// Stops agents and every guest child they spawned. The next request starts a fresh service
-    /// with a new journal epoch, as a restarted JVM service did.
+    /// with a new journal epoch.
     pub fn stop(&self) {
         if let Some((chat, runtime)) = self.current.lock().unwrap().take() {
             chat.shutdown();

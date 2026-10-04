@@ -23,6 +23,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Workflow"
-// All client code lives under app/. Retain the JVM Chat oracle until Rust parity acceptance.
-include(":app:client", ":app:proxy", ":app:android", ":agent", ":engine-chat")
-project(":engine-chat").projectDir = file("engine/chat")
+// All client code lives under app/.
+include(":app:client", ":app:proxy", ":app:android")

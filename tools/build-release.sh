@@ -78,7 +78,7 @@ for abi, arch in [('arm64-v8a', 'arm64'), ('x86_64', 'amd64')]:
             for item in tools['files']:
                 data = contents.read(item['path'])
                 assert len(data) == item['size'] and hashlib.sha256(data).hexdigest() == item['sha256']
-            for required in ['codex/bin/codex', 'jre/bin/java', 'chat/workflow-chat.jar', 'notices/codex-LICENSE', 'notices/jre-LICENSE', 'notices/claude-code-LICENSE']:
+            for required in ['codex/bin/codex', 'notices/codex-LICENSE', 'notices/claude-code-LICENSE']:
                 assert required in contents.namelist()
         assert 'assets/web/terminal.html' in names
         assert not any(n.startswith('assets/web/chat/') for n in names)

@@ -238,7 +238,7 @@ class EngineIntegrationTest {
 
     @Test fun engineGuestChatPublishesStateAndNewClientReattachesToSameConversation() = runBlocking<Unit> {
         ready()
-        for (id in listOf("codex", "jre", "chat")) {
+        for (id in listOf("codex")) {
             val measured = tool(id)
             assertEquals("Required Engine tool $id: $measured", "ready", measured["phase"])
             assertTrue((measured["version"] as? String).orEmpty().isNotBlank())
