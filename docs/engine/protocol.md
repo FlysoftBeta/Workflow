@@ -18,7 +18,7 @@ workflow-engine serve --root <user-file-root>
   [--tools <directory-containing-tools.json-and-tools.zip>]
 ```
 
-Android packages the Server as `libworkflow-engine.so`, the container runtime as `libworkflow-runtime.so`, and the loader as `libworkflow-loader.so`. The APK carries the same architecture-specific tools pair under `assets/environment/tools/`; standalone execution supplies `--tools`. Codex and the Linux JRE are guest tools, not Android JNI libraries. Runtime CLI commands such as `run`, `install`, `verify`, `fsck`, and `probe` retain their separate runtime contract and acceptance workloads.
+Android packages the Server as `libworkflow-engine.so`, the container runtime as `libworkflow-runtime.so`, and the loader as `libworkflow-loader.so`. The APK carries the same architecture-specific tools pair under `assets/environment/tools/`; standalone execution supplies `--tools`. Codex is a guest tool, not an Android JNI library. Runtime CLI commands such as `run`, `install`, `verify`, `fsck`, and `probe` retain their separate runtime contract and acceptance workloads.
 
 ## Authoritative state
 
@@ -120,7 +120,7 @@ First use explicitly requests `environment.reconcile {retry?}`. Once enrolled, t
 
 ## Engine-managed tools
 
-`environment.tools.status {}` returns `{revision,tools:[...]}`. Each tool has `id`, `version`, `architecture`, `binary`, `phase`, `progress`, `error`, and `operationId`; unavailable values can be null. The catalog still includes `codex`, `jre`, `chat` and optional `claude`; Server no longer runs the JRE or JAR, and removing those entries waits for the [Chat cutover gate](chat.md#rust-port-and-cutover-gate). Phases are `not_installed`, `installing`, `verifying`, `ready` or `failed`. A ready chat artifact means only that the retained JAR is verified.
+`environment.tools.status {}` returns `{revision,tools:[...]}`. Each tool has `id`, `version`, `architecture`, `binary`, `phase`, `progress`, `error`, and `operationId`; unavailable values can be null. The catalog includes the mandatory `codex` and optional `claude`. Phases are `not_installed`, `installing`, `verifying`, `ready` or `failed`.
 
 `environment.tools.install {toolId:"claude",retry?:boolean}` starts or observes an Engine-owned asynchronous job and returns the current tools projection. Failed unchanged work requires explicit retry. The Engine selects the pinned download, validates length and SHA-256, runs the measured version check, and publishes its outcome. Android does not supply an executable path, release version, URL or script. A restart marks interrupted install/verification work failed rather than inventing completion.
 

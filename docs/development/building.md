@@ -30,7 +30,7 @@ Keep that Rust selection in the shell used for builds so both Cargo and the dire
 
 ## Prepare the customized images
 
-A fresh clone does not contain the ignored environment archives or the executable-prebuilt cache. Gradle obtains missing Mihomo, Codex and the Linux JRE from pinned manifests. Mihomo is staged as an Android local executable, while Codex and the JRE enter the Engine tools payload alongside the locally built chat-service JAR. Archive and member identities are verified. An invalid cached executable fails verification and must be inspected before removing it to permit a new download. First-time dependency resolution and image construction require network access.
+A fresh clone does not contain the ignored environment archives or the executable-prebuilt cache. Gradle obtains missing Mihomo and Codex from pinned manifests. Mihomo is staged as an Android local executable, while Codex enters the Engine tools payload. Archive and member identities are verified. An invalid cached executable fails verification and must be inspected before removing it to permit a new download. First-time dependency resolution and image construction require network access.
 
 Gradle expects customized `workspace` images to exist before APK assembly. Build both explicitly:
 
@@ -47,18 +47,14 @@ APK assembly verifies the image profile, architecture, archive size, and SHA-256
 
 ## Engine tools payload
 
-The Kotlin Chat service remains the production path while the Rust port is incomplete. Keep its JAR, JRE and packaging checks until the [Chat cutover gate](../engine/chat.md#rust-port-and-cutover-gate) passes. Host policy tests or the presence of a Rust crate are not permission to remove them.
+Chat is linked into the Server binary, so the payload carries no chat service or Java runtime. Android production depends on `:app:client`; instrumentation uses the process-launch fixture from `:app:client` test fixtures.
 
-The `agent` verification suite builds `:engine-chat:serviceJar`, producing `engine/chat/build/libs/workflow-chat.jar`. This is Java 17 bytecode for the bundled guest JRE, independent of both the Gradle JDK and Android's runtime. Android production depends on `:app:client`; `:agent` and `:engine-chat` must not enter its production dependency graph. Instrumentation may retain adapter/process fixtures explicitly.
+APK assembly invokes `engine/tools/package.py` for the selected architecture. It produces `tools.json` and `tools.zip` under generated assets at `assets/environment/tools/`. The payload combines pinned Codex and the retained upstream notices. Its catalog records per-file size, SHA-256 and executable mode, archive identity, architecture, fixed guest entry points and the pinned optional Claude release. Ignored downloads live beneath `third_party/.cache/engine`; a corrupt existing cache fails rather than being silently replaced.
 
-APK assembly invokes `engine/tools/package.py` for the selected architecture. It produces `tools.json` and `tools.zip` under generated assets at `assets/environment/tools/`. The payload combines pinned Codex, Eclipse Temurin JRE 17.0.20.1+1, the service JAR and retained upstream notices. Its catalog records per-file size, SHA-256 and executable mode, archive identity, architecture, fixed guest entry points and the pinned optional Claude release. Ignored downloads live beneath `third_party/.cache/engine`; a corrupt existing cache fails rather than being silently replaced.
-
-For a standalone distribution, build the JAR under the normal build lease and package the same pair:
+For a standalone distribution, package the same pair:
 
 ```sh
-tools/with-build-lock.sh ./gradlew :engine-chat:serviceJar
 python3 engine/tools/package.py --architecture amd64 \
-  --jar engine/chat/build/libs/workflow-chat.jar \
   --output artifacts/engine-tools/amd64
 ```
 

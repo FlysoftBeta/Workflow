@@ -1,5 +1,5 @@
 //! Test-only fakes (feature `testing`): in-memory pipes, a scripted guest process and runtime, the
-//! recorded-transcript `ScriptedServer` ported from the retained Kotlin harness, and a reducing
+//! recorded-transcript `ScriptedServer` ported from the former Kotlin harness, and a reducing
 //! event store. Fixture JSON is manipulated directly here because it is test data, not vendor IO.
 use crate::{
     backend::EventSink,
@@ -464,12 +464,14 @@ fn rewrite(response: &Value, id: Value) -> Value {
     response
 }
 
-/// Folds every event into `AgentState`, like the retained `AgentStateStore`, and lets tests wait.
+type Listener = Box<dyn Fn(&AgentState, &AgentEvent) + Send + Sync>;
+
+/// Folds every event into `AgentState` and lets tests wait.
 #[derive(Default)]
 pub struct EventStore {
     state: Mutex<(AgentState, Vec<AgentEvent>)>,
     changed: Condvar,
-    listeners: Mutex<Vec<Box<dyn Fn(&AgentState, &AgentEvent) + Send + Sync>>>,
+    listeners: Mutex<Vec<Listener>>,
 }
 impl EventStore {
     pub fn new() -> Arc<Self> {

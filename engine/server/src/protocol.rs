@@ -425,7 +425,7 @@ pub struct ChatWatchParams {
     #[serde(flatten)]
     pub extra: OpaqueObject,
 }
-/// The guest Kotlin service owns its command/body schema until the round-2 Rust port.
+/// `workflow-chat` decodes `args` into its typed per-command arguments; Server only routes the name.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ChatCommandParams {
     pub name: String,

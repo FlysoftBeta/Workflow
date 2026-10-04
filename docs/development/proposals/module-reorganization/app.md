@@ -12,7 +12,7 @@ Connection profiles remain the only client-authored durable source. Workspace-de
 
 Environment owns the configuration and service domain types and behavior, including appearance, overlay/client settings and proxy intent/receipts. Chat owns agent/backend defaults; Terminal owns terminal configuration. Server composes their existing serde shapes into the wire contract. App synchronization mirrors these owners rather than depending on Server-only domain state.
 
-The final Gradle projects are `:app:android`, `:app:client` and `:app:proxy`. `core` and `agent-model` are merged into the client project, while their Kotlin package names remain unchanged initially. The temporary JVM `:agent` and `:engine-chat` projects may depend on `:app:client` until the Rust gate permits deletion. This exception does not allow Android production to depend on vendor execution.
+The final Gradle projects are `:app:android`, `:app:client` and `:app:proxy`. `core` and `agent-model` are merged into the client project, while their Kotlin package names remain unchanged initially. The temporary JVM `:agent` and `:engine-chat` projects that depended on `:app:client` were deleted on 2026-10-04; Android production never depended on vendor execution.
 
 ## Terminal repairs
 
@@ -59,6 +59,6 @@ The maintained documentation move is included in round 2. The [JSON relocation m
 | R2 App module move | `app/**`, `core/**`, `proxy/**`, `agent-model/**`, root Gradle includes/catalog, `native/**`, `web/**` | Frozen Engine catalog; coordinate Chat-owned models | `client`, `proxy`, `app-unit`, `web`, `native`, `lint`, both ABI APK builds |
 | R2 typed bindings/config sync | `app/client/**`, configuration/connection platform adapters and tests | Module move; Rust schema and fixtures | Codec/schema goldens, concurrent revision conflict and reconnect tests; isolated connection/proxy device cases |
 | R2 terminal repairs | `app/android/**/terminal/**`, `app/web/**` | Server path-resolution API | Offline tests and API 28 touch acceptance for all four defects, rotation and streaming |
-| R2 Chat deletion | Client chat bindings, old JVM module includes and fixtures | Rust adapter/service parity plus guest/device acceptance | Chat/client suites; remove JRE only after accepted cutover |
+| R2 Chat deletion (done 2026-10-04, before guest/device acceptance by user decision) | Client chat bindings, old JVM module includes and fixtures | Rust adapter/service parity; guest/device acceptance still pending | Chat/client suites |
 | R2 docs reorganization | Entire maintained `docs/`, root/module READMEs and AGENTS | Integrated Engine/App layout | `documentation`, navigation audit, archive map, accurate status/report matrix |
 | Integrated acceptance | Integration tests and reports, no new behavior | R2 complete | Source-bound host checks, both ABI builds, API 28 isolated AVD; ARM64/device gaps explicitly recorded |

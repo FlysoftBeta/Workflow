@@ -1,7 +1,7 @@
 # Proxy service library
 
 `:app:proxy` is a pure Kotlin/JVM library for Mihomo configuration, controller access and owned-process
-supervision. It does not depend on Android, `:agent` or `:app:client`. Android supplies the platform ports;
+supervision. It does not depend on Android or `:app:client`. Android supplies the platform ports;
 the Engine supplies the canonical workspace configuration, provider assets and published service
 state. The library's local files are disposable executor staging and bounded logs.
 

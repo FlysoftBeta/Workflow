@@ -1,4 +1,4 @@
-//! Phase-one model. Names and defaults follow the retained Kotlin ChatWire codec.
+//! Phase-one model. Names and defaults follow the client's Kotlin ChatWire codec.
 use super::pairs::Pairs;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

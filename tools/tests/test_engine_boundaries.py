@@ -52,8 +52,12 @@ class EngineBoundaryTests(unittest.TestCase):
                 self.assertNotRegex(source, r'\bjson!\s*\(', str(path))
                 self.assertNotRegex(source, r'\bserde_json::Value\b|\bValue\s+as\s+V\b', str(path))
 
-    def test_chat_parity_gate_retains_the_working_production_bridge(self):
-        self.assertTrue((ENGINE / "chat/build.gradle.kts").is_file())
+    def test_chat_is_rust_only_and_runs_through_the_environment_runtime(self):
+        for retired in ("chat/build.gradle.kts", "chat/src/main/kotlin", "chat/src/test/kotlin"):
+            self.assertFalse((ENGINE / retired).exists(), retired)
+        self.assertFalse((ENGINE.parent / "agent").exists())
+        self.assertFalse((ENGINE.parent / "third_party/jre").exists())
+        self.assertNotRegex((ENGINE.parent / "settings.gradle.kts").read_text(), r'":agent"|":engine-chat"')
         self.assertTrue((ENGINE / "server/src/chat.rs").is_file())
         self.assertIn("spawn_piped", production(ENGINE / "server/src/chat.rs"))
         self.assertFalse((ENGINE / "runtime").exists())

@@ -325,27 +325,24 @@ abstract class PrepareEngineToolsTask : DefaultTask() {
     @get:Input abstract val architecture: Property<String>
     @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE) abstract val script: RegularFileProperty
     @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE) abstract val sources: ConfigurableFileCollection
-    @get:InputFile @get:PathSensitive(PathSensitivity.NONE) abstract val serviceJar: RegularFileProperty
     @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
     @get:Inject abstract val execOperations: ExecOperations
     @TaskAction fun prepare() {
         execOperations.exec {
             commandLine("python3", script.get().asFile.absolutePath,
-                "--architecture", architecture.get(), "--jar", serviceJar.get().asFile.absolutePath,
+                "--architecture", architecture.get(),
                 "--output", outputDirectory.get().asFile.resolve("environment/tools").absolutePath)
         }
     }
 }
 val engineTools = flavorArchitectures.mapValues { (flavor, arch) ->
     tasks.register<PrepareEngineToolsTask>("prepare${flavor.replaceFirstChar(Char::titlecase)}EngineTools") {
-        dependsOn(":engine-chat:serviceJar")
         architecture.set(arch)
         script.set(repositoryRoot.file("engine/tools/package.py"))
         sources.from(repositoryRoot.file("engine/tools/package.py"))
-        sources.from(listOf("codex", "jre", "claude-code").flatMap { name ->
+        sources.from(listOf("codex", "claude-code").flatMap { name ->
             listOf("manifest.json", "LICENSE").map { repositoryRoot.file("third_party/$name/$it") }
         })
-        serviceJar.set(project(":engine-chat").layout.buildDirectory.file("libs/workflow-chat.jar"))
         outputDirectory.set(layout.buildDirectory.dir("generated/engine-tools/$flavor"))
     }
 }
@@ -353,7 +350,7 @@ val engineTools = flavorArchitectures.mapValues { (flavor, arch) ->
 val prebuiltNotices = tasks.register<PrebuiltNoticesTask>("prebuiltNotices") {
     packages.from(prebuiltPackages)
     // Bundled design resources (ui.design): Material Symbols vectors and the JetBrains Mono NL font.
-    packages.from(listOf("material-symbols", "jetbrains-mono", "claude-code", "codex", "jre").map { repositoryRoot.dir("third_party/$it") })
+    packages.from(listOf("material-symbols", "jetbrains-mono", "claude-code", "codex").map { repositoryRoot.dir("third_party/$it") })
     outputDirectory.set(layout.buildDirectory.dir("generated/prebuilt-notices"))
 }
 
@@ -439,13 +436,13 @@ android {
         noCompress += "zst"
     }
     lint {
-        // Code moved into :app:client/:agent/:app:proxy keeps the app's API-level (NewApi, minSdk 28) checks.
+        // Code moved into :app:client/:app:proxy keeps the app's API-level (NewApi, minSdk 28) checks.
         checkDependencies = true
     }
 }
 
 composeCompiler {
-    // :app:client / :agent / :app:proxy models are immutable data classes (docs/report/initial/w1b-core-state.md §3).
+    // :app:client / :app:proxy models are immutable data classes (docs/report/initial/w1b-core-state.md §3).
     stabilityConfigurationFiles.add(project.layout.projectDirectory.file("compose-stability.conf"))
 }
 
@@ -467,8 +464,6 @@ dependencies {
     implementation("org.commonmark:commonmark-ext-gfm-strikethrough:0.30.0")
     implementation("ru.noties:jlatexmath-android:0.2.0")
     implementation(project(":app:client"))
-    testImplementation(project(":agent"))
-    androidTestImplementation(project(":agent"))
     androidTestImplementation(testFixtures(project(":app:proxy")))
     implementation(project(":app:proxy"))
     implementation(libs.androidx.webkit)

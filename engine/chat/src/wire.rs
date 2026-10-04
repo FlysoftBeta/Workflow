@@ -3,7 +3,7 @@
 //! Vendor frames are parsed once into [`OpaqueJson`], which keeps every field and number token, and
 //! then projected into small typed structs built from the field types below. Each type accepts any
 //! JSON value and yields nothing for a value of another kind, exactly like the accessors of the
-//! retained Kotlin adapters (`str`, `long`, `double`, `bool`, `obj`, `arr`, `strings`). A projection
+//! former Kotlin adapters (`str`, `long`, `double`, `bool`, `obj`, `arr`, `strings`). A projection
 //! therefore never fails because one field has an unexpected type, and unknown fields stay in the
 //! opaque frame that the neutral model retains as `raw`.
 use crate::model::OpaqueJson;
@@ -29,7 +29,7 @@ pub fn project_opt<T: DeserializeOwned + Default>(value: Option<&OpaqueJson>) ->
 pub fn encode<T: Serialize + ?Sized>(value: &T) -> OpaqueJson {
     OpaqueJson(serde_json::to_value(value).expect("typed vendor bodies always encode"))
 }
-/// Parses one vendor line. Duplicate members keep the last value, as the retained adapters did, and
+/// Parses one vendor line. Duplicate members keep the last value, as the former Kotlin adapters did, and
 /// every number keeps its exact token (`-0`, `1.2300e+20`, integers beyond 64 bits).
 pub fn parse(text: &str) -> Result<OpaqueJson, String> {
     exact(text, 0).map(OpaqueJson).map_err(|e| e.to_string())

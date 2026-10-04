@@ -8,4 +8,4 @@ fi
 cd -- "$repo"
 cargo build --manifest-path engine/Cargo.toml --locked -p workflow-server --bin workflow-engine -j 2
 export WORKFLOW_ENGINE="$repo/engine/target/debug/workflow-engine"
-exec ./gradlew :app:client:test :app:proxy:test :agent:test :engine-chat:test :app:android:testX86_64DebugUnitTest
+exec ./gradlew :app:client:test :app:proxy:test :app:android:testX86_64DebugUnitTest

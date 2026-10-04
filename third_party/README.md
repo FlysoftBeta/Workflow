@@ -13,8 +13,7 @@ neither an image nor an APK. See its [README](qemu-user/README.md) for the names
 
 The web terminal dependencies are pinned separately in `web/package.json` and `web/package-lock.json`;
 [`web/vendor.mjs`](../app/web/vendor.mjs) writes their copied licenses and digest manifest alongside the
-offline assets. Agent protocol schema snapshots belong in `agent/src/main/resources/protocol/`,
-where adapter coverage is checked against their inventories.
+offline assets.
 
 Update a manifest, required license/notice files and the consuming implementation together. Keep
 download caches and generated packaging output out of the source tree. The

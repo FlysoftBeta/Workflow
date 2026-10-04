@@ -66,7 +66,7 @@ impl LoginSlot {
 }
 #[derive(Clone)]
 enum AccountRead {
-    Answered(AccountState),
+    Answered(Box<AccountState>),
     Failed(String),
 }
 struct Session {
@@ -82,6 +82,9 @@ struct Handle {
     outcome: Arc<Shared<LoginFlow>>,
 }
 
+/// The connection a shared account read was issued on, and its outcome.
+type PendingRead = (Arc<RpcConnection>, Arc<Shared<AccountRead>>);
+
 pub struct CodexBackend(Arc<Inner>);
 struct Inner {
     me: Weak<Inner>,
@@ -93,7 +96,7 @@ struct Inner {
     lifecycle: Mutex<()>,
     session: Mutex<Option<Session>>,
     login: Mutex<LoginSlot>,
-    read: Mutex<Option<(Arc<RpcConnection>, Arc<Shared<AccountRead>>)>>,
+    read: Mutex<Option<PendingRead>>,
     open_requests: Mutex<HashMap<String, PendingRequest>>,
     active_turn: Mutex<HashMap<String, String>>,
     /// clientMessageId → (queuedSubmissionId, threadId).
@@ -536,7 +539,9 @@ impl Inner {
                     spawn("codex-account-read", move || {
                         s.set(
                             match c.request("account/read", Some(params::account_read())) {
-                                Ok(result) => AccountRead::Answered(events::account(&result)),
+                                Ok(result) => {
+                                    AccountRead::Answered(Box::new(events::account(&result)))
+                                }
                                 Err(e) => AccountRead::Failed(describe(&e)),
                             },
                         );
@@ -582,7 +587,7 @@ impl Inner {
 
     fn refresh(&self, connection: &Arc<RpcConnection>) {
         match self.read_account(connection, self.config.timings.read_timeout) {
-            AccountRead::Answered(account) => self.observe_account(connection, account),
+            AccountRead::Answered(account) => self.observe_account(connection, *account),
             AccountRead::Failed(message) => self.emit(AgentEvent::AccountCheckFailed {
                 backend: B,
                 message,
@@ -838,7 +843,7 @@ impl Inner {
                     wait = timings.poll;
                     if account.state == LoginState::LoggedIn {
                         if self.login.lock().unwrap().is(handle.serial, Phase::Waiting) {
-                            self.observe_account(&handle.connection, account);
+                            self.observe_account(&handle.connection, *account);
                         }
                         return false;
                     }
@@ -847,7 +852,7 @@ impl Inner {
                         reported = false;
                         self.emit(AgentEvent::AccountChanged {
                             backend: B,
-                            account,
+                            account: *account,
                         });
                     }
                 }
@@ -950,7 +955,7 @@ impl Inner {
             }
             match self.read_account(&handle.connection, self.config.timings.read_timeout) {
                 AccountRead::Answered(account) if account.state == LoginState::LoggedIn => {
-                    self.observe_account(&handle.connection, account);
+                    self.observe_account(&handle.connection, *account);
                     return;
                 }
                 AccountRead::Answered(_) => (),

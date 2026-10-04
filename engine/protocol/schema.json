@@ -1217,7 +1217,7 @@
       }
     },
     "ChatCommandParams": {
-      "description": "The guest Kotlin service owns its command/body schema until the round-2 Rust port.",
+      "description": "`workflow-chat` decodes `args` into its typed per-command arguments; Server only routes the name.",
       "type": "object",
       "properties": {
         "args": {

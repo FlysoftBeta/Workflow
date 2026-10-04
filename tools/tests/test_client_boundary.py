@@ -40,7 +40,6 @@ class ClientBoundaryTests(unittest.TestCase):
 
     def test_production_dependency_graph_cannot_reach_agent_or_chat_service(self):
         # Resolve every reached module, so a newly introduced intermediary cannot hide a server dependency.
-        aliases = {":engine-chat": ROOT / "engine/chat/build.gradle.kts"}
         pending = [":app:android"]
         visited = set()
         while pending:
@@ -50,7 +49,7 @@ class ClientBoundaryTests(unittest.TestCase):
             visited.add(module)
             self.assertNotIn(module, {":agent", ":engine-chat", ":engine:chat"},
                              f"Android production reaches Engine implementation module {module}")
-            build = aliases.get(module, ROOT / module.lstrip(":").replace(":", "/") / "build.gradle.kts")
+            build = ROOT / module.lstrip(":").replace(":", "/") / "build.gradle.kts"
             self.assertTrue(build.is_file(), f"Unresolved production module {module}; extend boundary resolution explicitly")
             pending.extend(production_dependencies(build.read_text()))
         self.assertIn(":app:client", visited, "Android must consume the typed client module")
@@ -121,8 +120,8 @@ class ClientBoundaryTests(unittest.TestCase):
         self.assertEqual({":app:client", ":app:proxy"}, production_dependencies('''
             implementation(project(":app:client"))
             debugImplementation(project(path = ":app:proxy"))
-            testImplementation(project(":agent"))
-            androidTestImplementation(project(":agent"))
+            testImplementation(project(":engine-chat"))
+            androidTestImplementation(testFixtures(project(":app:client")))
             // implementation(project(":agent"))
         '''))
 
