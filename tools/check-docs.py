@@ -26,7 +26,8 @@ def main():
     paths = []
     for directory, dirs, files in os.walk(ROOT):
         parent = Path(directory)
-        dirs[:] = [name for name in dirs if name not in IGNORED]
+        # A nested checkout, such as a linked worktree under .claude/worktrees, has its own documents and root.
+        dirs[:] = [name for name in dirs if name not in IGNORED and not (parent / name / ".git").exists()]
         relative = parent.relative_to(ROOT)
         if relative == Path("docs/archive"):
             dirs[:] = [name for name in dirs if name in {"implementation-1.0.0", "experiments"}]
