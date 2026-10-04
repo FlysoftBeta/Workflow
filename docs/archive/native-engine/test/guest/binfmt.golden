@@ -1,6 +1,0 @@
-magic rc=0 interp[3]: /tmp/prog.wfb one two
-extension rc=0 interp[2]: /tmp/prog.wfx three
-preserve rc=0 interp[3]: /tmp/prog.prs custom-argv0 four
-path-search rc=0 interp[2]: /tmp/prog.wfb five
-foreign-elf rc=0 qemu[2]: /tmp/arm64-true /tmp/arm64-true
-no-rule rc=127 /tmp/none: line 1: ZZZZ: command not found
