@@ -55,7 +55,7 @@ class AgentHub(
                             "afterRevision" to cursor.second, "timeoutMs" to 25_000), 35_000)))
                         if (update.resnapshot || update.epoch != cursor.first) break
                         lock.withLock {
-                            if (epoch == update.epoch && update.revision > revision) {
+                            if (appliesTo(update, cursor, epoch to revision)) {
                                 publish(AgentReducer.reduceAll(mutable.value, update.events), update.metadata)
                                 revision = update.revision
                             }
@@ -70,6 +70,19 @@ class AgentHub(
                 }
             }
         }
+    }
+
+    companion object {
+        /**
+         * Whether a `chat.watch` [update] requested from [requested] (epoch, afterRevision) may be applied to the
+         * projection now at [current]. Its events follow the requested revision, so they apply only while the
+         * projection is still exactly there. A command's snapshot taken during the watch moves [current] to the
+         * snapshot's revision, which already contains some or all of those events; reducing them again would
+         * duplicate them. Such an update is dropped and the next watch resumes after the snapshot's revision,
+         * so the Engine's journal delivers the remaining changes and nothing is lost.
+         */
+        internal fun appliesTo(update: ChatUpdate, requested: Pair<String, Long>, current: Pair<String, Long>): Boolean =
+            update.epoch == requested.first && current == requested && update.revision > requested.second
     }
 
     private suspend fun snapshot() = lock.withLock {
