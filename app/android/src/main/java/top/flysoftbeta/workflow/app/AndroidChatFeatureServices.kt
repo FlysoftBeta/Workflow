@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import top.flysoftbeta.workflow.feature.chat.ChatEnvironmentState
 import top.flysoftbeta.workflow.feature.chat.ChatFeatureServices
-import top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionManager
 import top.flysoftbeta.workflow.platform.agent.ClaudeCodeInstaller
 import top.flysoftbeta.workflow.platform.engine.EnvironmentHealth
 import top.flysoftbeta.workflow.platform.importer.ImportService
@@ -15,7 +14,7 @@ import top.flysoftbeta.workflow.platform.importer.ImportService
 class AndroidChatFeatureServices(private val context: Context) : ChatFeatureServices {
     override val hub get() = AppGraph.agentHub(context)
     override val importer get() = ImportService.get(context)
-    override val processScope get() = WorkspaceConnectionManager.get(context).requireSession().scope
+    override val processScope get() = AppGraph.session(context).scope
     override val environment by lazy {
         val engine = AppGraph.engine(context)
         combine(engine.health, AppGraph.claudeInstaller(context).state) { health, claude ->
@@ -30,5 +29,5 @@ class AndroidChatFeatureServices(private val context: Context) : ChatFeatureServ
     override fun retryEnvironment() = AppGraph.engine(context).retry()
     override fun installClaude() = AppGraph.claudeInstaller(context).install()
     override suspend fun readResource(path: String, maxBytes: Int): ByteArray? =
-        runCatching { WorkspaceConnectionManager.get(context).requireSession().store.readBytes(path, maxBytes) }.getOrNull()
+        runCatching { AppGraph.session(context).store.readBytes(path, maxBytes) }.getOrNull()
 }

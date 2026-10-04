@@ -63,7 +63,7 @@ internal fun ConversationContent(c: ConversationController, frame: PanelFrame, m
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    entry == null -> RegionLoading(true)
+                    entry == null -> OpeningPane(c, Modifier.fillMaxSize())
                     turns.isEmpty() && entry.backendThreadId == null -> StartPane(c, Modifier.fillMaxSize())
                     turns.isEmpty() && !c.available -> NeedsEnvironmentPane(c, Modifier.fillMaxSize())
                     turns.isEmpty() && loggedOut -> LoginPane(c, Modifier.fillMaxSize())

@@ -1,5 +1,6 @@
 package top.flysoftbeta.workflow.feature.launcher
 
+import top.flysoftbeta.workflow.app.panel.launchAction
 import top.flysoftbeta.workflow.platform.apps.InstalledApps
 import top.flysoftbeta.workflow.platform.apps.InstalledApp
 
@@ -75,7 +76,7 @@ fun LauncherScreen(shell: Shell, modifier: Modifier = Modifier) {
     LaunchedEffect(entries) { catalog.ensure(entries.filterIsInstance<LauncherEntry.App>().map { it.ref }) }
 
     fun update(transform: (List<LauncherEntry>) -> List<LauncherEntry>) {
-        scope.launch {
+        scope.launchAction({ shell.showSnackbar(it.summary) }) {
             val result = shell.store.updateConfig { it.copy(launcher = transform(Launcher.normalize(it.launcher))) }
             when (result) {
                 is ConfigUpdate.Blocked -> shell.showSnackbar("配置有错误，未保存更改")

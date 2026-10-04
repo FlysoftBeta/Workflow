@@ -1,5 +1,6 @@
 package top.flysoftbeta.workflow.feature.terminal
 
+import top.flysoftbeta.workflow.platform.UnhandledFailures
 import android.content.Context
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -25,7 +26,7 @@ class TerminalHost internal constructor(
     val backend: TerminalBackend,
     val environment: EngineController? = null,
 ) {
-    private val scope = CoroutineScope(SupervisorJob(environment?.scope?.coroutineContext?.get(Job)) + Dispatchers.Default)
+    private val scope = CoroutineScope(SupervisorJob(environment?.scope?.coroutineContext?.get(Job)) + Dispatchers.Default + UnhandledFailures.handler("terminal"))
     private val sessions = ConcurrentHashMap<String, TerminalSession>()
     private val fixtureOrdinals = AtomicInteger()
 

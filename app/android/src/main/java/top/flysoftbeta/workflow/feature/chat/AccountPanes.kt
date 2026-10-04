@@ -48,6 +48,8 @@ import top.flysoftbeta.workflow.agent.model.LoginView
 import top.flysoftbeta.workflow.agent.model.isPending
 import top.flysoftbeta.workflow.agent.model.ProcessState
 import top.flysoftbeta.workflow.ui.design.InlineError
+import top.flysoftbeta.workflow.ui.design.InlineLoading
+import top.flysoftbeta.workflow.ui.design.RegionLoading
 import top.flysoftbeta.workflow.ui.design.SearchField
 import top.flysoftbeta.workflow.ui.design.SignInContent
 import top.flysoftbeta.workflow.ui.design.openSignInLink
@@ -86,6 +88,29 @@ internal fun StartPane(c: ConversationController, modifier: Modifier) {
                 "${ChatText.backendName(entry.backend)} 未能启动", Modifier.widthIn(max = 480.dp),
                 listOf(TextAction("重试") { c.retryBackend() }),
             )
+        }
+    }
+}
+
+/**
+ * Before the conversation entry arrives: the hub waits for a preparing environment, so this shows that
+ * preparation (with its retry) rather than a bare indicator, or the failure that stopped the open.
+ */
+@Composable
+internal fun OpeningPane(c: ConversationController, modifier: Modifier) {
+    val environment by c.services.environment.collectAsState()
+    val failure = c.openFailure
+    if (failure == null && environment.usable) { RegionLoading(true, modifier); return }
+    Column(modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        if (failure != null) {
+            InlineError(failure, Modifier.widthIn(max = 480.dp), listOf(TextAction("重试") { c.retryOpen() }))
+        } else {
+            if (!environment.canRetry) {
+                InlineLoading(true)
+                Spacer(Modifier.height(12.dp))
+            }
+            Text(environment.description, style = WorkflowTheme.text.body, color = WorkflowTheme.colors.onSurfaceVariant, textAlign = TextAlign.Center)
+            if (environment.canRetry) TextButton(onClick = c.services::retryEnvironment) { Text("重试环境") }
         }
     }
 }

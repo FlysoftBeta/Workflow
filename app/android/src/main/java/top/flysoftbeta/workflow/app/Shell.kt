@@ -8,6 +8,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import top.flysoftbeta.workflow.platform.UnhandledFailures
 import top.flysoftbeta.workflow.core.config.Appearance
 import top.flysoftbeta.workflow.app.panel.DecisionRequest
 import top.flysoftbeta.workflow.app.panel.PanelRegistry
@@ -46,8 +48,10 @@ class Shell(
     val appContext: Context,
     val store: WorkspaceStore,
     val registry: PanelRegistry,
-    private val scope: CoroutineScope,
+    baseScope: CoroutineScope,
 ) {
+    /** Shell commands report a failure nothing handled instead of terminating the process. */
+    private val scope = baseScope + UnhandledFailures.handler("shell") { showSnackbar(it.summary) }
     var space by mutableStateOf(Space.LAUNCHER)
         private set
 

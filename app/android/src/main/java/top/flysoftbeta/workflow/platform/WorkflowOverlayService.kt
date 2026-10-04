@@ -38,7 +38,7 @@ class WorkflowOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwne
     private val saved = SavedStateRegistryController.create(this)
     override val lifecycle: Lifecycle get() = registry
     override val savedStateRegistry: SavedStateRegistry get() = saved.savedStateRegistry
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + UnhandledFailures.handler("overlay"))
     private lateinit var windows: WindowManager
     private lateinit var capabilities: DeviceCapabilities
     private val main = Handler(Looper.getMainLooper())

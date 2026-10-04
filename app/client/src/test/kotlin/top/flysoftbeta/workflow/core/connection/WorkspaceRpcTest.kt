@@ -12,7 +12,7 @@ import top.flysoftbeta.workflow.core.json.Json
 class WorkspaceRpcTest {
     @Test fun rejectsProtocolMismatchAndClosesTransport() = runBlocking<Unit> {
         RpcPeer { request -> response(request, mapOf("protocol" to "workflow.workspace/2")) }.use { peer ->
-            assertTrue(runCatching { peer.rpc.hello("test") }.isFailure)
+            assertTrue(runCatching { peer.rpc.hello("test") }.exceptionOrNull() is IncompatibleWorkspaceException)
             assertNotNull(peer.rpc.failure.value)
             assertEquals(1, peer.closes.get())
         }
@@ -36,9 +36,10 @@ class WorkspaceRpcTest {
             val slow = async { runCatching { peer.rpc.request("slow") } }
             delay(20)
             assertTrue(runCatching { peer.rpc.request("malformed") }.isFailure)
-            assertTrue(withTimeout(2_000) { slow.await() }.isFailure)
+            assertTrue(withTimeout(2_000) { slow.await() }.exceptionOrNull() is WorkspaceClosedException)
             withTimeout(2_000) { peer.rpc.failure.first { it != null } }
             assertEquals(1, peer.closes.get())
+            assertTrue(runCatching { peer.rpc.request("after") }.exceptionOrNull() is WorkspaceClosedException)
         }
     }
 
@@ -47,7 +48,10 @@ class WorkspaceRpcTest {
             if (request["method"] == "slow") delay(100)
             response(request, request["method"])
         }.use { peer ->
-            assertTrue(runCatching { peer.rpc.request("slow", timeoutMs = 10) }.exceptionOrNull() is TimeoutCancellationException)
+            // A timeout is a failure the caller must handle, never a cancellation that silently ends its coroutine.
+            val timeout = runCatching { peer.rpc.request("slow", timeoutMs = 10) }.exceptionOrNull()
+            assertTrue(timeout is WorkspaceTimeoutException)
+            assertFalse(timeout is CancellationException)
             delay(150)
             assertEquals("next", peer.rpc.request("next"))
             assertNull(peer.rpc.failure.value)

@@ -28,13 +28,13 @@ import androidx.compose.ui.unit.dp
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import kotlinx.coroutines.launch
 import top.flysoftbeta.workflow.agent.model.ConversationEntry
 import top.flysoftbeta.workflow.agent.model.ConversationIndexing
 import top.flysoftbeta.workflow.agent.model.ThreadKey
 import top.flysoftbeta.workflow.agent.model.TurnStatus
 import top.flysoftbeta.workflow.app.panel.RailContext
 import top.flysoftbeta.workflow.app.panel.RailController
+import top.flysoftbeta.workflow.app.panel.launchAction
 import top.flysoftbeta.workflow.core.layout.LayoutOp
 import top.flysoftbeta.workflow.platform.agent.AgentHub
 import top.flysoftbeta.workflow.ui.design.CompositeMenu
@@ -127,7 +127,7 @@ class ChatRailController(private val context: RailContext, private val hub: Agen
                                         Box(Modifier.weight(1f)) {
                                             ConversationRow(e, selected = e.id == active, running = false, pending = false, onClick = { open(e) }, onLongClick = null)
                                         }
-                                        TextButton(onClick = { context.scope.launch { hub.archive(e.id, false) } }) { Text("恢复") }
+                                        TextButton(onClick = { launchReporting { hub.archive(e.id, false) } }) { Text("恢复") }
                                     }
                                 } else {
                                     ConversationRow(e, selected = e.id == active, running = running, pending = pending,
@@ -138,8 +138,8 @@ class ChatRailController(private val context: RailContext, private val hub: Agen
                                     groups = listOf(MenuGroup("conversation", listOf(
                                         MenuEntry.Action("rename", "重命名", Sym.Edit) { renaming = e },
                                         MenuEntry.Action("archive", "归档", Sym.Archive) {
-                                            context.scope.launch { hub.archive(e.id, true) }
-                                            context.commands.snackbar("已归档", "撤销") { context.scope.launch { hub.archive(e.id, false) } }
+                                            launchReporting { hub.archive(e.id, true) }
+                                            context.commands.snackbar("已归档", "撤销") { launchReporting { hub.archive(e.id, false) } }
                                         },
                                     ))),
                                 )
@@ -161,10 +161,13 @@ class ChatRailController(private val context: RailContext, private val hub: Agen
         renaming?.let { e ->
             RenameDialog(e.title ?: ChatText.untitled(e.preview), onDismiss = { renaming = null }) { title ->
                 renaming = null
-                context.scope.launch { hub.rename(e.id, title) }
+                launchReporting { hub.rename(e.id, title) }
             }
         }
     }
+
+    /** The rail has no error row of its own, so a failed command is reported in the Snackbar. */
+    private fun launchReporting(block: suspend () -> Unit) { context.scope.launchAction(context.commands) { block() } }
 
     private fun open(entry: ConversationEntry) {
         context.layout(LayoutOp.showConversation(entry.id))

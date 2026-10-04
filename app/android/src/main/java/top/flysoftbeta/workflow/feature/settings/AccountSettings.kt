@@ -103,6 +103,7 @@ internal class HubAccountCommands(private val hub: AgentHub) : AccountCommands {
     val status = when (val h = health) {
         EnvironmentHealth.NotInstalled -> "准备中"
         is EnvironmentHealth.Unavailable -> "不可用"
+        is EnvironmentHealth.Unknown -> "正在检查"
         is EnvironmentHealth.Installing -> h.progress?.let { "构建中 ${(it * 100).toInt()}%" } ?: "构建中"
         is EnvironmentHealth.Provisioning -> h.progress?.let { "构建中 ${(it * 100).toInt()}%" } ?: "构建中"
         is EnvironmentHealth.Failed -> if (h.environmentAvailable) "构建失败，原环境可用" else "构建失败"

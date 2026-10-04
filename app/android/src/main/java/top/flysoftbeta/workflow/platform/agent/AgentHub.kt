@@ -4,7 +4,6 @@ import android.content.Context
 import java.io.ByteArrayOutputStream
 import java.util.Base64
 import java.util.IdentityHashMap
-import java.util.UUID
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -15,6 +14,8 @@ import top.flysoftbeta.workflow.agent.model.*
 import top.flysoftbeta.workflow.agent.rpc.*
 import top.flysoftbeta.workflow.core.connection.RemoteWorkspaceStore
 import top.flysoftbeta.workflow.core.connection.WorkspaceRpc
+import top.flysoftbeta.workflow.core.connection.WorkspaceClosedException
+import top.flysoftbeta.workflow.core.connection.WorkspaceRpcException
 import top.flysoftbeta.workflow.core.resource.ComposerDraft
 import top.flysoftbeta.workflow.core.store.StateCodec
 import top.flysoftbeta.workflow.core.store.WorkspaceStore
@@ -27,7 +28,7 @@ class AgentHub(
     private val scope: CoroutineScope,
     @Suppress("UNUSED_PARAMETER") io: CoroutineDispatcher,
 ) {
-    private val rpc: WorkspaceRpc get() = (store as? RemoteWorkspaceStore)?.rpc ?: error("请连接工作区 Engine")
+    private val rpc: WorkspaceRpc get() = (store as? RemoteWorkspaceStore)?.rpc ?: throw WorkspaceClosedException("请连接工作区 Engine")
     private val mutable = MutableStateFlow(AgentState())
     val state = mutable.asStateFlow()
     private val metadata = MutableStateFlow(ChatMetadata())
@@ -83,6 +84,22 @@ class AgentHub(
          */
         internal fun appliesTo(update: ChatUpdate, requested: Pair<String, Long>, current: Pair<String, Long>): Boolean =
             update.epoch == requested.first && current == requested && update.revision > requested.second
+
+        /** The Engine refused a chat call because the environment is not usable yet; it has already started preparing it. */
+        internal fun preparingEnvironment(error: Throwable): Boolean =
+            error is WorkspaceRpcException && error.kind == "environment_preparing"
+
+        /**
+         * Runs [call] until the Engine accepts it. The Engine's chat gate refuses before dispatch, so a refused
+         * command had no effect and repeating it is safe; this waits at the watch loop's one-second cadence.
+         * Any other failure, including a closed connection, ends the wait.
+         */
+        internal suspend fun <T> awaitingEnvironment(retryDelayMs: Long = 1000, call: suspend () -> T): T {
+            while (true) {
+                try { return call() } catch (error: WorkspaceRpcException) { if (!preparingEnvironment(error)) throw error }
+                delay(retryDelayMs)
+            }
+        }
     }
 
     private suspend fun snapshot() = lock.withLock {
@@ -120,7 +137,8 @@ class AgentHub(
     }
 
     private suspend fun command(name: String, vararg args: Pair<String, Any?>): JsonElement {
-        val value = wire(rpc.request("chat.command", mapOf("name" to name, "args" to mapOf(*args)), 120_000))
+        // A user action waits while the environment prepares instead of failing; panels show the preparation.
+        val value = wire(awaitingEnvironment { rpc.request("chat.command", mapOf("name" to name, "args" to mapOf(*args)), 120_000) })
         // The command is already committed. A projection read failure must not turn it into a failed
         // send or encourage a duplicate submission; the watch will recover the display.
         try { snapshot() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { }
@@ -135,8 +153,6 @@ class AgentHub(
     fun permissions() = metadata.value.permissions
     fun loginMethods(kind: BackendKind) = metadata.value.loginMethods[kind].orEmpty()
     fun warmUp(kind: BackendKind) { scope.launch { runCatching { command("warmUp", "kind" to kind.id) } } }
-    suspend fun newConversation(backend: BackendKind? = null, id: String = UUID.randomUUID().toString()): String =
-        command("newConversation", "backend" to backend?.id, "id" to id).jsonPrimitive.content
     suspend fun ensureConversation(id: String): ConversationEntry = ChatWire.decode(command("ensureConversation", "id" to id))
     suspend fun open(id: String) { command("open", "id" to id) }
     suspend fun loadEarlier(id: String) { command("loadEarlier", "id" to id) }

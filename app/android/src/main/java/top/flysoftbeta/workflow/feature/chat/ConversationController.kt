@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.CancellationException
+import top.flysoftbeta.workflow.core.connection.Failure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -118,13 +119,12 @@ class ConversationController(
         private set
     private val resetRequests = MutableStateFlow(0)
 
+    /** Why this conversation could not be opened; the panel offers Retry. */
+    var openFailure by mutableStateOf<String?>(null)
+        private set
+
     init {
-        context.scope.launch {
-            val e = hub.ensureConversation(conversationId)
-            entry = e
-            // Start failures surface as backend state (未能启动 / 需要工作环境), not as an action error.
-            runCatching { hub.open(conversationId) }
-        }
+        context.scope.launch { openEntry() }
         context.scope.launch {
             hub.conversations.map { list -> list.firstOrNull { it.id == conversationId } }.distinctUntilChanged().collect { e ->
                 if (e != null) {
@@ -353,7 +353,8 @@ class ConversationController(
         problem = null
         context.scope.launch {
             sending = true
-            val stored = try { composer.save() } catch (error: Exception) { sending = false; throw error }
+            val stored = try { composer.save() } catch (cancelled: CancellationException) { sending = false; throw cancelled }
+                catch (error: Exception) { sending = false; report(error); return@launch }
             val (text, attachments) = composer.takeForSend()
             val settings = TurnSettings(model = selection?.model, effort = selection?.effort, permissions = permissions)
             try {
@@ -407,6 +408,23 @@ class ConversationController(
             val kind = entry?.backend ?: return null
             return signIns.getOrPut(kind) { SignInState(kind, accountCommands, context.scope) { hub.state.value.backend(kind).account } }
         }
+
+    /** Ensures the conversation; the hub waits while the environment prepares, so only real failures land here. */
+    private suspend fun openEntry() {
+        openFailure = null
+        val e = try { hub.ensureConversation(conversationId) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                val failure = Failure.of(error)
+                if (failure !is Failure.Lost) openFailure = failure.summary
+                return
+            }
+        entry = e
+        // Start failures surface as backend state (未能启动 / 需要工作环境), not as an action error.
+        runCatching { hub.open(conversationId) }
+    }
+
+    fun retryOpen() { context.scope.launch { openEntry() } }
 
     fun retryBackend() {
         problem = null
@@ -509,11 +527,11 @@ class ConversationController(
             problem = null
             return
         }
-        problemDetail = error.message
-        problem = when (error) {
-            is IllegalArgumentException -> "无法发送：内容无效"
-            else -> "操作没有完成"
-        }
+        val failure = Failure.of(error)
+        // A lost connection is explained by the reconnect card, not by this conversation.
+        if (failure is Failure.Lost) { problem = null; return }
+        problemDetail = failure.detail
+        problem = if (error is IllegalArgumentException) "无法发送：内容无效" else failure.summary
     }
 
     companion object {

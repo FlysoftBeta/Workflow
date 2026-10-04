@@ -33,9 +33,9 @@ import top.flysoftbeta.workflow.ui.design.TextAction
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
 
 /**
- * The environment's state where the terminal is visible (docs/ux/README.md §6): progress while it is prepared,
- * "环境配置已更改 [重启环境]" only after the environment declaration changed, and a failed build with its log. Nothing
- * while the environment is simply ready.
+ * The environment's state where the terminal is visible (docs/ux/design-system.md): progress while it is prepared,
+ * "环境配置已更改 [重启环境]" only after the environment declaration changed, a failed build with its log, and a
+ * neutral line while its status cannot be read. Nothing while the environment is simply ready.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -43,7 +43,7 @@ internal fun EnvironmentNotice(controller: EngineController, onRestart: () -> Un
     val health by controller.health.collectAsState()
     var details by remember { mutableStateOf<EnvironmentHealth.Failed?>(null) }
     when (val h = health) {
-        is EnvironmentHealth.Installing, is EnvironmentHealth.Provisioning -> {
+        EnvironmentHealth.NotInstalled, is EnvironmentHealth.Installing, is EnvironmentHealth.Provisioning -> {
             val progress = when (h) {
                 is EnvironmentHealth.Installing -> h.progress
                 is EnvironmentHealth.Provisioning -> h.progress
@@ -77,7 +77,8 @@ internal fun EnvironmentNotice(controller: EngineController, onRestart: () -> Un
             if (h.environmentAvailable) NoticeTone.Warning else NoticeTone.Error, Modifier.testTag("environment:failed"),
             actions = listOf(TextAction("详情") { details = h }, TextAction("重试") { controller.retry() }),
         )
-        EnvironmentHealth.NotInstalled, is EnvironmentHealth.Unavailable -> Unit
+        is EnvironmentHealth.Unknown -> NoticeBar("正在检查环境", NoticeTone.Neutral, Modifier.testTag("environment:unknown"))
+        is EnvironmentHealth.Unavailable -> NoticeBar(h.reason, NoticeTone.Neutral, Modifier.testTag("environment:unavailable"))
     }
     details?.let { failed -> FailureDialog(controller, failed) { details = null } }
 }

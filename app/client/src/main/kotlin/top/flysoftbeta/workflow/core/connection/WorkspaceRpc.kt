@@ -17,7 +17,19 @@ import top.flysoftbeta.workflow.core.json.Json
 import kotlinx.serialization.json.JsonElement
 import top.flysoftbeta.workflow.client.protocol.*
 
-class WorkspaceRpcException(val code: Long, override val message: String, val data: Any?) : IOException(message)
+class WorkspaceRpcException(val code: Long, override val message: String, val data: Any?) : IOException(message) {
+    /** The Engine's stable error kind (`data.kind`), such as `conflict` or `environment_preparing`. */
+    val kind: String? get() = (data as? Map<*, *>)?.get("kind") as? String
+}
+
+/** The connection closed before or while this request ran; the connection status explains why. */
+class WorkspaceClosedException(message: String, cause: Throwable? = null) : IOException(message, cause)
+
+/** The Engine speaks another protocol or version. Retrying cannot help; version 1.0.0 has no adapter. */
+class IncompatibleWorkspaceException(message: String) : IOException(message)
+
+/** The Engine did not answer in time. Unlike a coroutine timeout, this is a failure, never a cancellation. */
+class WorkspaceTimeoutException(val method: String, val timeoutMs: Long) : IOException("工作区响应超时")
 
 /** Bounded JSONL transport. No vendor-agent messages, workspace reducers or persistence live here. */
 class WorkspaceRpc(
@@ -74,8 +86,8 @@ class WorkspaceRpc(
         try {
             require(clientId.isNotBlank()) { "Workspace client id must not be empty" }
             val result = obj(request("hello", mapOf("protocol" to PROTOCOL, "clientId" to clientId)))
-            if (result["protocol"] != PROTOCOL) throw IOException("工作区协议版本与应用不一致")
-            if (WorkspaceWire.string(result, "engineVersion") != ENGINE_VERSION) throw IOException("工作区 Engine 版本与应用不一致")
+            if (result["protocol"] != PROTOCOL) throw IncompatibleWorkspaceException("工作区协议版本与应用不一致")
+            if (WorkspaceWire.string(result, "engineVersion") != ENGINE_VERSION) throw IncompatibleWorkspaceException("工作区 Engine 版本与应用不一致")
             check(WorkspaceWire.string(result, "workspaceRoot").isNotBlank()) { "Workspace omitted its root" }
             val capabilities = obj(result["capabilities"])
             for (key in listOf("workspace", "files", "documents", "environment", "processes", "pty", "services")) {
@@ -101,22 +113,25 @@ class WorkspaceRpc(
         val id = "r${ids.incrementAndGet()}"
         val deferred = CompletableDeferred<JsonElement>()
         synchronized(waiting) {
-            check(!closed) { mutableFailure.value ?: "工作区连接已关闭" }
+            if (closed) throw WorkspaceClosedException(mutableFailure.value ?: "工作区连接已关闭")
             waiting[id] = deferred
         }
         try {
             val bytes = RpcEnvelope.request(id, method, params).toString().toByteArray(Charsets.UTF_8)
             require(bytes.size <= MAX_FRAME_BYTES) { "工作区请求超过协议大小限制" }
-            return withTimeout(timeoutMs) {
+            return withTimeoutOrNull(timeoutMs) {
                 withContext(io) {
                     writer.withLock {
-                        check(!closed) { mutableFailure.value ?: "工作区连接已关闭" }
+                        if (closed) throw WorkspaceClosedException(mutableFailure.value ?: "工作区连接已关闭")
                         try { output.write(bytes); output.write(10); output.flush() }
-                        catch (error: IOException) { fail(error.message ?: "工作区写入失败"); closeTransport(); throw error }
+                        catch (error: IOException) {
+                            fail(error.message ?: "工作区写入失败"); closeTransport()
+                            throw WorkspaceClosedException(mutableFailure.value ?: "工作区写入失败", error)
+                        }
                     }
                 }
                 deferred.await()
-            }
+            } ?: throw WorkspaceTimeoutException(method, timeoutMs)
         } finally { waiting.remove(id) }
     }
 
@@ -124,7 +139,7 @@ class WorkspaceRpc(
         if (!closed) {
             closed = true
             mutableFailure.value = message
-            waiting.values.forEach { it.completeExceptionally(IOException(message)) }
+            waiting.values.forEach { it.completeExceptionally(WorkspaceClosedException(message)) }
             waiting.clear()
         }
     }

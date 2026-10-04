@@ -1,5 +1,6 @@
 package top.flysoftbeta.workflow.platform.apps
 
+import top.flysoftbeta.workflow.platform.UnhandledFailures
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -37,7 +38,7 @@ data class InstalledApp(
  * the main thread never calls `loadLabel` / `loadIcon`). Process-wide.
  */
 class InstalledApps private constructor(private val context: Context) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + UnhandledFailures.handler("apps"))
     private val mutex = Mutex()
     private val iconPx = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(48)
 

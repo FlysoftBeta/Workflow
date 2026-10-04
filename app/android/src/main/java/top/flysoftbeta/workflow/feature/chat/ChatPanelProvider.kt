@@ -1,5 +1,6 @@
 package top.flysoftbeta.workflow.feature.chat
 
+import java.util.UUID
 import kotlinx.coroutines.flow.StateFlow
 import top.flysoftbeta.workflow.app.panel.NewPanelRequest
 import top.flysoftbeta.workflow.app.panel.PanelContext
@@ -25,7 +26,11 @@ class ChatPanelProvider(private val services: ChatFeatureServices) : PanelProvid
         return ConversationController(id, context, services)
     }
 
-    override suspend fun newTarget(request: NewPanelRequest): PanelTarget = PanelTarget.Conversation(hub.newConversation())
+    /**
+     * A new conversation opens at once under a fresh ID. Its controller ensures the conversation, which the
+     * Engine creates with the default backend; meanwhile the panel shows environment preparation.
+     */
+    override suspend fun newTarget(request: NewPanelRequest): PanelTarget = PanelTarget.Conversation(UUID.randomUUID().toString())
 
     override fun resourceTitle(ref: ResourceRef): String? {
         val id = (ref as? ResourceRef.Conversation)?.id ?: return null

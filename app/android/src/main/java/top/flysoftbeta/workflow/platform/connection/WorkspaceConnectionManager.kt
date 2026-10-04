@@ -1,11 +1,13 @@
 package top.flysoftbeta.workflow.platform.connection
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -17,14 +19,40 @@ import top.flysoftbeta.workflow.core.config.ConfigCodec
 import top.flysoftbeta.workflow.core.config.ConfigParse
 import top.flysoftbeta.workflow.core.json.Json
 import top.flysoftbeta.workflow.core.store.StoreStatus
+import top.flysoftbeta.workflow.platform.UnhandledFailures
 import top.flysoftbeta.workflow.platform.service.LocalRuntimeService
+
+/** The step a connection attempt is performing, shown while it connects (docs/app/connection.md). */
+enum class ConnectPhase(val label: String) {
+    ENGINE("正在启动工作区 Engine"),
+    WORKSPACE("正在加载工作区"),
+    CONFIGURATION("正在同步配置"),
+}
 
 sealed interface ConnectionStatus {
     data object Loading : ConnectionStatus
     data object Configure : ConnectionStatus
-    data class Connecting(val name: String) : ConnectionStatus
+    data class Connecting(val name: String, val phase: ConnectPhase = ConnectPhase.ENGINE) : ConnectionStatus
     data class Connected(val session: WorkspaceConnectionSession) : ConnectionStatus
-    data class Failed(val message: String, val profile: WorkspaceConnectionConfig?) : ConnectionStatus
+    /**
+     * A connection that was online was lost and is retried automatically. [phase] is null while the attempt waits
+     * until [retryAt] (epoch milliseconds); [detail] is the lost Engine's diagnostic output.
+     */
+    data class Reconnecting(
+        val name: String,
+        val attempt: Int,
+        val cause: String,
+        val phase: ConnectPhase?,
+        val retryAt: Long?,
+        val detail: String?,
+    ) : ConnectionStatus
+    /** [retryable] is false when retrying cannot help, such as an Engine of another version. */
+    data class Failed(
+        val message: String,
+        val profile: WorkspaceConnectionConfig?,
+        val detail: String? = null,
+        val retryable: Boolean = true,
+    ) : ConnectionStatus
 }
 
 data class WorkspaceConnectionSession(
@@ -34,13 +62,15 @@ data class WorkspaceConnectionSession(
     val store: RemoteWorkspaceStore,
     val scope: CoroutineScope,
     val configuration: ClientConfigurationSync? = null,
+    /** The Engine's recent diagnostic output, for Details after a failure. */
+    val diagnostic: () -> String = { "" },
 )
 
 /** The shell's only persistent files: connection profiles and Engine-delivered local configuration. */
 class WorkspaceConnectionManager private constructor(context: Context) {
     private val app = context.applicationContext
     private val bootstrapper: WorkspaceBootstrapper = EmbeddedWorkspaceBootstrapper(app)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + UnhandledFailures.handler("connection"))
     private val mutable = MutableStateFlow<ConnectionStatus>(ConnectionStatus.Loading)
     val status = mutable.asStateFlow()
     private val configured = MutableStateFlow<List<WorkspaceConnectionConfig>>(emptyList())
@@ -49,6 +79,8 @@ class WorkspaceConnectionManager private constructor(context: Context) {
     private val localCache = File(app.filesDir, "workspace-local-config.json")
     private val cacheWriteLock = Mutex()
     private var connecting: Job? = null
+    /** Ends a reconnect wait early: Retry now, or the app returning to the foreground. */
+    private val wake = Channel<Unit>(Channel.CONFLATED)
     @Volatile private var activeToken: String? = null
     @Volatile private var current: WorkspaceConnectionSession? = null
     private val mutableLocalConfig = MutableStateFlow(AppConfig())
@@ -76,7 +108,7 @@ class WorkspaceConnectionManager private constructor(context: Context) {
         }
     }
 
-    fun requireSession(): WorkspaceConnectionSession = sessionOrNull() ?: error("请先配置并连接工作区")
+    fun requireSession(): WorkspaceConnectionSession = sessionOrNull() ?: throw WorkspaceClosedException("请先配置并连接工作区")
     fun sessionOrNull(): WorkspaceConnectionSession? = current?.takeIf {
         it.rpc.failure.value == null && it.store.state.value.status == StoreStatus.READY && it.scope.isActive
     }
@@ -87,82 +119,133 @@ class WorkspaceConnectionManager private constructor(context: Context) {
         connect(existing ?: WorkspaceConnectionConfig(id, name, WorkspaceEndpoint.Embedded(id)))
     }
 
-    @Synchronized fun connect(profile: WorkspaceConnectionConfig) {
+    @Synchronized fun connect(profile: WorkspaceConnectionConfig) = start(profile, lost = null)
+
+    /** Why an attempt or an online connection failed; [retryable] is false when retrying cannot help. */
+    private class Loss(val message: String, val detail: String?, val retryable: Boolean)
+
+    /**
+     * Connects [profile]. With [lost], an online connection was lost: attempts repeat automatically after
+     * [RECONNECT_DELAYS_MS] while the previous Workbench stays inert. A first connection reports its failure at once.
+     */
+    @Synchronized private fun start(profile: WorkspaceConnectionConfig, lost: Loss?) {
         if (connecting?.isActive == true) return
         val token = UUID.randomUUID().toString()
         activeToken = token
+        while (wake.tryReceive().isSuccess) Unit
         connecting = scope.launch(start = CoroutineStart.LAZY) {
             val previous = current
             current = null
             previous?.let(::retire)
-            mutable.value = ConnectionStatus.Connecting(profile.name)
-            var rpc: WorkspaceRpc? = null
-            var sessionScope: CoroutineScope? = null
-            var store: RemoteWorkspaceStore? = null
-            try {
-                val endpoint = profile.endpoint as? WorkspaceEndpoint.Embedded
-                    ?: throw UnsupportedWorkspaceTransport("远程连接只提供扩展接口，此版本尚未实现")
-                check(ID.matches(profile.id) && ID.matches(endpoint.workspaceId)) { "工作区标识无效" }
-                // Use profile id for the local directory; no old workspace is scanned or migrated.
-                val normalized = profile.copy(endpoint = WorkspaceEndpoint.Embedded(profile.id))
-                val profiles = configured.value.filterNot { it.id == normalized.id } + normalized
-                saveProfiles(normalized.id, profiles)
-                configured.value = profiles
-                loadLocalConfig(normalized.id)
-                LocalRuntimeService.retainEnvironment(app, token).getOrThrow()
-                val transport = bootstrapper.connect(normalized)
-                sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-                rpc = WorkspaceRpc(transport, sessionScope)
-                val connectedStore = RemoteWorkspaceStore(rpc, sessionScope, profile.id).also { it.start() }
-                store = connectedStore
-                val ready = withTimeout(45_000) { connectedStore.awaitReady() }
-                check(ready.status == StoreStatus.READY) { ready.failure ?: (transport as? EmbeddedWorkspaceTransport)?.diagnostic()?.ifBlank { null } ?: "工作区未能启动" }
-                val identity = WorkspaceIdentity(normalized.id, WorkspaceWire.string(rpc.hello(normalized.id), "workspaceRoot"))
-                val session = WorkspaceConnectionSession(token, normalized, rpc, connectedStore, sessionScope, ClientConfigurationSync(rpc, identity))
-                refreshLocalConfig(session)
-                check(session.rpc.failure.value == null && session.store.state.value.status == StoreStatus.READY) { "工作区连接已断开" }
-                WorkspaceNetworkReporter.attach(app, session)
-                val attemptContext = currentCoroutineContext()
-                synchronized(this@WorkspaceConnectionManager) {
-                    attemptContext.ensureActive()
-                    check(activeToken == token) { "工作区连接已取消" }
-                    current = session
-                    mutable.value = ConnectionStatus.Connected(session)
+            var cause = lost
+            var attempt = 0
+            while (true) {
+                attempt++
+                val reconnecting = cause
+                if (reconnecting != null) {
+                    val wait = RECONNECT_DELAYS_MS[attempt - 1]
+                    log("Reconnect attempt $attempt in $wait ms: ${reconnecting.message}")
+                    publish(token, ConnectionStatus.Reconnecting(profile.name, attempt, reconnecting.message, null,
+                        System.currentTimeMillis() + wait, reconnecting.detail))
+                    withTimeoutOrNull(wait) { wake.receive() }
                 }
-                session.scope.launch(Dispatchers.IO) {
-                    session.store.state.map { it.config }.distinctUntilChanged().collect {
-                        try { refreshLocalConfig(session) }
-                        catch (cancelled: CancellationException) { throw cancelled }
-                        catch (error: Exception) { mutableCacheError.value = error.message ?: "本地显示配置无法缓存" }
-                    }
+                val failure = connectOnce(profile, token) { phase ->
+                    publish(token, if (reconnecting == null) ConnectionStatus.Connecting(profile.name, phase)
+                        else ConnectionStatus.Reconnecting(profile.name, attempt, reconnecting.message, phase, null, reconnecting.detail))
+                } ?: return@launch
+                log("Connection attempt $attempt failed: ${failure.message}")
+                if (reconnecting == null || !failure.retryable || attempt >= RECONNECT_DELAYS_MS.size) {
+                    publish(token, ConnectionStatus.Failed(failure.message, profile, failure.detail, failure.retryable))
+                    return@launch
                 }
-                // Run cleanup in the manager scope so retiring the session cannot cancel its own cleanup.
-                scope.launch {
-                    val message = session.store.state.first { it.status == StoreStatus.FAILED }.failure ?: "工作区连接已断开"
-                    synchronized(this@WorkspaceConnectionManager) {
-                        if (current?.token == session.token) {
-                            current = null
-                            mutable.value = ConnectionStatus.Failed(message, normalized)
-                        }
-                    }
-                    retire(session)
-                }
-                session.scope.launch {
-                    session.rpc.failure.filterNotNull().first().let(session.store::disconnect)
-                }
-            } catch (error: Exception) {
-                store?.disconnect(error.message ?: "无法连接工作区")
-                rpc?.close(); sessionScope?.cancel()
-                LocalRuntimeService.releaseEnvironment(app, token)
-                if (error is CancellationException && error !is TimeoutCancellationException) throw error
-                synchronized(this@WorkspaceConnectionManager) {
-                    if (activeToken == token) {
-                        current = null
-                        mutable.value = ConnectionStatus.Failed(error.message ?: "无法连接工作区", profile)
-                    }
-                }
+                cause = failure
             }
         }.also { it.start() }
+    }
+
+    private fun log(message: String) { runCatching { Log.w(UnhandledFailures.TAG, message) } }
+
+    /** Publishes [status] only while [token] is still the current attempt. */
+    private fun publish(token: String, status: ConnectionStatus) = synchronized(this) {
+        if (activeToken == token) mutable.value = status
+    }
+
+    /** One connection attempt; null when it connected. */
+    private suspend fun connectOnce(profile: WorkspaceConnectionConfig, token: String, phase: (ConnectPhase) -> Unit): Loss? {
+        var rpc: WorkspaceRpc? = null
+        var sessionScope: CoroutineScope? = null
+        var store: RemoteWorkspaceStore? = null
+        var transport: WorkspaceTransport? = null
+        try {
+            phase(ConnectPhase.ENGINE)
+            val endpoint = profile.endpoint as? WorkspaceEndpoint.Embedded
+                ?: throw UnsupportedWorkspaceTransport("远程连接只提供扩展接口，此版本尚未实现")
+            check(ID.matches(profile.id) && ID.matches(endpoint.workspaceId)) { "工作区标识无效" }
+            // Use profile id for the local directory; no old workspace is scanned or migrated.
+            val normalized = profile.copy(endpoint = WorkspaceEndpoint.Embedded(profile.id))
+            val profiles = configured.value.filterNot { it.id == normalized.id } + normalized
+            saveProfiles(normalized.id, profiles)
+            configured.value = profiles
+            loadLocalConfig(normalized.id)
+            LocalRuntimeService.retainEnvironment(app, token).getOrThrow()
+            val connected = bootstrapper.connect(normalized)
+            transport = connected
+            val diagnostic = { (connected as? EmbeddedWorkspaceTransport)?.diagnostic().orEmpty() }
+            phase(ConnectPhase.WORKSPACE)
+            sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + UnhandledFailures.handler("session"))
+            rpc = WorkspaceRpc(connected, sessionScope)
+            val connectedStore = RemoteWorkspaceStore(rpc, sessionScope, profile.id).also { it.start() }
+            store = connectedStore
+            val ready = withTimeout(45_000) { connectedStore.awaitReady() }
+            check(ready.status == StoreStatus.READY) { ready.failure ?: diagnostic().ifBlank { null } ?: "工作区未能启动" }
+            val identity = WorkspaceIdentity(normalized.id, WorkspaceWire.string(rpc.hello(normalized.id), "workspaceRoot"))
+            val session = WorkspaceConnectionSession(token, normalized, rpc, connectedStore, sessionScope,
+                ClientConfigurationSync(rpc, identity), diagnostic)
+            phase(ConnectPhase.CONFIGURATION)
+            refreshLocalConfig(session)
+            check(session.rpc.failure.value == null && session.store.state.value.status == StoreStatus.READY) { "工作区连接已断开" }
+            WorkspaceNetworkReporter.attach(app, session)
+            val attemptContext = currentCoroutineContext()
+            synchronized(this@WorkspaceConnectionManager) {
+                attemptContext.ensureActive()
+                check(activeToken == token) { "工作区连接已取消" }
+                current = session
+                mutable.value = ConnectionStatus.Connected(session)
+            }
+            session.scope.launch(Dispatchers.IO) {
+                session.store.state.map { it.config }.distinctUntilChanged().collect {
+                    try { refreshLocalConfig(session) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: Exception) { mutableCacheError.value = error.message ?: "本地显示配置无法缓存" }
+                }
+            }
+            // Run cleanup in the manager scope so retiring the session cannot cancel its own cleanup.
+            val attemptJob = currentCoroutineContext()[Job]
+            scope.launch {
+                val message = session.store.state.first { it.status == StoreStatus.FAILED }.failure ?: "工作区连接已断开"
+                val lost = synchronized(this@WorkspaceConnectionManager) {
+                    (current?.token == session.token).also { if (it) current = null }
+                }
+                val detail = session.diagnostic().ifBlank { null }
+                retire(session)
+                // The attempt that produced this session may still be finishing; reconnect after it ended.
+                attemptJob?.join()
+                if (lost) start(normalized, Loss(message, detail, retryable = true))
+            }
+            session.scope.launch {
+                session.rpc.failure.filterNotNull().first().let(session.store::disconnect)
+            }
+            return null
+        } catch (error: Exception) {
+            store?.disconnect(error.message ?: "无法连接工作区")
+            rpc?.close(); sessionScope?.cancel()
+            LocalRuntimeService.releaseEnvironment(app, token)
+            if (error is CancellationException && error !is TimeoutCancellationException) throw error
+            val detail = (transport as? EmbeddedWorkspaceTransport)?.diagnostic()?.ifBlank { null }
+            val retryable = error !is IncompatibleWorkspaceException && error !is UnsupportedWorkspaceTransport
+            val message = if (error is TimeoutCancellationException) "工作区启动超时" else error.message ?: "无法连接工作区"
+            return Loss(message, detail, retryable)
+        }
     }
 
     /** Explicit disconnection invalidates old consumers before their callbacks can issue more work. */
@@ -212,7 +295,19 @@ class WorkspaceConnectionManager private constructor(context: Context) {
         }
     }
 
-    fun retry() { (status.value as? ConnectionStatus.Failed)?.profile?.let(::connect) ?: run { mutable.value = ConnectionStatus.Configure } }
+    /** Retry now: ends a reconnect wait, or repeats a failed connection once. */
+    fun retry() {
+        when (val current = status.value) {
+            is ConnectionStatus.Reconnecting -> wake.trySend(Unit)
+            is ConnectionStatus.Failed -> current.profile?.let(::connect) ?: run { mutable.value = ConnectionStatus.Configure }
+            else -> Unit
+        }
+    }
+
+    /** The app returned to the foreground: a waiting reconnect attempt runs now. */
+    fun onForeground() {
+        if (status.value is ConnectionStatus.Reconnecting) wake.trySend(Unit)
+    }
 
     private fun saveProfiles(active: String, profiles: List<WorkspaceConnectionConfig>) = atomic(profilesFile, Json.stringify(mapOf(
         "format" to 1, "active" to active,
@@ -229,6 +324,8 @@ class WorkspaceConnectionManager private constructor(context: Context) {
     companion object {
         private val LOCAL_KEYS = setOf("appearance", "overlay", "launcher", "terminal")
         private val ID = Regex("[A-Za-z0-9_-]{1,64}")
+        /** Waits before each automatic reconnect attempt; after the last one the connection is reported offline. */
+        val RECONNECT_DELAYS_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
         @Volatile private var instance: WorkspaceConnectionManager? = null
         fun get(context: Context): WorkspaceConnectionManager = instance ?: synchronized(this) {
             instance ?: WorkspaceConnectionManager(context).also { instance = it }

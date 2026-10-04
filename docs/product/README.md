@@ -6,7 +6,7 @@ This directory defines intended user-visible behavior. [Workspace tools and serv
 
 ## Entering and leaving a workspace
 
-Users choose and save a workspace connection before entering the Workbench. Version 1.0.0 supports the local connection; it does not offer a working remote or SSH connection. When a connection is lost, workspace changes become unavailable. Reconnection restores the workspace's authoritative state, including drafts already accepted by it.
+Users choose and save a workspace connection before entering the Workbench. Version 1.0.0 supports the local connection; it does not offer a working remote or SSH connection. When a connection is lost, workspace changes become unavailable while the app reconnects automatically. Reconnection restores the workspace's authoritative state, including drafts already accepted by it.
 
 Launcher and Workbench are separate spaces, comparable to a desktop and the applications running on it. Launcher contains an Apps grid and a few corner controls. Workbench contains the current Session. Returning to Launcher preserves the Workbench exactly as it was.
 

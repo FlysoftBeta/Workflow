@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import top.flysoftbeta.workflow.app.panel.launchAction
 import top.flysoftbeta.workflow.app.panel.DecisionOption
 import top.flysoftbeta.workflow.app.panel.DecisionRequest
 import top.flysoftbeta.workflow.app.panel.DecisionStyle
@@ -100,7 +101,8 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
             children.remove(directory)
         }
         (directories - watches.keys).forEach { directory ->
-            watches[directory] = context.scope.launch {
+            // A watch that fails keeps the last listing; the connection card explains a lost connection.
+            watches[directory] = context.scope.launchAction({}) {
                 load(directory)
                 store.directoryChanges(directory).debounce(150).collect { load(directory) }
             }
@@ -120,11 +122,11 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
     }
 
     fun refresh() {
-        context.scope.launch { (children.keys.toList()).forEach { load(it) } }
+        context.scope.launchAction({}) { (children.keys.toList()).forEach { load(it) } }
     }
 
     private fun refresh(directory: String) {
-        context.scope.launch { if (children.containsKey(directory)) load(directory) }
+        context.scope.launchAction({}) { if (children.containsKey(directory)) load(directory) }
     }
 
     fun isDirectory(path: String): Boolean? =
@@ -227,7 +229,7 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
             ?: if (children[parent].orEmpty().any { it.name == name }) "已存在同名项" else null
         if (problem != null) { edit = withError(current, problem); return }
         val path = WorkspacePaths.child(parent, name)
-        context.scope.launch {
+        context.scope.launchAction({ failure -> edit = withError(current, failure.summary) }) {
             val result = when (current) {
                 is InlineEdit.Create -> if (current.directory) store.createDirectory(path) else store.createFile(path)
                 is InlineEdit.Rename -> store.movePath(current.path, path)
@@ -253,12 +255,12 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
     // ---- Delete (trash + undo), duplicate, move ----------------------------------------------------------
 
     fun delete(path: String) {
-        context.scope.launch {
+        context.scope.launchAction(context.commands) {
             when (val result = store.trashPath(path)) {
                 is TrashResult.Trashed -> {
                     refresh(WorkspacePaths.parent(path))
                     context.commands.snackbar("已删除「${WorkspacePaths.name(path)}」", "撤销") {
-                        context.scope.launch {
+                        context.scope.launchAction(context.commands) {
                             when (val restored = store.restoreFromTrash(result.entry.id)) {
                                 is RestoreResult.Restored -> { refresh(WorkspacePaths.parent(restored.path)); select(restored.path); scrollTarget = restored.path }
                                 is RestoreResult.Failed -> context.commands.snackbar("无法恢复：${shortReason(restored.message)}")
@@ -272,7 +274,7 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
     }
 
     fun duplicate(path: String) {
-        context.scope.launch {
+        context.scope.launchAction(context.commands) {
             val parent = WorkspacePaths.parent(path)
             val taken = runCatching { store.listDirectory(parent, showHidden = true) }.getOrDefault(emptyList()).map { it.name }.toSet()
             val target = WorkspacePaths.child(parent, FileNames.unique(WorkspacePaths.name(path), taken))
@@ -286,7 +288,7 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
     /** Drag and drop onto a folder (or "移动到…"): confirm, then move each path. */
     fun requestMove(paths: List<String>, folder: String) {
         if (!ExplorerModel.canMoveInto(paths, folder)) return
-        context.scope.launch {
+        context.scope.launchAction(context.commands) {
             val label = if (folder.isEmpty()) "工作区" else WorkspacePaths.name(folder)
             val choice = context.commands.decide(DecisionRequest(
                 title = "移动到「$label」？",
@@ -298,7 +300,7 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
     }
 
     fun move(paths: List<String>, folder: String) {
-        context.scope.launch {
+        context.scope.launchAction(context.commands) {
             val taken = runCatching { store.listDirectory(folder, showHidden = true) }.getOrDefault(emptyList()).map { it.name }.toMutableSet()
             val failures = ArrayList<String>()
             var last: String? = null
@@ -322,12 +324,12 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
 
     fun upload(kind: ImportKind, directory: String = targetDirectory()) {
         if (!ExplorerModel.canImportInto(directory)) { context.commands.snackbar(PROTECTED); return }
-        context.scope.launch { reportImport(directory, importer.pick(kind, directory, OWNER)) }
+        context.scope.launchAction(context.commands) { reportImport(directory, importer.pick(kind, directory, OWNER)) }
     }
 
     fun importExternal(uris: List<android.net.Uri>, directory: String) {
         if (!ExplorerModel.canImportInto(directory)) { context.commands.snackbar(PROTECTED); return }
-        context.scope.launch { reportImport(directory, importer.importUris(uris, directory)) }
+        context.scope.launchAction(context.commands) { reportImport(directory, importer.importUris(uris, directory)) }
     }
 
     private suspend fun reportImport(directory: String, result: ImportResult) {

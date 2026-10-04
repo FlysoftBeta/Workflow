@@ -1,5 +1,7 @@
 package top.flysoftbeta.workflow.feature.workbench
 
+import kotlinx.coroutines.CancellationException
+import top.flysoftbeta.workflow.core.connection.Failure
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -66,7 +68,11 @@ fun WorkbenchScreen(shell: Shell, runtime: WorkbenchRuntime, dnd: DragDropState,
         Box(modifier.fillMaxSize().background(WorkflowTheme.colors.frame))
         // Archived (manually or by maintenance) or not created yet: the most recent live one, else a new one.
         LaunchedEffect(state.status, state.activeSessionId) {
-            if (state.status == StoreStatus.READY) shell.store.enterWorkbench()
+            if (state.status == StoreStatus.READY) {
+                try { shell.store.enterWorkbench() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (error: Exception) { Failure.of(error).takeUnless { it is Failure.Lost }?.let { shell.showSnackbar(it.summary) } }
+            }
         }
         return
     }

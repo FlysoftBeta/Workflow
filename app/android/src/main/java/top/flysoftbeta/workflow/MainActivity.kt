@@ -22,6 +22,8 @@ import top.flysoftbeta.workflow.platform.importer.ImportService
 class MainActivity : ComponentActivity() {
     private var model: ShellViewModel? = null
     private var boundToken: String? = null
+    /** The Workbench shown while a lost connection is restored; Compose state so the frame updates with it. */
+    private var retained by mutableStateOf<ShellViewModel?>(null)
     private var maintenance: Job? = null
     private var overlayRestore: Job? = null
     private var savedSpace: String? = null
@@ -38,20 +40,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             val status by manager.status.collectAsState()
             val connected = status as? ConnectionStatus.Connected
-            if (connected == null) ConnectionScreen(manager, status)
-            else key(connected.session.token) {
-                val viewModel = remember(connected.session.token) { bind(connected.session) }
-                DisposableEffect(connected.session.token) {
-                    onDispose {
-                        if (boundToken == connected.session.token && manager.sessionOrNull()?.token != boundToken) {
-                            maintenance?.cancel(); overlayRestore?.cancel()
-                            viewModelStore.clear()
-                            model = null; boundToken = null
-                            AppGraph.useConnection(null)
-                        }
-                    }
+            // A lost connection keeps the last Workbench composed but inert under the reconnect card
+            // (docs/ux/workbench.md); only a new session or an explicit disconnect releases it.
+            val live = connected?.let { bind(it.session) }
+            val shown = live ?: retained.takeIf { status !is ConnectionStatus.Configure }
+            LaunchedEffect(status is ConnectionStatus.Configure) { if (status is ConnectionStatus.Configure) release() }
+            if (shown == null) ConnectionScreen(manager, status)
+            else key(boundToken) {
+                InertWhileReconnecting(inert = live == null, overlay = { ConnectionOverlay(manager, status) }) {
+                    WorkflowApp(shown)
                 }
-                if (viewModel != null) WorkflowApp(viewModel) else ConnectionScreen(manager, status)
             }
         }
     }
@@ -60,18 +58,17 @@ class MainActivity : ComponentActivity() {
         val manager = WorkspaceConnectionManager.get(this)
         if (manager.sessionOrNull()?.token != session.token) return null
         if (boundToken != session.token) {
-            maintenance?.cancel(); overlayRestore?.cancel()
-            viewModelStore.clear()
-            model = null
-            AppGraph.useConnection(session.token)
+            release()
+            AppGraph.useConnection(session)
             boundToken = session.token
             model = try { ViewModelProvider(this)[ShellViewModel::class.java] }
             catch (error: Exception) {
                 // The Engine may disconnect on its IO thread while this frame constructs services.
                 if (manager.sessionOrNull()?.token == session.token) throw error
-                viewModelStore.clear(); boundToken = null; AppGraph.useConnection(null)
+                release()
                 return null
             }
+            retained = model
             val restoring = savedConnection == session.profile.id && savedSpace != null
             if (restoring) {
                 savedSpace?.let { name -> Space.entries.firstOrNull { it.name == name } }?.let(model!!.shell::restoreSpace)
@@ -82,6 +79,15 @@ class MainActivity : ComponentActivity() {
             if (foreground) startForegroundWork()
         }
         return checkNotNull(model)
+    }
+
+    /** Disposes the Workbench of the previous connection and unbinds its services. */
+    private fun release() {
+        if (boundToken == null && model == null) return
+        maintenance?.cancel(); overlayRestore?.cancel()
+        viewModelStore.clear()
+        model = null; boundToken = null; retained = null
+        AppGraph.useConnection(null)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -104,7 +110,11 @@ class MainActivity : ComponentActivity() {
         intent?.removeExtra(EXTRA_DESTINATION)
     }
 
-    override fun onStart() { super.onStart(); foreground = true; startForegroundWork() }
+    override fun onStart() {
+        super.onStart(); foreground = true
+        WorkspaceConnectionManager.get(this).onForeground()
+        startForegroundWork()
+    }
     private fun startForegroundWork() {
         val current = model ?: return
         maintenance?.cancel(); maintenance = current.maintenanceLoop()

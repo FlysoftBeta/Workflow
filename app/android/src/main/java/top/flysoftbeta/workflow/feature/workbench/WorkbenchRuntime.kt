@@ -26,6 +26,8 @@ import top.flysoftbeta.workflow.app.panel.PanelRegistry
 import top.flysoftbeta.workflow.app.panel.RailContext
 import top.flysoftbeta.workflow.app.panel.RailController
 import top.flysoftbeta.workflow.app.panel.WorkbenchCommands
+import top.flysoftbeta.workflow.app.panel.launchAction
+import top.flysoftbeta.workflow.platform.UnhandledFailures
 import top.flysoftbeta.workflow.core.layout.ExplorerView
 import top.flysoftbeta.workflow.core.layout.LayoutOp
 import top.flysoftbeta.workflow.core.layout.Panel
@@ -88,7 +90,9 @@ class SessionRuntime(
     private val registry: PanelRegistry,
     private val shell: Shell,
 ) {
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /** Reports a failure nothing handled instead of letting it terminate the process (docs/app/workbench.md). */
+    private val unhandled = UnhandledFailures.handler("workbench") { shell.showSnackbar(it.summary) }
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + unhandled)
     val presence = RegionPresence()
 
     /** A seam or region edge is being dragged (PanelFrame.resizing). */
@@ -111,7 +115,7 @@ class SessionRuntime(
             if (entry.key == panel.target.key) return entry.controller
             disposeEntry(panel.id)
         }
-        val childScope = CoroutineScope(SupervisorJob(scope.coroutineContext.job) + Dispatchers.Main.immediate)
+        val childScope = CoroutineScope(SupervisorJob(scope.coroutineContext.job) + Dispatchers.Main.immediate + unhandled)
         val context = object : PanelContext {
             override val appContext = this@SessionRuntime.appContext
             override val store = this@SessionRuntime.store
@@ -167,7 +171,7 @@ class SessionRuntime(
     fun railController(): RailController = rail ?: createRail().also { rail = it }
 
     private fun createExplorer(): ExplorerController {
-        val explorerScope = CoroutineScope(SupervisorJob(scope.coroutineContext.job) + Dispatchers.Main.immediate)
+        val explorerScope = CoroutineScope(SupervisorJob(scope.coroutineContext.job) + Dispatchers.Main.immediate + unhandled)
         val sessionFlow = store.state.map { it.session(sessionId)?.workbench }
         return registry.explorer.create(object : ExplorerContext {
             override val appContext = this@SessionRuntime.appContext
@@ -184,7 +188,7 @@ class SessionRuntime(
     }
 
     private fun createRail(): RailController {
-        val railScope = CoroutineScope(SupervisorJob(scope.coroutineContext.job) + Dispatchers.Main.immediate)
+        val railScope = CoroutineScope(SupervisorJob(scope.coroutineContext.job) + Dispatchers.Main.immediate + unhandled)
         return registry.rail.create(object : RailContext {
             override val appContext = this@SessionRuntime.appContext
             override val store = this@SessionRuntime.store
@@ -261,9 +265,9 @@ class SessionRuntime(
         override fun openFile(path: String, cursor: TextCursor?) {
             revealEditorSide()
             val target = PanelTarget.forFile(path)
-            scope.launch {
-                val wb = store.applyLayout(sessionId, LayoutOp.Open(target)) ?: return@launch
-                val panel = wb.panelFor(target) ?: return@launch
+            launchReporting {
+                val wb = store.applyLayout(sessionId, LayoutOp.Open(target)) ?: return@launchReporting
+                val panel = wb.panelFor(target) ?: return@launchReporting
                 if (cursor != null) {
                     layout(LayoutOp.UpdateView(panel.id, panel.view.copy(cursor = cursor)))
                     controller(panel).navigate(cursor)
@@ -277,16 +281,16 @@ class SessionRuntime(
 
         override fun newTerminal(directory: String?) {
             presence.sideOverlay = false
-            scope.launch {
-                val target = registry.provider(PanelKind.TERMINAL).newTarget(NewPanelRequest(directory = directory)) ?: return@launch
-                val wb = store.applyLayout(sessionId, LayoutOp.Open(target)) ?: return@launch
+            launchReporting {
+                val target = registry.provider(PanelKind.TERMINAL).newTarget(NewPanelRequest(directory = directory)) ?: return@launchReporting
+                val wb = store.applyLayout(sessionId, LayoutOp.Open(target)) ?: return@launchReporting
                 wb.panelFor(target)?.let { controller(it).requestInputFocus() }
             }
         }
 
         override fun newConversation() {
-            scope.launch {
-                val target = registry.provider(PanelKind.CONVERSATION).newTarget(NewPanelRequest()) ?: return@launch
+            launchReporting {
+                val target = registry.provider(PanelKind.CONVERSATION).newTarget(NewPanelRequest()) ?: return@launchReporting
                 showConversationRegion()
                 store.applyLayout(sessionId, LayoutOp.showConversation((target as PanelTarget.Conversation).conversationId))
             }
@@ -307,6 +311,11 @@ class SessionRuntime(
         override fun snackbar(message: String, actionLabel: String?, onAction: (() -> Unit)?) = shell.showSnackbar(message, actionLabel, onAction)
 
         override suspend fun decide(request: DecisionRequest): String? = shell.decide(request)
+
+        /** A shell command has no panel to hold an error row, so its failure is reported in the Snackbar. */
+        private fun launchReporting(block: suspend CoroutineScope.() -> Unit) {
+            scope.launchAction({ shell.showSnackbar(it.summary) }, block)
+        }
 
         /** In Chat, files open in the side region: make sure it is visible. */
         private fun revealEditorSide() {
@@ -338,10 +347,10 @@ class SessionRuntime(
                 controller(preferred).onDrop(payload)
                 return
             }
-            scope.launch {
-                val target = registry.provider(kind).newTarget(NewPanelRequest()) ?: return@launch
+            launchReporting {
+                val target = registry.provider(kind).newTarget(NewPanelRequest()) ?: return@launchReporting
                 val op = if (target is PanelTarget.Conversation) LayoutOp.showConversation(target.conversationId) else LayoutOp.Open(target)
-                val next = store.applyLayout(sessionId, op) ?: return@launch
+                val next = store.applyLayout(sessionId, op) ?: return@launchReporting
                 next.panelFor(target)?.let { controller(it).onDrop(payload) }
             }
         }

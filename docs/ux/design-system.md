@@ -83,8 +83,18 @@ Loading indicators wait 300ms before appearing. A longer operation uses a region
 | New conversation | Backend choice and composer, with the last backend remembered; no greeting or suggestion cards |
 | Backend is logged out | Centered Log in action naming the backend; Send disabled |
 | Environment is preparing | A wavy linear progress indicator and Preparing environment n% at the terminal top; a small loading indicator in the send position |
+| Environment status cannot be read | A neutral Checking environment line at the terminal top; the last known readiness still applies |
+| Conversation opens before its entry exists | The environment's progress or failure with Retry environment, or an error row with Retry when the open failed |
 | Verified replacement awaits activation | Environment configuration changed with Restart environment at the terminal top; Settings gains a dot |
 | Copy or archive completes | A concise Snackbar such as Copied or Archived · Undo |
+
+## Readiness and failures
+
+Every capability depends on a prefix of one ladder: the connection, then the environment, then the capability itself, such as a signed-in backend or a running terminal. A surface presents the lowest condition that is not yet satisfied, so the same condition looks the same wherever it appears. A condition that resolves by itself is shown as waiting, with its step and measured progress, and actions that need it wait visibly instead of failing. A condition that needs a decision is shown as blocked: one line states the reason, the single action that unblocks it sits beside it, and dependent controls are disabled. A ready condition adds nothing.
+
+A failed action is classified before it is shown. A lost connection is not reported by the action, because the connection card already explains it. A slow Engine or a preparing environment is transient and keeps the waiting presentation. A blocked capability names its reason. A refusal from Engine appears as one local error row with a short summary chosen by Engine's error kind, and the raw message is available only under Details. A Snackbar reports a failure only when no panel hosts the action, such as creating a panel from a shell command.
+
+The first connection uses the full-screen connection screen, which names the step being performed: starting the workspace Engine, loading the workspace, or synchronizing configuration. A connection lost after it was online keeps the Workbench visible but inert under a 32% scrim. A centered card reads Reconnecting to the workspace with the cause, the attempt number and a countdown to the next attempt, or the step of the attempt in progress, together with Retry now and, when Engine left diagnostic output, Details. After the last automatic attempt, or a failure that retrying cannot fix, the card reads Workspace offline with the reason. The card is a polite live region, the inert Workbench is hidden from accessibility focus, and focus moves to the card's primary action.
 
 ## Accessibility and keyboard input
 
