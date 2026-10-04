@@ -4,6 +4,7 @@ import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.ViewModelProvider
@@ -25,6 +26,22 @@ import top.flysoftbeta.workflow.platform.connection.WorkspaceConnectionManager
 /** Real Engine cwd resolution → production panel → Sora, with stale generations rejected. */
 class TerminalWorkbenchAcceptanceTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+
+    /**
+     * The model MainActivity bound for the connection. `Connected` is published on the Engine's thread
+     * before the activity recomposes and binds. A ViewModelProvider read in between creates an orphan
+     * model in the activity's store; the bind then clears that store and creates the real model, so the
+     * tile click navigates the real Shell while the orphan's Shell stays on the Launcher. Both read the
+     * same session store, so only the order proves which one is bound: the Launcher tile is composed from
+     * the bound model, and the read happens on the main thread after it appears.
+     */
+    private fun boundModel(): ShellViewModel {
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("工作台").fetchSemanticsNodes().isNotEmpty() }
+        var model: ShellViewModel? = null
+        compose.runOnUiThread { model = ViewModelProvider(compose.activity)[ShellViewModel::class.java] }
+        return checkNotNull(model)
+    }
+
     @Test fun engineResolvedOutputPathOpensWorkbenchEditorAtCursor() {
         check(Build.HARDWARE in setOf("ranchu", "goldfish"))
         val manager = WorkspaceConnectionManager.get(compose.activity)
@@ -32,7 +49,7 @@ class TerminalWorkbenchAcceptanceTest {
         if (manager.status.value is ConnectionStatus.Configure) compose.onNodeWithText("使用此设备").performClick()
         compose.waitUntil(60_000) { manager.status.value is ConnectionStatus.Connected || manager.status.value is ConnectionStatus.Failed }
         assertTrue(manager.status.value.toString(), manager.status.value is ConnectionStatus.Connected)
-        val model = ViewModelProvider(compose.activity)[ShellViewModel::class.java]
+        val model = boundModel()
         val session = manager.requireSession()
         val store = session.store
         compose.onNodeWithText("工作台").performClick()
