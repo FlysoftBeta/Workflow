@@ -76,7 +76,7 @@ Layout operation `type` values use lower camel case: `open`, `focus`, `focusStac
 
 ## Files and uploads
 
-`files.read {path,offset,length}` returns `{data,nextOffset,eof,size}`, with `length` at most 65,536. Paths must remain beneath the workspace root and cannot traverse symlinks or private state. File commands accept visible `.workspace` entries. Writes are limited to editable configuration: `.workspace/config.json`, `.workspace/env.json`, safe paths beneath `.workspace/proxy/`, the classified directories of other services and the allowlisted entries of the Codex and Claude Code homes below `.workspace/agents/`. Writing read-only agent tools fails with `read_only`; private paths fail as invalid parameters.
+`files.read {path,offset,length}` returns `{data,nextOffset,eof,size}`, with `length` at most 65,536. Paths must remain beneath the workspace root and cannot traverse symlinks or private state. File commands accept visible `.workspace` entries. Writes are limited to editable configuration: `.workspace/config.json`, safe paths beneath `.workspace/proxy/`, the classified directories of other services and the allowlisted entries of the Codex and Claude Code homes below `.workspace/agents/`. Writing a fixed folder fails with `read_only`; private paths, including `.workspace/cache/`, fail as invalid parameters.
 
 `files.upload.begin` accepts `{directory,name,size}` for an import whose final destination must be allocated by the Engine. `directory` is workspace-relative and `name` is a single filename. The Engine validates both and returns `{uploadId}`. The exact-destination form `{path,size}` remains available for file creation and explicit service assets; it rejects an existing destination rather than allocating a variant.
 
@@ -110,7 +110,7 @@ The network executor reports `{serviceId:"network",state:{dnsServers:[...],conne
 
 ## Environment lifecycle
 
-Environment means the full runtime, including tools, packages, variables, mounts, processes, and lifecycle. `.workspace/env.json` declares version 1 settings, including Python and Node arrays, packages, variables, and ordered `{id,run,user:"work"|"root"}` post-scripts. Missing language arrays use image defaults, empty arrays disable that managed language, and the first entry of a nonempty array is the default. Invalid or duplicate version specifications are rejected. `root` here is virtual guest root, not device root. The [environment document](environment.md) gives the full declaration semantics.
+Environment means the full runtime, including tools, packages, variables, mounts, processes, and lifecycle. The `environment` section of `.workspace/config.json` declares version 1 settings, including Python and Node arrays, packages, variables, and ordered `{id,run,user:"work"|"root"}` post-scripts. Missing language arrays use image defaults, empty arrays disable that managed language, and the first entry of a nonempty array is the default. Invalid or duplicate version specifications are rejected. `root` here is virtual guest root, not device root. The [environment document](environment.md) gives the full declaration semantics.
 
 First use explicitly requests `environment.reconcile {retry?}`. Once enrolled, the Server monitors saved and external declaration changes, including after reconnect. A connection used only for files or local services does not extract an unused environment. Failed input is remembered and does not repeatedly run without a changed declaration or explicit retry.
 

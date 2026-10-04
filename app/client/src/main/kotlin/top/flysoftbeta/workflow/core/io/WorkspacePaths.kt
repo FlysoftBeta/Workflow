@@ -10,8 +10,8 @@ object WorkspacePaths {
     const val STATE = ".workspace/state"
     const val PROXY = ".workspace/proxy"
     const val TMP = ".workspace/tmp"
+    /** Workspace configuration, including the environment declaration in its `environment` section. */
     const val CONFIG = ".workspace/config.json"
-    const val ENVIRONMENT = ".workspace/env.json"
 
     /** Returns the normalized form, or throws [IllegalArgumentException] for absolute or escaping paths. */
     fun normalize(raw: String): String {
@@ -50,7 +50,7 @@ object WorkspacePaths {
      * opened in the editor through the proxy app's explicit "edit configuration" action.
      */
     fun isReserved(path: String): Boolean =
-        (isWithin(path, INTERNAL) && !isWithin(path, PROXY) && path != CONFIG && path != ENVIRONMENT) || path.isEmpty()
+        (isWithin(path, INTERNAL) && !isWithin(path, PROXY) && path != CONFIG) || path.isEmpty()
 
     /** Reference-store filter only; production listings follow the Engine's `.workspace` allowlist. */
     fun isHiddenInExplorer(path: String): Boolean = isWithin(path, INTERNAL)

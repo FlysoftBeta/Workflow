@@ -1,6 +1,6 @@
 # Engine tools distribution
 
-`package.py` builds one verified Linux payload per architecture from the pinned Codex release. The APK carries `assets/environment/tools/tools.json` and `tools.zip`. A standalone Server accepts the same pair through its tools directory option. Codex is an ordinary guest executable, not an Android native library.
+`package.py` builds one verified Linux payload per architecture from the pinned Codex release: `codex/bin/codex` and the `codex/bin/codex-code-mode-host` it starts for Code Mode, both taken from the same release's MUSL archives. The APK carries `assets/environment/tools/tools.json` and `tools.zip`. A standalone Server accepts the same pair through its tools directory option. Codex is an ordinary guest executable, not an Android native library.
 
 The catalog records every file's size, SHA-256 and executable mode, the payload archive identity, architecture, tool versions and the pinned optional Claude download. Safe extraction rejects links, traversal, extra members and mismatched content. The Codex and Claude Code legal notices are retained in the payload. All downloads are cached under ignored `third_party/.cache/engine`; an invalid existing cache fails instead of being silently replaced.
 

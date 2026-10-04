@@ -27,31 +27,36 @@ def guest(c,argv,expected=0):
         result[stream]=data.decode(errors='replace')
     return result
 
+def declare(private,spec):
+    # The environment declaration is the `environment` section of config.json.
+    path=private/'config.json';config=json.loads(path.read_text()) if path.exists() else {'version':2}
+    config['environment']=spec;path.write_text(json.dumps(config))
+
 def run(a,root):
     private=root/'.workspace';private.mkdir(parents=True)
     spec={'version':1,'python':['3.14'],'node':['24'],'packages':[],'env':{},'post_scripts':[{'id':'home-config','user':'work','run':'mkdir -p "$HOME/.config/workflow-test"; printf "script-live\\n" > "$HOME/.config/workflow-test/result"; python3 --version; node --version'}]}
-    (private/'env.json').write_text(json.dumps(spec))
+    declare(private,spec)
     c=Client(a.engine,root,['--runtime',a.runtime,'--loader',a.loader,'--image',a.image,'--image-index',a.index]);c.hello()
     start=time.monotonic();c.call('environment.reconcile');c.command('createSession',{'name':'files stay responsive during install'});assert time.monotonic()-start<2
     status=poll(c,{'ready'});first=status['active']['generation']
     out=guest(c,['/bin/sh','-c','cat "$HOME/.config/workflow-test/result"; python3 --version; node --version'])
     assert 'script-live' in out['stdout'] and 'Python 3.14.' in out['stdout'] and 'v24.' in out['stdout'],out
-    assert not list((private/'environment/generations').glob('*/post-home'))
+    assert not list((private/'cache/generations').glob('*/post-home'))
     print('real customized image/default toolchains/staged work-home activation:',out['stdout'].splitlines(),flush=True)
     # A failed script wrote only to its private staged home.
     spec['post_scripts']=[{'id':'failure','user':'work','run':'printf "must-not-publish" > "$HOME/.config/workflow-test/result"; exit 7'}]
-    (private/'env.json').write_text(json.dumps(spec));c.call('environment.reconcile')
+    declare(private,spec);c.call('environment.reconcile')
     status=poll(c,{'failed'});assert status['usable'] and status['active']['generation']==first,status
     assert (private/'environment/stores/home/work/.config/workflow-test/result').read_text()=='script-live\n'
-    assert not list((private/'environment/generations').glob('*/post-home'))
+    assert not list((private/'cache/generations').glob('*/post-home'))
     # An empty language list really disables that language; cached installs remain available for later profiles.
-    spec['post_scripts']=[];spec['node']=[];(private/'env.json').write_text(json.dumps(spec));c.call('environment.reconcile');status=poll(c,{'ready'})
+    spec['post_scripts']=[];spec['node']=[];declare(private,spec);c.call('environment.reconcile');status=poll(c,{'ready'})
     assert status['active']['verified']['node']==[],status
     out=guest(c,['/bin/sh','-c','python3 --version; node --version'],expected=127)
     assert 'Python 3.14.' in out['stdout'],out
     # A live process pins the current environment until an explicit restart.
     p=c.call('process.spawn',{'argv':['/bin/sleep','300']})['processId'];old=status['active']['generation']
-    spec['env']={'WORKFLOW_TEST_VALUE':'new-value'};(private/'env.json').write_text(json.dumps(spec));c.call('environment.reconcile');status=poll(c,{'needs_restart'})
+    spec['env']={'WORKFLOW_TEST_VALUE':'new-value'};declare(private,spec);c.call('environment.reconcile');status=poll(c,{'needs_restart'})
     assert status['active']['generation']==old and c.call('process.wait',{'processId':p})['running'],status
     status=c.call('environment.restart',timeout=30);assert status['phase']=='ready' and status['active']['generation']!=old,status
     assert not c.call('process.wait',{'processId':p})['running']

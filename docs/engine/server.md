@@ -14,7 +14,7 @@ Server composes sessions and drafts into one persisted `state/workspace.json` tr
 
 ## Transactions and recovery
 
-Environment supplies the exclusive workspace process lock and typed atomic store. Publication writes and synchronizes a temporary file, renames it atomically, and synchronizes the containing directory before Server acknowledges the new revision. Workspace settings live in `.workspace/config.json`; the environment declaration lives in `.workspace/env.json`.
+Environment supplies the exclusive workspace process lock and typed atomic store. Publication writes and synchronizes a temporary file, renames it atomically, and synchronizes the containing directory before Server acknowledges the new revision. Workspace settings and the environment declaration live in `.workspace/config.json`, the declaration in its `environment` section. Incomplete uploads stage below `.workspace/cache/uploads/` and are discarded when the Server loads.
 
 Recovery retains a valid backup and preserves corrupt original bytes under `.workspace/corrupt/`. Unknown state, draft and composer formats stay read-only rather than being migrated. A damaged environment record does not block access to ordinary files and sessions. Invalid external configuration leaves the last valid configuration in use and exposes `configProblem`; a parse failure does not authorize overwriting it.
 

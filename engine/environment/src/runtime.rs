@@ -725,8 +725,7 @@ pub(crate) fn guest_command(
     if let Some(loader) = &opts.loader {
         c.arg("--loader").arg(loader);
     }
-    let stores = opts.root.join(".workspace/environment/stores");
-    let toolchains = stores.join("toolchains");
+    let toolchains = crate::lifecycle::store_dir(opts, "toolchains");
     fs::create_dir_all(&toolchains)?;
     c.arg("--bind")
         .arg(format!("{}:/opt/toolchains", toolchains.display()));
@@ -737,7 +736,7 @@ pub(crate) fn guest_command(
         ));
     }
     if interactive {
-        let home = stores.join("home/work");
+        let home = crate::lifecycle::store_dir(opts, "home/work");
         fs::create_dir_all(&home)?;
         c.arg("--bind")
             .arg(format!("{}:/home/work", home.display()));
@@ -758,7 +757,10 @@ pub(crate) fn guest_command(
             c.arg("--hide").arg(mask);
         }
     }
-    let resolver = opts.root.join(".workspace/environment/network/resolv.conf");
+    let resolver = opts
+        .root
+        .join(access::DIRECTORY)
+        .join(crate::store::keys::RESOLVER);
     if resolver.is_file() {
         c.arg("--bind")
             .arg(format!("{}:/etc/resolv.conf", resolver.display()));
@@ -919,7 +921,7 @@ mod tests {
             true,
         )
         .unwrap();
-        let launcher = temp.path().join(".workspace/agents/tools/launchers/codex");
+        let launcher = temp.path().join(".workspace/cache/tools/launchers/codex");
         let binding = format!("{}:/usr/local/bin/codex", launcher.display());
         assert!(command.get_args().any(|arg| arg == binding.as_str()));
         assert!(
@@ -979,27 +981,33 @@ mod tests {
             .iter()
             .find(|bind| bind.ends_with(":/opt/workflow/tools"))
             .unwrap();
-        assert!(payload.starts_with(&format!("{root}/.workspace/agents/tools/payload/")));
+        assert!(payload.starts_with(&format!("{root}/.workspace/cache/tools/payload/")));
         assert!(binds.contains(&format!(
-            "{root}/.workspace/agents/tools/claude/2.1.283:/opt/workflow/tools/claude"
+            "{root}/.workspace/cache/tools/claude/2.1.283:/opt/workflow/tools/claude"
         )));
         assert!(binds.contains(&format!("{root}:/workspace")));
-        assert!(!binds.iter().any(|bind| bind.contains("/.workspace/environment/tools")));
+        assert!(!binds.iter().any(|bind| bind.contains("/.workspace/agents/tools")));
+        assert!(binds.contains(&format!(
+            "{root}/.workspace/cache/toolchains:/opt/toolchains"
+        )));
+        assert!(binds.contains(&format!(
+            "{root}/.workspace/environment/stores/home/work:/home/work"
+        )));
         let hides = values(&args, "--hide");
         assert_eq!(hides, crate::access::guest_masks());
         for private in [
             "state",
             "environment",
             "documents",
-            "uploads",
             "corrupt",
             "trash",
             "engine.lock",
             "agents",
+            "cache",
         ] {
             assert!(hides.contains(&format!("/workspace/.workspace/{private}")), "{private}");
         }
-        for visible in ["config.json", "env.json", "proxy", "services"] {
+        for visible in ["config.json", "proxy", "services"] {
             assert!(
                 !hides.iter().any(|hide| hide == &format!("/workspace/.workspace/{visible}")),
                 "{visible}"
@@ -1014,8 +1022,8 @@ mod tests {
         assert_eq!(envs["CODEX_HOME"], "/home/work/.codex");
         assert_eq!(envs["CLAUDE_CONFIG_DIR"], "/home/work/.claude");
         assert_eq!(envs["HOME"], "/home/work");
-        assert!(!temp.path().join(".workspace/environment/tools/payloads").exists());
-        assert!(!temp.path().join(".workspace/environment/launchers").exists());
+        assert!(!temp.path().join(".workspace/agents/tools").exists());
+        assert!(!temp.path().join(".workspace/environment/tools").exists());
     }
     #[test]
     fn provisioning_guests_see_neither_the_workspace_nor_agent_homes() {

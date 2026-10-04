@@ -443,6 +443,46 @@ fn external_config_changes_win_compare_and_swap_and_invalid_files_stay_untouched
 }
 
 #[test]
+fn environment_declaration_lives_in_config_and_never_blocks_other_settings() {
+    let (t, mut w) = temp_workspace();
+    let path = t.path().join(".workspace/config.json");
+    let written: V = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(written["environment"], json!({"version":1,"packages":[],"env":{},"post_scripts":[]}));
+    assert!(!t.path().join(".workspace/env.json").exists());
+    // An absent section declares the image defaults and stays absent when settings are saved.
+    let mut without = written.clone();
+    without.as_object_mut().unwrap().remove("environment");
+    storage::write_json(&path, &without).unwrap();
+    w.reload_config();
+    let update = |w: &mut workspace::Workspace, theme: &str| {
+        let revision = w.revision;
+        let mut config = j(&w.state)["config"].clone();
+        config["appearance"]["theme"] = json!(theme);
+        cmd(w, "updateConfig", json!({"config":config,"expectedRevision":revision}))["kind"].clone()
+    };
+    assert_eq!(update(&mut w, "dark"), "updated");
+    let saved: V = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(saved["appearance"]["theme"], "dark");
+    assert!(saved.get("environment").is_none(), "{saved}");
+    // A bad declaration is refused by an explicit save but does not block settings updates.
+    let mut invalid = saved.clone();
+    invalid["environment"] = json!({"version":1,"python":["3.13","3.13"]});
+    let opened = cmd(&mut w, "openFile", json!({"path":".workspace/config.json"}));
+    cmd(
+        &mut w,
+        "editFile",
+        json!({"path":".workspace/config.json","shown":opened["disk"],"text":invalid.to_string()}),
+    );
+    assert_ne!(cmd(&mut w, "saveFile", json!({"path":".workspace/config.json"}))["kind"], "saved");
+    cmd(&mut w, "discardDraft", json!({"path":".workspace/config.json"}));
+    storage::write_json(&path, &invalid).unwrap();
+    w.reload_config();
+    assert_eq!(update(&mut w, "light"), "updated");
+    let kept: V = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(kept["environment"], invalid["environment"]);
+}
+
+#[test]
 fn saving_preserves_executable_mode_and_move_never_overwrites_orphan_drafts() {
     use std::os::unix::fs::PermissionsExt;
     let (t, mut w) = temp_workspace();
@@ -522,7 +562,8 @@ fn list_directory_shows_protected_workspace_configuration_without_credentials() 
     assert_eq!(root.first().map(String::as_str), Some(".workspace"));
     let internal = paths(cmd(&mut w, "listDirectory", json!({"path":".workspace","showHidden":true})));
     assert!(internal.contains(&".workspace/agents".to_owned()));
-    assert!(internal.contains(&".workspace/env.json".to_owned()));
+    assert!(internal.contains(&".workspace/config.json".to_owned()));
+    assert!(!internal.iter().any(|p| p.ends_with("env.json") || p.ends_with("/cache")));
     assert!(!internal.iter().any(|p| p.contains("state") || p.ends_with("engine.lock")));
     assert_eq!(
         paths(cmd(&mut w, "listDirectory", json!({"path":".workspace/agents/codex","showHidden":true}))),

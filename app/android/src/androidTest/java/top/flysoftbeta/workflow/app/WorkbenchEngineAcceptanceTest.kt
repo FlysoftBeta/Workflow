@@ -21,6 +21,7 @@ import top.flysoftbeta.workflow.MainActivity
 import top.flysoftbeta.workflow.core.layout.*
 import top.flysoftbeta.workflow.core.resource.FileStatus
 import top.flysoftbeta.workflow.core.store.SaveResult
+import top.flysoftbeta.workflow.core.store.saveEnvironmentDeclaration
 import top.flysoftbeta.workflow.feature.editor.TextEditorController
 import top.flysoftbeta.workflow.feature.files.FilesExplorer
 import top.flysoftbeta.workflow.platform.connection.ConnectionStatus
@@ -312,7 +313,7 @@ class WorkbenchEngineAcceptanceTest {
         compose.waitUntil(10_000) { runBlocking { store.openFile("rebuild-cwd/before-cwd.txt").text.trim() } == "/workspace/rebuild-cwd" }
         val generation = terminal.generation.value
         val spec = """{"version":1,"env":{"WF_REBUILD_UI":"confirmed"}}"""
-        assertTrue(runBlocking { store.saveFile(top.flysoftbeta.workflow.core.io.WorkspacePaths.ENVIRONMENT, spec) } is SaveResult.Saved)
+        assertTrue(runBlocking { store.saveEnvironmentDeclaration(spec) } is SaveResult.Saved)
         // No environment.reconcile RPC: saving the declaration must be sufficient.
         val engine = AppGraph.engine(compose.activity)
         compose.waitUntil(120_000) {
@@ -331,7 +332,7 @@ class WorkbenchEngineAcceptanceTest {
         assertNotNull(wb.panels[panel.id])
         assertEquals("retained draft", store.state.value.drafts["rebuild-draft.txt"]?.text)
         screenshot("rebuild-ready")
-        note("Saved env.json automatically built; confirmed UI restart retained terminal cwd/panel and unsaved draft")
+        note("Saved environment declaration automatically built; confirmed UI restart retained terminal cwd/panel and unsaved draft")
     }
 
     private fun dragFrom(node: SemanticsNodeInteraction, target: Offset) {

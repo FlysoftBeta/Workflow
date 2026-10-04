@@ -275,7 +275,7 @@ fn exact_upload_does_not_replace_raced_destination_and_service_assets_use_store(
         UploadOutcome::Failed { .. }
     ));
     files.cancel_upload(&mut uploads, &exact.upload_id);
-    assert_eq!(files.store.list("uploads").unwrap(), Vec::<String>::new());
+    assert_eq!(files.store.list("cache/uploads").unwrap(), Vec::<String>::new());
     let path = ".workspace/services/example/providers/list.yaml";
     let upload = files
         .begin_upload(
@@ -393,8 +393,10 @@ fn protected_fixture() -> (tempfile::TempDir, FileWork, FileWorkState) {
         ("agents/claude/.credentials.json", "{\"secret\":1}"),
         ("agents/claude/.claude.json", "{\"oauthAccount\":{}}"),
         ("agents/claude/projects/-workspace/s.jsonl", "{}\n"),
+        ("cache/tools/payload/abc/codex/bin/codex", "binary"),
+        ("cache/tools/payload/abc/notices/codex-LICENSE", "license"),
+        // Former locations are not migrated; they stay private like any unknown entry.
         ("agents/tools/payload/abc/codex/bin/codex", "binary"),
-        ("agents/tools/payload/abc/notices/codex-LICENSE", "license"),
     ] {
         files.store.write_text(key, text).unwrap();
     }
@@ -424,12 +426,11 @@ fn root_listing_shows_the_protected_workspace_folder_with_only_allowlisted_child
                 ".workspace/proxy",
                 ".workspace/services",
                 ".workspace/config.json",
-                ".workspace/env.json",
             ]
         );
         assert_eq!(
             names(&files.list_directory(".workspace/agents", hidden).unwrap()),
-            [".workspace/agents/claude", ".workspace/agents/codex", ".workspace/agents/tools"]
+            [".workspace/agents/claude", ".workspace/agents/codex"]
         );
         assert_eq!(
             names(&files.list_directory(".workspace/agents/codex", hidden).unwrap()),
@@ -440,16 +441,12 @@ fn root_listing_shows_the_protected_workspace_folder_with_only_allowlisted_child
             [".workspace/agents/claude/settings.json"]
         );
     }
-    assert_eq!(
-        names(&files.list_directory(".workspace/agents/tools/payload/abc", false).unwrap()),
-        [
-            ".workspace/agents/tools/payload/abc/codex",
-            ".workspace/agents/tools/payload/abc/notices",
-        ]
-    );
     for private in [
         ".workspace/state",
         ".workspace/environment",
+        ".workspace/cache",
+        ".workspace/cache/tools/payload/abc",
+        ".workspace/agents/tools",
         ".workspace/agents/codex/sessions",
         ".workspace/agents/claude/projects",
     ] {
@@ -468,6 +465,8 @@ fn credentials_and_private_state_are_refused_by_every_file_api() {
         ".workspace/state/workspace.json",
         ".workspace/engine.lock",
         ".workspace/config.json.bak",
+        ".workspace/env.json",
+        ".workspace/cache/tools/payload/abc/notices/codex-LICENSE",
     ] {
         assert!(files.open(&mut state, path).is_err(), "{path}");
         assert!(files.read_chunk(path, 0, 16).is_err(), "{path}");
@@ -502,7 +501,7 @@ fn credentials_and_private_state_are_refused_by_every_file_api() {
 }
 
 #[test]
-fn editable_configuration_is_writable_while_tools_and_folders_are_protected() {
+fn editable_configuration_is_writable_while_folders_are_protected() {
     let (_d, files, mut state) = protected_fixture();
     let config = ".workspace/agents/codex/config.toml";
     let open = files.open(&mut state, config).unwrap();
@@ -537,16 +536,14 @@ fn editable_configuration_is_writable_while_tools_and_folders_are_protected() {
         }
         assert_eq!(files.file_operation(&mut state, &create(path)), FileOutcome::Done, "{path}");
     }
-    let tool = ".workspace/agents/tools/payload/abc/notices/codex-LICENSE";
-    let shown = files.open(&mut state, tool).unwrap();
-    assert_eq!(shown.disk_text.as_deref(), Some("license"));
-    assert_eq!(files.read_chunk(tool, 0, 3).unwrap().data, b"lic");
-    let refused = files.edit(&mut state, tool, "changed", &shown.disk).unwrap_err();
+    let folder = ".workspace/agents/codex";
+    let refused = files.edit(&mut state, folder, "changed", &FileVersion::default()).unwrap_err();
     assert_eq!(refused.kind, "read_only");
-    assert!(files.write_text(tool, "changed").is_err());
+    assert!(files.write_text(".workspace/cache/tools/payload/abc/notices/codex-LICENSE", "changed").is_err());
     assert!(state.drafts.is_empty());
     for path in [
-        ".workspace/agents/tools/payload/abc/new",
+        ".workspace/cache/new",
+        ".workspace/env.json",
         ".workspace/agents/codex/other.txt",
         ".workspace/agents/codex/auth.json",
         ".workspace/agents/new/config.toml",

@@ -2,25 +2,21 @@
 //!
 //! The explorer shows `.workspace` as a protected folder. This module is its only allowlist:
 //! FileWork enforces [`classify`] for every client file API, and the guest mask returned by
-//! [`guest_masks`] is derived from the same tables. Private Engine state is therefore hidden from
-//! file APIs and masked in the guest, while explicitly editable configuration stays reachable in
-//! both places. Agent homes and tools appear in the guest only at their own mount points, so a
-//! walk of `/workspace` never reaches agent credentials through a second path.
+//! [`guest_masks`] is derived from the same tables. Private Engine state and the disposable
+//! `cache/` are therefore hidden from file APIs and masked in the guest, while explicitly editable
+//! configuration stays reachable in both places. Agent homes appear in the guest only at their own
+//! mount points, so a walk of `/workspace` never reaches agent credentials through a second path.
 
 /// The directory name below the workspace root.
 pub const DIRECTORY: &str = ".workspace";
 /// Guest mount point of the workspace root for processes that see user files.
 pub const GUEST_WORKSPACE: &str = "/workspace";
-/// Engine-installed agent tools, relative to `.workspace/`. They are visible and read-only.
-pub const AGENT_TOOLS: &str = "agents/tools";
 
 /// What client file APIs may do with a visible `.workspace/` entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Access {
     /// A fixed folder: listed, never created, renamed, moved, deleted or written.
     Folder,
-    /// Visible, readable Engine-installed content; every write is refused.
-    ReadOnly,
     /// Explicitly editable configuration.
     Editable,
 }
@@ -39,24 +35,23 @@ enum Top {
     EditableTree,
     /// A fixed folder of fixed per-service folders whose descendants are editable.
     Services,
-    /// Agent homes and the read-only agent tools, mounted at their own guest paths.
+    /// Agent homes, mounted at their own guest paths.
     Agents,
-    /// Engine-private state, masked in the guest.
+    /// Engine-private state and the disposable cache, masked in the guest.
     Private,
 }
 const TOP_LEVEL: &[(&str, Top)] = &[
     ("config.json", Top::File),
-    ("env.json", Top::File),
     ("proxy", Top::EditableTree),
     ("services", Top::Services),
     ("agents", Top::Agents),
     ("state", Top::Private),
     ("environment", Top::Private),
     ("documents", Top::Private),
-    ("uploads", Top::Private),
     ("corrupt", Top::Private),
     ("trash", Top::Private),
     ("engine.lock", Top::Private),
+    ("cache", Top::Private),
 ];
 
 /// A coding agent's home below `.workspace/agents/<id>/`, bound at [`AgentHome::guest`].
@@ -136,9 +131,6 @@ fn agents(rest: &[&str]) -> Option<Access> {
     let Some((first, tail)) = rest.split_first() else {
         return Some(Access::Folder);
     };
-    if format!("agents/{first}") == AGENT_TOOLS {
-        return Some(Access::ReadOnly);
-    }
     let home = AGENT_HOMES.iter().find(|home| home.id == *first)?;
     let Some((entry, below)) = tail.split_first() else {
         return Some(Access::Folder);
@@ -167,7 +159,7 @@ pub fn key(path: &str) -> Option<&str> {
 }
 
 /// Guest paths hidden below `/workspace/.workspace` for processes that mount the workspace:
-/// private top-level state and the agents tree, whose homes and tools are mounted at their own
+/// private top-level state, the cache and the agents tree, whose homes are mounted at their own
 /// guest paths.
 ///
 /// The runtime matches hides against resolved guest paths and maps a directory back to the guest
@@ -187,7 +179,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn explicit_allowlist_exposes_configuration_and_tools_only() {
+    fn explicit_allowlist_exposes_configuration_only() {
         for key in [
             "",
             "proxy",
@@ -201,7 +193,6 @@ mod tests {
         }
         for key in [
             "config.json",
-            "env.json",
             "proxy/config.yaml",
             "proxy/providers/list.yaml",
             "services/example/providers/list.yaml",
@@ -217,13 +208,6 @@ mod tests {
         ] {
             assert_eq!(classify(key), Some(Access::Editable), "{key}");
         }
-        for key in [
-            "agents/tools",
-            "agents/tools/payload/abc/codex/bin/codex",
-            "agents/tools/claude/2.1.0/bin/claude",
-        ] {
-            assert_eq!(classify(key), Some(Access::ReadOnly), "{key}");
-        }
     }
 
     #[test]
@@ -234,7 +218,14 @@ mod tests {
             "environment",
             "environment/stores/home/work",
             "documents/chat/conversations.json",
+            "cache",
+            "cache/uploads/x",
+            "cache/tools/payload/abc/codex/bin/codex",
+            "cache/generations/job/rootfs",
+            "env.json",
             "uploads/x",
+            "agents/tools",
+            "agents/tools/payload/abc/codex/bin/codex",
             "corrupt",
             "trash/1/entry.json",
             "engine.lock",
@@ -284,6 +275,7 @@ mod tests {
             }
         }
         assert!(masks.contains(&format!("{prefix}agents")));
+        assert!(masks.contains(&format!("{prefix}cache")));
         for home in AGENT_HOMES {
             assert!(home.guest.starts_with("/home/work/"));
         }
@@ -292,7 +284,7 @@ mod tests {
     #[test]
     fn internal_paths_map_to_store_keys() {
         assert!(is_internal(".workspace"));
-        assert!(is_internal(".workspace/env.json"));
+        assert!(is_internal(".workspace/config.json"));
         assert!(!is_internal(".workspaces"));
         assert!(!is_internal("docs/.workspace"));
         assert_eq!(key(".workspace"), Some(""));

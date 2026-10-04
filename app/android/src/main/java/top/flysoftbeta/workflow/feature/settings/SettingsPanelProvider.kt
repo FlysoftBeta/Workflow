@@ -16,7 +16,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import top.flysoftbeta.workflow.app.panel.*
 import top.flysoftbeta.workflow.core.config.AppConfig
+import top.flysoftbeta.workflow.core.io.WorkspacePaths
 import top.flysoftbeta.workflow.core.layout.Panel
+import top.flysoftbeta.workflow.core.layout.TextCursor
 import top.flysoftbeta.workflow.core.store.ConfigUpdate
 import top.flysoftbeta.workflow.ui.design.*
 import top.flysoftbeta.workflow.ui.design.icons.Sym
@@ -45,6 +47,15 @@ internal class SettingsController(val context: PanelContext, val services: Setti
                 is ConfigUpdate.Blocked -> context.commands.snackbar("配置文件有错误，请先修正：${result.problem}")
                 is ConfigUpdate.Failed -> context.commands.snackbar("设置未保存：${result.message}")
             }
+        }
+    }
+
+    /** The environment declaration is the `environment` section of config.json; open the file there. */
+    fun openEnvironmentDeclaration() {
+        context.scope.launch {
+            val text = runCatching { context.store.openFile(WorkspacePaths.CONFIG).diskText }.getOrNull()
+            val line = text?.lineSequence()?.indexOfFirst { it.trimStart().startsWith("\"environment\"") } ?: -1
+            context.commands.openFile(WorkspacePaths.CONFIG, if (line >= 0) TextCursor(line, 0) else null)
         }
     }
 

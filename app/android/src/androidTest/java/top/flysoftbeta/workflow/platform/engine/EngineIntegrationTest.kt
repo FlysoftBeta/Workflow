@@ -18,7 +18,6 @@ import top.flysoftbeta.workflow.agent.model.*
 import top.flysoftbeta.workflow.agent.rpc.*
 import kotlinx.serialization.json.*
 import top.flysoftbeta.workflow.core.connection.*
-import top.flysoftbeta.workflow.core.io.WorkspacePaths
 import top.flysoftbeta.workflow.core.json.Json
 import top.flysoftbeta.workflow.core.layout.*
 import top.flysoftbeta.workflow.core.store.*
@@ -128,7 +127,7 @@ class EngineIntegrationTest {
         store.editFile("draft.txt", "unsaved survives restart", shown)
         assertTrue(store.flush())
         assertEquals("unsaved survives restart", store.state.value.drafts["draft.txt"]?.text)
-        val probe = runGuest(engine, listOf("/bin/bash", "-lc", "set -ex; test \"\$(id -u)\" = 1000; test \"\$PWD\" = /home/work; test ! -e /workspace/.workspace/state/workspace.json; test ! -e /workspace/.workspace/environment; test -f /workspace/.workspace/env.json; python3 --version; node --version; sudo -n id -u; printf shared > /workspace/from-guest.txt"))
+        val probe = runGuest(engine, listOf("/bin/bash", "-lc", "set -ex; test \"\$(id -u)\" = 1000; test \"\$PWD\" = /home/work; test ! -e /workspace/.workspace/state/workspace.json; test ! -e /workspace/.workspace/environment; test -f /workspace/.workspace/config.json; test ! -e /workspace/.workspace/cache; python3 --version; node --version; sudo -n id -u; printf shared > /workspace/from-guest.txt"))
         assertEquals(probe.error, 0, probe.exitCode)
         assertEquals("shared", store.openFile("from-guest.txt").text)
         val net = runGuest(engine, listOf("/usr/bin/curl", "-sS", "--max-time", "30", "-o", "/dev/null", "-w", "%{http_code}", "https://api.openai.com"))
@@ -146,7 +145,7 @@ class EngineIntegrationTest {
         val spec = Json.stringify(mapOf("version" to 1, "python" to listOf("3.14"), "node" to emptyList<String>(),
             "packages" to emptyList<String>(), "env" to mapOf("WF_ACCEPTANCE" to "reconciled"),
             "post_scripts" to listOf(mapOf("id" to "home-marker", "run" to "printf home-kept > \"\$HOME/qa-marker\"", "user" to "work"))))
-        assertTrue(store.saveFile(WorkspacePaths.ENVIRONMENT, spec) is SaveResult.Saved)
+        assertTrue(store.saveEnvironmentDeclaration(spec) is SaveResult.Saved)
         rpc.request("environment.reconcile")
         val pending = withTimeout(120_000) { engine.health.first { it is EnvironmentHealth.NeedsRestart || it is EnvironmentHealth.Failed } }
         assertTrue(engine.describe(pending), pending is EnvironmentHealth.NeedsRestart)
@@ -165,13 +164,15 @@ class EngineIntegrationTest {
         assertEquals("unsaved survives restart", store.state.value.drafts["draft.txt"]?.text)
         assertTrue(store.flush())
         // Data is physically owned by the Server under the new metadata directory only.
-        assertTrue(File(root, ".workspace/env.json").isFile)
+        assertTrue(File(root, ".workspace/config.json").isFile)
+        assertTrue(File(root, ".workspace/cache/generations").isDirectory)
+        assertFalse(File(root, ".workspace/env.json").exists())
         assertFalse(File(root, ".workflow").exists())
         assertFalse(File(root, "container.json").exists())
 
         val failedSpec = Json.stringify(mapOf("version" to 1, "node" to emptyList<String>(),
             "post_scripts" to listOf(mapOf("id" to "rollback", "run" to "printf bad > \"\$HOME/qa-marker\"; exit 23", "user" to "work"))))
-        assertTrue(store.saveFile(WorkspacePaths.ENVIRONMENT, failedSpec) is SaveResult.Saved)
+        assertTrue(store.saveEnvironmentDeclaration(failedSpec) is SaveResult.Saved)
         rpc.request("environment.reconcile")
         val failed = withTimeout(120_000) { engine.health.first { it is EnvironmentHealth.Failed } }
         assertTrue("Failed rebuild must retain the verified environment", failed.usable)
@@ -275,7 +276,7 @@ class EngineIntegrationTest {
         // Changing only declared environment variables needs no home snapshot. Verify Engine
         // owns stopping/rehydrating chat independently of the transactional post-script tests.
         val declaration = Json.stringify(mapOf("version" to 1, "env" to mapOf("WF_CHAT_RESTART" to "yes")))
-        assertTrue(store.saveFile(WorkspacePaths.ENVIRONMENT, declaration) is SaveResult.Saved)
+        assertTrue(store.saveEnvironmentDeclaration(declaration) is SaveResult.Saved)
         rpc.request("environment.reconcile")
         val pending = withTimeout(120_000) { engine.health.first { it is EnvironmentHealth.NeedsRestart || it is EnvironmentHealth.Failed } }
         assertTrue(engine.describe(pending), pending is EnvironmentHealth.NeedsRestart)

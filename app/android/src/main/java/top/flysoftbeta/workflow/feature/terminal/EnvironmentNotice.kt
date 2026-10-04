@@ -34,7 +34,7 @@ import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
 
 /**
  * The environment's state where the terminal is visible (docs/ux/README.md §6): progress while it is prepared,
- * "环境配置已更改 [重启环境]" only after env.json changed, and a failed build with its log. Nothing
+ * "环境配置已更改 [重启环境]" only after the environment declaration changed, and a failed build with its log. Nothing
  * while the environment is simply ready.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

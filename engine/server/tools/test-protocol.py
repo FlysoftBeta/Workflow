@@ -85,7 +85,7 @@ def protocol(engine, root):
     assert c.call('documents.read',{'namespace':'services.proxy','key':'config.yaml'})['document']=='mode: rule\n'
 
     c.call('services.report',{'serviceId':'network','state':{'dnsServers':['127.0.0.1','::1'],'connected':False}})
-    assert (root/'.workspace/environment/network/resolv.conf').read_text()=='nameserver 127.0.0.1\nnameserver ::1\n'
+    assert (root/'.workspace/cache/network/resolv.conf').read_text()=='nameserver 127.0.0.1\nnameserver ::1\n'
     c.call('services.report',{'serviceId':'network','state':{'dnsServers':['bad\nsearch example.invalid'],'connected':True}},error='invalid_params')
     epoch=c.call('services.executor.register',{'serviceId':'proxy','executorId':'host-contract'})['epoch']
     c.call('services.report',{'serviceId':'proxy','epoch':epoch,'state':{'running':False,'reason':'permission_missing'}})
@@ -130,7 +130,7 @@ def lifecycle(engine,root):
     assert status['phase']=='ready',status;generation=status['active']['generation']
     p=c.call('process.spawn',{'argv':['/bin/sleep','20']})['processId']
     c.call('environment.restart');assert c.call('process.wait',{'processId':p})['running']
-    (root/'.workspace/env.json').write_text(json.dumps({'version':1,'env':{'CHANGE':'1'}}))
+    declare(root,{'version':1,'env':{'CHANGE':'1'}})
     c.call('environment.reconcile')
     for _ in range(100):
         status=c.call('environment.status')
@@ -147,7 +147,7 @@ def lifecycle(engine,root):
     assert status['active']['generation']!=generation and not c.call('process.wait',{'processId':p})['running']
     generation=status['active']['generation']
     spec={'version':1,'python':['3.14','3.13'],'node':[],'packages':[],'env':{},'post_scripts':[{'id':'fails','run':'FAIL_BUILD','user':'root'}]}
-    (root/'.workspace/env.json').write_text(json.dumps(spec));c.call('environment.reconcile')
+    declare(root,spec);c.call('environment.reconcile')
     for _ in range(100):
         status=c.call('environment.status')
         if status['phase']=='failed':break
@@ -162,9 +162,16 @@ def lifecycle(engine,root):
     c.close();print('Lifecycle fixture: nonblocking build, language arrays, script failure retains usable generation, explicit retry, pending restart stops managed jobs: PASS')
 
 
+def declare(root,spec):
+    # The environment declaration is the `environment` section of config.json.
+    path=root/'.workspace/config.json';config=json.loads(path.read_text());config['environment']=spec
+    path.write_text(json.dumps(config))
+
+
 def processes(engine,root,runtime,loader,rootfs):
     # The real Rust runtime executes every tested command. No host shell fallback.
-    private=root/'.workspace/environment';g=private/'generations/fixture';g.mkdir(parents=True)
+    private=root/'.workspace/environment';private.mkdir(parents=True);g=root/'.workspace/cache/generations/fixture';g.mkdir(parents=True)
+    (root/'.workspace/cache/toolchains').mkdir()
     (g/'rootfs').symlink_to(rootfs.resolve(),target_is_directory=True)
     (private/'environment.json').write_text(json.dumps({'format':1,'status':'ready','active':{'generation':'fixture','profile':'fixture','config':{'env':{}}},'pending':None,'failure':None}))
     c=Client(engine,root,['--runtime',runtime,'--loader',loader]);c.hello()

@@ -23,27 +23,28 @@ Environment owns `.workspace/` path construction, typed atomic publication, imag
 
 ## Workspace storage
 
-The user chooses a root that appears as `/workspace` in the environment. User files live directly beneath it. Engine configuration and private data live in its `.workspace/` directory:
+The user chooses a root that appears as `/workspace` in the environment. User files live directly beneath it. Engine configuration and data live in its `.workspace/` directory, which holds only configuration and persistent data at its top level; everything that can be rebuilt sits in `cache/`:
 
 ```text
 <workspace-root>/
   .workspace/
-    config.json                 revisioned workspace configuration
-    env.json                    environment declaration
+    config.json                 revisioned configuration, including the `environment` declaration
     proxy/                      canonical proxy YAML, providers and redacted logs
     services/<serviceId>/        other explicitly editable service files
+    agents/{codex,claude}/       agent homes: configuration, credentials and sessions
     state/workspace.json         sessions, layouts, file and composer drafts
     state/terminals.json         terminal identities and metadata
     state/services/              measured service reports
     state/local-services/        desired state and executor receipts
-    environment/                 generations, home, tools and activation records
+    environment/                 lifecycle record and the persistent guest home store
     documents/                   typed or opaque documents and revision sidecars
-    uploads/                     incomplete restricted uploads
     trash/                       reversible deletions
     corrupt/                     original data retained during recovery
+    cache/                       disposable: tools, image archives, generations, toolchains,
+                                 resolver and incomplete uploads
 ```
 
-The explorer shows `.workspace` as a protected folder: Environment's typed allowlist (`access.rs`) marks editable configuration, read-only agent tools, and hidden private state, and FileWork and Workspace layout enforce it, so panels can open allowed files such as `.workspace/proxy/` while the file API rejects private state. Environment supplies the guest mask for private state. Runtime metadata inside a generation uses `.workflow-engine/`, a separate implementation directory. Version 1.0.0 has no migration or scan for historical layouts. The proxy directory is `.workspace/proxy/`; the earlier `.workspace/services/proxy/` location is not imported.
+The explorer shows `.workspace` as a protected folder: Environment's typed allowlist (`access.rs`) marks editable configuration and hides private state and the cache, and FileWork and Workspace layout enforce it, so panels can open allowed files such as `.workspace/proxy/` while the file API rejects private state. Environment supplies the guest mask for private state and the cache. Deleting `cache/` while the Engine is stopped is safe: the tools payload is extracted again from the APK, and an environment whose generation disappeared becomes unavailable and is rebuilt from its declaration once it has been used before. Runtime metadata inside a generation uses `.workflow-engine/`, a separate implementation directory. Version 1.0.0 has no migration or scan for historical layouts: a former `env.json`, `agents/tools/` or generation below `environment/` is ignored, so an existing workspace rebuilds its environment from the `environment` section of `config.json`. The proxy directory is `.workspace/proxy/`; the earlier `.workspace/services/proxy/` location is not imported.
 
 The Server commits session/layout state and Working Resources in one workspace transaction through the Environment store. Keeping their domain ownership separate must not split archive protection into independently acknowledged writes. Atomic publication, backup and quarantine happen before a committed revision is acknowledged.
 

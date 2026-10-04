@@ -5,7 +5,7 @@ import java.math.BigInteger
 import java.math.BigDecimal
 import kotlinx.serialization.json.*
 
-const val ENGINE_CONTRACT_SHA256 = "523d1d89a729ff353c57c73d3dee7abc35789532a57680e16c68c8b33aee6d49"
+const val ENGINE_CONTRACT_SHA256 = "c2d074903686852a52586ecdc598625e3e4e3617c2bff9034b3f0ce2a593e15d"
 
 class Activation private constructor(override val json: JsonElement) : WireValue {
     private val fields = Wire.obj(json)
@@ -233,11 +233,12 @@ class ClientConfig private constructor(override val json: JsonElement) : WireVal
     private val fields = Wire.obj(json)
     val `agent`: AgentConfig = Wire.member(fields, "agent", "{\"backend\":\"codex\",\"backends\":{}}").let { value -> AgentConfig.decode(value) }
     val `appearance`: Appearance = Wire.member(fields, "appearance", "{\"density\":\"compact\",\"fontScale\":1.0,\"monoFontSize\":13.0,\"theme\":\"system\"}").let { value -> Appearance.decode(value) }
+    val `environment`: EnvironmentSpec? = Wire.optional(fields, "environment")?.let { value -> Wire.nullable(value) { EnvironmentSpec.decode(it) } }
     val `launcher`: List<String> = Wire.member(fields, "launcher", "[\"workbench\",\"proxy\",\"settings\"]").let { value -> Wire.array(value).map { Wire.string(it) } }
     val `overlay`: OverlayConfig = Wire.member(fields, "overlay", "{\"enabled\":false,\"extraApps\":[]}").let { value -> OverlayConfig.decode(value) }
     val `terminal`: TerminalConfig = Wire.member(fields, "terminal", "{\"extraKeysPinned\":false}").let { value -> TerminalConfig.decode(value) }
     val `version`: BigInteger = Wire.member(fields, "version").let { value -> Wire.integer(value) .also { require(it >= BigInteger("0")) { "Value outside the Engine schema" } } }
-    val additional: Map<String, OpaqueJson> = fields.filterKeys { it !in setOf<String>("agent", "appearance", "launcher", "overlay", "terminal", "version") }.mapValues { (_, value) -> OpaqueJson.decode(value) }
+    val additional: Map<String, OpaqueJson> = fields.filterKeys { it !in setOf<String>("agent", "appearance", "environment", "launcher", "overlay", "terminal", "version") }.mapValues { (_, value) -> OpaqueJson.decode(value) }
     companion object { fun decode(value: JsonElement) = ClientConfig(value) }
 }
 
@@ -977,11 +978,12 @@ class ConfigPatch private constructor(override val json: JsonElement) : WireValu
     private val fields = Wire.obj(json)
     val `agent`: AgentPatch? = Wire.optional(fields, "agent")?.let { value -> AgentPatch.decode(value) }
     val `appearance`: AppearancePatch? = Wire.optional(fields, "appearance")?.let { value -> AppearancePatch.decode(value) }
+    val `environment`: EnvironmentSpec2? = Wire.optional(fields, "environment")?.let { value -> EnvironmentSpec2.decode(value) }
     val `launcher`: Array_of_string? = Wire.optional(fields, "launcher")?.let { value -> Array_of_string.decode(value) }
     val `overlay`: OverlayPatch? = Wire.optional(fields, "overlay")?.let { value -> OverlayPatch.decode(value) }
     val `terminal`: TerminalPatch? = Wire.optional(fields, "terminal")?.let { value -> TerminalPatch.decode(value) }
     val `version`: uint64? = Wire.optional(fields, "version")?.let { value -> uint64.decode(value) }
-    val additional: Map<String, OpaqueJson> = fields.filterKeys { it !in setOf<String>("agent", "appearance", "launcher", "overlay", "terminal", "version") }.mapValues { (_, value) -> OpaqueJson.decode(value) }
+    val additional: Map<String, OpaqueJson> = fields.filterKeys { it !in setOf<String>("agent", "appearance", "environment", "launcher", "overlay", "terminal", "version") }.mapValues { (_, value) -> OpaqueJson.decode(value) }
     companion object { fun decode(value: JsonElement) = ConfigPatch(value) }
 }
 
@@ -1152,6 +1154,18 @@ class EnvironmentSpec private constructor(override val json: JsonElement) : Wire
     val `version`: BigInteger = Wire.member(fields, "version").let { value -> Wire.integer(value) .also { require(it >= BigInteger("0")) { "Value outside the Engine schema" } } }
     val additional: Map<String, OpaqueJson> = fields.filterKeys { it !in setOf<String>("env", "node", "packages", "post_scripts", "python", "version") }.mapValues { (_, value) -> OpaqueJson.decode(value) }
     companion object { fun decode(value: JsonElement) = EnvironmentSpec(value) }
+}
+
+class EnvironmentSpec2 private constructor(override val json: JsonElement) : WireValue {
+    private val fields = Wire.obj(json)
+    val `env`: Map<String, String>? = Wire.optional(fields, "env")?.let { value -> Wire.obj(value).mapValues { (_, it) -> Wire.string(it) } }
+    val `node`: List<String>? = Wire.optional(fields, "node")?.let { value -> Wire.array(value).map { Wire.string(it) } }
+    val `packages`: List<String>? = Wire.optional(fields, "packages")?.let { value -> Wire.array(value).map { Wire.string(it) } }
+    val `post_scripts`: List<PostScript>? = Wire.optional(fields, "post_scripts")?.let { value -> Wire.array(value).map { PostScript.decode(it) } }
+    val `python`: List<String>? = Wire.optional(fields, "python")?.let { value -> Wire.array(value).map { Wire.string(it) } }
+    val `version`: BigInteger = Wire.member(fields, "version").let { value -> Wire.integer(value) .also { require(it >= BigInteger("0")) { "Value outside the Engine schema" } } }
+    val additional: Map<String, OpaqueJson> = fields.filterKeys { it !in setOf<String>("env", "node", "packages", "post_scripts", "python", "version") }.mapValues { (_, value) -> OpaqueJson.decode(value) }
+    companion object { fun decode(value: JsonElement) = EnvironmentSpec2(value) }
 }
 
 class EnvironmentStatus private constructor(override val json: JsonElement) : WireValue {

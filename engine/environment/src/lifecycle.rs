@@ -1,9 +1,10 @@
 use crate::{
-    Error, Result, Store,
-    json::{OpaqueObject, canonical_bytes},
+    Error, Result, Store, access,
+    json::{OpaqueJson, OpaqueObject, canonical_bytes},
     model::*,
     persist::{self, now},
     runtime,
+    store::keys::{CONFIG, ENVIRONMENT_STATE, GENERATIONS, IMAGES, PERSISTENT_STORES, TOOLCHAINS},
 };
 use std::{
     collections::{BTreeMap, HashSet},
@@ -16,6 +17,27 @@ use std::{
     },
 };
 const ENVCTL: &str = "/usr/local/libexec/workflow/envctl";
+/// A host path below `.workspace/`.
+fn internal(opts: &Options, key: &str) -> PathBuf {
+    opts.root.join(access::DIRECTORY).join(key)
+}
+fn generation_dir(opts: &Options, id: &str) -> Result<PathBuf> {
+    Ok(internal(opts, GENERATIONS).join(persist::identifier(id)?))
+}
+/// The host directory of an image store. The toolchains are reinstalled by every build, so they
+/// live in the cache; other stores, such as the guest home, hold user data.
+pub(crate) fn store_dir(opts: &Options, name: &str) -> PathBuf {
+    if name == "toolchains" {
+        internal(opts, TOOLCHAINS)
+    } else {
+        internal(opts, PERSISTENT_STORES).join(name)
+    }
+}
+/// The `environment` section of `config.json`, the only part of that file Environment reads.
+#[derive(serde::Deserialize)]
+struct Declaration<T> {
+    environment: Option<T>,
+}
 #[derive(Clone, Default)]
 pub struct Options {
     pub root: PathBuf,
@@ -37,15 +59,15 @@ pub struct Environment {
 impl Environment {
     pub fn load(options: Options, running: Arc<AtomicUsize>) -> Result<Self> {
         let store = Store::open(&options.root)?;
-        let dir = store.path("environment")?;
-        fs::create_dir_all(dir.join("generations"))?;
-        fs::create_dir_all(dir.join("stores"))?;
+        let generations = store.path(GENERATIONS)?;
+        fs::create_dir_all(&generations)?;
+        fs::create_dir_all(store.path(PERSISTENT_STORES)?)?;
         let mut read_only = false;
         #[derive(serde::Deserialize)]
         struct Format {
             format: u64,
         }
-        let mut state = match store.read::<Format>("environment/environment.json") {
+        let mut state = match store.read::<Format>(ENVIRONMENT_STATE) {
             Ok(None) => EnvironmentState::default(),
             Ok(Some(header)) if header.format != 1 => {
                 read_only = true;
@@ -59,12 +81,12 @@ impl Environment {
                     ..EnvironmentState::default()
                 }
             }
-            _ => match store.read::<EnvironmentState>("environment/environment.json") {
+            _ => match store.read::<EnvironmentState>(ENVIRONMENT_STATE) {
                 Ok(Some(state)) => state,
                 _ => {
-                    store.quarantine("environment/environment.json")?;
+                    store.quarantine(ENVIRONMENT_STATE)?;
                     let mut restored = store
-                        .read::<EnvironmentState>("environment/environment.json.bak")
+                        .read::<EnvironmentState>(&format!("{ENVIRONMENT_STATE}.bak"))
                         .ok()
                         .flatten()
                         .filter(|v| v.format == 1)
@@ -85,7 +107,7 @@ impl Environment {
                 .as_ref()
                 .filter(|id| persist::identifier(id).is_ok())
             {
-                crate::home_stage::cleanup(&dir.join("generations").join(job));
+                crate::home_stage::cleanup(&generations.join(job));
             }
             state.status = if state.active.is_some() {
                 LifecycleStatus::Ready
@@ -97,6 +119,9 @@ impl Environment {
                 "Previous build was interrupted; retry to rebuild",
                 None,
             ));
+        }
+        if !read_only {
+            forget_missing_generations(&mut state, &generations, &store_dir(&options, "toolchains"));
         }
         let out = Self {
             options,
@@ -111,30 +136,31 @@ impl Environment {
         }
         Ok(out)
     }
-    fn directory(&self) -> PathBuf {
-        self.store
-            .path("environment")
-            .expect("fixed environment key")
-    }
+    /// Identifies the requested declaration: only the `environment` section of `config.json`
+    /// counts, so editing other settings never schedules a build.
     fn requested_spec_hash(&self) -> String {
-        let read = (|| -> std::io::Result<String> {
-            let file = File::open(self.store.path("env.json").map_err(std::io::Error::other)?)?;
-            let size = file.metadata()?.len();
-            let mut bytes = Vec::new();
-            file.take(32 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
-            Ok(format!("{size}:{}", persist::hash(&bytes)))
-        })();
-        read.unwrap_or_else(|error| format!("unreadable:{:?}", error.kind()))
+        match self.store.read::<Declaration<OpaqueJson>>(CONFIG) {
+            Ok(Some(declaration)) => persist::hash(&canonical_bytes(&declaration.environment)),
+            Ok(None) => "missing".into(),
+            Err(error) => format!("unreadable:{}", error.kind),
+        }
     }
     pub fn reconcile_changed(shared: &Arc<Mutex<Self>>) {
         let changed = {
             let e = shared.lock().unwrap();
+            // A removed cache leaves an enrolled environment without its generation; rebuild it
+            // like a changed declaration. Failed builds keep their fingerprint guard.
+            let evicted = e.state.active.is_none()
+                && e.state.failure.is_none()
+                && e.state.status == LifecycleStatus::Unavailable;
             !e.read_only
                 && !e.building
                 && e.options.runtime.is_some()
                 && (e.options.apk.is_some() || e.options.image.is_some())
                 && (e.state.requested_spec_hash.is_some() || e.state.active.is_some())
-                && e.state.requested_spec_hash.as_deref() != Some(e.requested_spec_hash().as_str())
+                && (evicted
+                    || e.state.requested_spec_hash.as_deref()
+                        != Some(e.requested_spec_hash().as_str()))
         };
         if changed {
             let _ = Self::reconcile(shared, false);
@@ -147,9 +173,8 @@ impl Environment {
                 "environment state is read-only",
             ));
         }
-        self.store.backup("environment/environment.json")?;
-        self.store
-            .write("environment/environment.json", &self.state)
+        self.store.backup(ENVIRONMENT_STATE)?;
+        self.store.write(ENVIRONMENT_STATE, &self.state)
     }
     pub fn status(&self) -> EnvironmentStatus {
         EnvironmentStatus {
@@ -229,10 +254,7 @@ impl Environment {
         std::thread::spawn(move || {
             let fingerprint = persist::hash(&canonical_bytes(&spec));
             let outcome = build(&opts, &mut spec, active.as_ref(), &job, &shared2);
-            let generation = opts
-                .root
-                .join(".workspace/environment/generations")
-                .join(&job);
+            let generation = internal(&opts, GENERATIONS).join(&job);
             if outcome.is_err() {
                 crate::home_stage::cleanup(&generation);
             }
@@ -341,12 +363,9 @@ impl Environment {
             .ok_or_else(|| Error::business("unavailable", "no verified environment"))?;
         verify_generation(&self.options, &activation)?;
         if let Err(error) = activate(&self.options, &activation) {
-            crate::home_stage::cleanup(
-                &self
-                    .directory()
-                    .join("generations")
-                    .join(&activation.generation),
-            );
+            if let Ok(generation) = generation_dir(&self.options, &activation.generation) {
+                crate::home_stage::cleanup(&generation);
+            }
             self.state.pending = None;
             self.state.status = LifecycleStatus::Failed;
             self.state.failure = Some(Failure::new("activate", error.message.clone(), None));
@@ -375,10 +394,7 @@ impl Environment {
             )
         })?;
         runtime::validate_command(argv, cwd, env)?;
-        let generation = self
-            .directory()
-            .join("generations")
-            .join(persist::identifier(&active.generation)?);
+        let generation = generation_dir(&self.options, &active.generation)?;
         let mut command = runtime::guest_command(
             &self.options,
             &generation,
@@ -395,15 +411,41 @@ impl Environment {
     }
 }
 fn read_spec(store: &Store) -> Result<EnvironmentSpec> {
-    let spec = store
-        .read("env.json")?
-        .ok_or_else(|| Error::business("io", "environment declaration not found"))?;
+    let declaration: Declaration<EnvironmentSpec> = store
+        .read(CONFIG)?
+        .ok_or_else(|| Error::business("io", "configuration not found"))?;
+    // A configuration without the section declares the image defaults.
+    let spec = declaration.environment.unwrap_or_default();
     validate(&spec)?;
     Ok(spec)
 }
+/// Forget activations whose generation or toolchains were removed with the cache. The
+/// environment becomes unavailable and is rebuilt from its declaration.
+fn forget_missing_generations(state: &mut EnvironmentState, generations: &Path, toolchains: &Path) {
+    let missing = |activation: &Activation| {
+        persist::identifier(&activation.generation).is_err()
+            || !generations.join(&activation.generation).is_dir()
+            || !toolchains.is_dir()
+    };
+    if state.previous.as_ref().is_some_and(missing) {
+        state.previous = None;
+    }
+    if state.pending.as_ref().is_some_and(missing) {
+        state.pending = None;
+        if state.status == LifecycleStatus::PendingRestart {
+            state.status = LifecycleStatus::Ready;
+        }
+    }
+    if state.active.as_ref().is_some_and(missing) {
+        state.active = None;
+        state.status = LifecycleStatus::Unavailable;
+        state.stage = "cache_removed".into();
+        state.failure = None;
+    }
+}
 pub fn validate(spec: &EnvironmentSpec) -> Result<()> {
     if spec.version != 1 {
-        return Err(Error::invalid("env.version must be 1"));
+        return Err(Error::invalid("environment.version must be 1"));
     }
     for (lang, list) in [("python", &spec.python), ("node", &spec.node)] {
         let mut seen = HashSet::new();
@@ -422,7 +464,7 @@ pub fn validate(spec: &EnvironmentSpec) -> Result<()> {
                 || !seen.insert(version)
             {
                 return Err(Error::invalid(&format!(
-                    "{lang}: duplicate or invalid version"
+                    "environment.{lang}: duplicate or invalid version"
                 )));
             }
         }
@@ -438,12 +480,12 @@ pub fn validate(spec: &EnvironmentSpec) -> Result<()> {
             || !package.as_bytes()[0].is_ascii_alphanumeric()
             || !seen.insert(package)
         {
-            return Err(Error::invalid("packages: invalid or duplicate package"));
+            return Err(Error::invalid("environment.packages: invalid or duplicate package"));
         }
     }
     for (key, value) in spec.env.iter().flatten() {
         if !runtime::env_key(key) || value.contains('\0') {
-            return Err(Error::invalid("env: invalid variable"));
+            return Err(Error::invalid("environment.env: invalid variable"));
         }
     }
     let mut seen = HashSet::new();
@@ -451,7 +493,7 @@ pub fn validate(spec: &EnvironmentSpec) -> Result<()> {
         persist::identifier(&script.id)?;
         if !seen.insert(&script.id) || script.run.trim().is_empty() || script.run.contains('\0') {
             return Err(Error::invalid(
-                "post_scripts: duplicate id or invalid script",
+                "environment.post_scripts: duplicate id or invalid script",
             ));
         }
     }
@@ -475,7 +517,7 @@ fn image(opts: &Options) -> Result<(PathBuf, PathBuf, ImageIndex)> {
     let (image, index) = if let (Some(image), Some(index)) = (&opts.image, &opts.image_index) {
         (image.clone(), index.clone())
     } else if let Some(apk) = &opts.apk {
-        let dir = opts.root.join(".workspace/environment/image");
+        let dir = internal(opts, IMAGES);
         fs::create_dir_all(&dir)?;
         let mut zip = zip::ZipArchive::new(File::open(apk)?)
             .map_err(|_| Error::business("invalid_apk", "APK cannot be read"))?;
@@ -588,10 +630,7 @@ fn build(
         verify_generation(opts, active)?;
         return Ok(active.clone());
     }
-    let generation = opts
-        .root
-        .join(".workspace/environment/generations")
-        .join(persist::identifier(job)?);
+    let generation = generation_dir(opts, job)?;
     let python = spec.python.as_ref().unwrap();
     let node = spec.node.as_ref().unwrap();
     let scripts = spec.post_scripts.as_ref().unwrap();
@@ -599,7 +638,6 @@ fn build(
     let mut step = 1;
     progress(shared, "install", step, total);
     runtime::install_generation(opts, &image, &index, &generation)?;
-    let stores = opts.root.join(".workspace/environment/stores");
     for seed in metadata.metadata.stores.values() {
         let name = &seed.store;
         if name.starts_with('/')
@@ -609,7 +647,7 @@ fn build(
         {
             return Err(Error::business("invalid_image", "invalid seed store path"));
         }
-        let target = stores.join(name);
+        let target = store_dir(opts, name);
         if seed.seed != "if-absent" || !target.exists() {
             merge_seed(&generation.join("seeds").join(name), &target)?;
         }
@@ -730,18 +768,12 @@ fn verify_tools(opts: &Options, generation: &Path, env: &BTreeMap<String, String
     Ok(())
 }
 fn verify_generation(opts: &Options, activation: &Activation) -> Result<()> {
-    let generation = opts
-        .root
-        .join(".workspace/environment/generations")
-        .join(persist::identifier(&activation.generation)?);
+    let generation = generation_dir(opts, &activation.generation)?;
     runtime::verify_generation(opts, &generation)?;
     verify_tools(opts, &generation, &activation.environment)
 }
 fn activate(opts: &Options, activation: &Activation) -> Result<()> {
-    let generation = opts
-        .root
-        .join(".workspace/environment/generations")
-        .join(persist::identifier(&activation.generation)?);
+    let generation = generation_dir(opts, &activation.generation)?;
     let mut cmd = runtime::guest_command(
         opts,
         &generation,
@@ -751,9 +783,7 @@ fn activate(opts: &Options, activation: &Activation) -> Result<()> {
         false,
     )?;
     cmd.arg(ENVCTL).arg("activate").arg(&activation.profile);
-    let active_link = opts
-        .root
-        .join(".workspace/environment/stores/toolchains/active");
+    let active_link = store_dir(opts, "toolchains").join("active");
     let previous = fs::read_link(&active_link).ok();
     runtime::checked(cmd, "profile activation")?;
     if let Err(error) = crate::home_stage::activate(&opts.root, &generation) {
@@ -892,19 +922,87 @@ mod tests {
         };
         store.write("environment/environment.json", &state).unwrap();
         store
-            .write_text(
-                "environment/generations/job/post-home/secret",
-                "do not retain",
-            )
+            .write_text("cache/generations/job/post-home/secret", "do not retain")
             .unwrap();
+        fs::create_dir_all(store.path("cache/generations/previous").unwrap()).unwrap();
+        fs::create_dir_all(store.path("cache/toolchains").unwrap()).unwrap();
         let recovered = environment(dir.path());
         assert_eq!(recovered.state.status, LifecycleStatus::Ready);
         assert!(recovered.status().usable);
-        assert!(
-            !store
-                .exists("environment/generations/job/post-home")
-                .unwrap()
-        );
+        assert!(!store.exists("cache/generations/job/post-home").unwrap());
         assert_eq!(recovered.state.failure.unwrap().stage, "interrupted");
+    }
+    #[test]
+    fn removed_cache_forgets_generations_and_requests_a_rebuild() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let activation = |generation: &str| Activation {
+            generation: generation.into(),
+            ..Activation::default()
+        };
+        let state = EnvironmentState {
+            status: LifecycleStatus::PendingRestart,
+            active: Some(activation("active")),
+            pending: Some(activation("pending")),
+            previous: Some(activation("previous")),
+            requested_spec_hash: Some("hash".into()),
+            ..EnvironmentState::default()
+        };
+        store.write("environment/environment.json", &state).unwrap();
+        for kept in ["cache/generations/active", "cache/toolchains"] {
+            fs::create_dir_all(store.path(kept).unwrap()).unwrap();
+        }
+        let partial = environment(dir.path());
+        assert_eq!(partial.state.active, Some(activation("active")));
+        assert_eq!(partial.state.pending, None);
+        assert_eq!(partial.state.previous, None);
+        assert_eq!(partial.state.status, LifecycleStatus::Ready);
+        fs::remove_dir_all(store.path("cache").unwrap()).unwrap();
+        let evicted = environment(dir.path());
+        assert_eq!(evicted.state.active, None);
+        assert_eq!(evicted.state.status, LifecycleStatus::Unavailable);
+        assert_eq!(evicted.state.stage, "cache_removed");
+        assert!(evicted.state.failure.is_none());
+        assert!(store.path("cache/generations").unwrap().is_dir());
+    }
+    #[test]
+    fn declaration_is_the_environment_section_of_the_configuration() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let env = environment(dir.path());
+        assert_eq!(env.requested_spec_hash(), "missing");
+        assert_eq!(read_spec(&store).unwrap_err().kind, "io");
+        store
+            .write_text("config.json", r#"{"version":2,"appearance":{"theme":"dark"}}"#)
+            .unwrap();
+        let defaults = env.requested_spec_hash();
+        assert_eq!(read_spec(&store).unwrap(), EnvironmentSpec::default());
+        store
+            .write_text(
+                "config.json",
+                r#"{"version":2,"appearance":{"theme":"light"},"environment":{"version":1,"python":["3.13"]}}"#,
+            )
+            .unwrap();
+        let declared = env.requested_spec_hash();
+        assert_ne!(declared, defaults);
+        assert_eq!(read_spec(&store).unwrap().python, Some(vec!["3.13".into()]));
+        // Other settings and key order do not change the requested declaration.
+        store
+            .write_text(
+                "config.json",
+                r#"{"environment":{"python":["3.13"],"version":1},"version":2,"appearance":{"theme":"dark"}}"#,
+            )
+            .unwrap();
+        assert_eq!(env.requested_spec_hash(), declared);
+        store
+            .write_text(
+                "config.json",
+                r#"{"version":2,"environment":{"version":1,"python":["3.13","3.13"]}}"#,
+            )
+            .unwrap();
+        assert!(read_spec(&store).unwrap_err().message.starts_with("environment.python"));
+        store.write_text("config.json", r#"{"version":2,"environment":{"version":1,"python":"3.13"}}"#).unwrap();
+        assert!(read_spec(&store).is_err());
+        assert_ne!(env.requested_spec_hash(), declared);
     }
 }

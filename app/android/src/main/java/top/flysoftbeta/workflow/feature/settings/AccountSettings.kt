@@ -110,7 +110,7 @@ internal class HubAccountCommands(private val hub: AgentHub) : AccountCommands {
         is EnvironmentHealth.NeedsRestart -> "需要重启"
     }
     SettingRow("环境状态", status)
-    TextButton(onClick = { c.context.commands.openFile(top.flysoftbeta.workflow.core.io.WorkspacePaths.ENVIRONMENT) }) { Text("编辑环境配置") }
+    TextButton(onClick = c::openEnvironmentDeclaration) { Text("编辑环境配置") }
     when (val h = health) {
         is EnvironmentHealth.NeedsRestart -> TextButton(enabled = !busy, onClick = { c.context.scope.launch {
             val decision = c.context.commands.decide(top.flysoftbeta.workflow.app.panel.DecisionRequest(

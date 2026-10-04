@@ -49,7 +49,7 @@ APK assembly verifies the image profile, architecture, archive size, and SHA-256
 
 Chat is linked into the Server binary, so the payload carries no chat service or Java runtime. Android production depends on `:app:client`; instrumentation uses the process-launch fixture from `:app:client` test fixtures.
 
-APK assembly invokes `engine/tools/package.py` for the selected architecture. It produces `tools.json` and `tools.zip` under generated assets at `assets/environment/tools/`. The payload combines pinned Codex and the retained upstream notices. Its catalog records per-file size, SHA-256 and executable mode, archive identity, architecture, fixed guest entry points and the pinned optional Claude release. Ignored downloads live beneath `third_party/.cache/engine`; a corrupt existing cache fails rather than being silently replaced.
+APK assembly invokes `engine/tools/package.py` for the selected architecture. It produces `tools.json` and `tools.zip` under generated assets at `assets/environment/tools/`. The payload combines pinned Codex, the Code Mode host from the same Codex release, and the retained upstream notices. Its catalog records per-file size, SHA-256 and executable mode, archive identity, architecture, fixed guest entry points and the pinned optional Claude release. Ignored downloads live beneath `third_party/.cache/engine`; a corrupt existing cache fails rather than being silently replaced.
 
 For a standalone distribution, package the same pair:
 

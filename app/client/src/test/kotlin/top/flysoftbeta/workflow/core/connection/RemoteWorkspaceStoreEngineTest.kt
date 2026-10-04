@@ -145,7 +145,7 @@ class RemoteWorkspaceStoreEngineTest {
         }, scope)
         val store = RemoteWorkspaceStore(rpc, scope, "client-test").also { it.start() }
         suspend fun ready() { assertEquals(StoreStatus.READY, withTimeout(5_000) { store.awaitReady() }.status) }
-        fun uploads() = File(root, ".workspace/uploads").list().orEmpty().toList()
+        fun uploads() = File(root, ".workspace/cache/uploads").list().orEmpty().toList()
         override fun close() { store.disconnect(); scope.cancel(); assertTrue(process.waitFor(3, TimeUnit.SECONDS)) }
     }
 }

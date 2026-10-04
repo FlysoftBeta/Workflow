@@ -220,13 +220,13 @@ impl Store {
             .iter()
             .map(|ip| format!("nameserver {ip}\n"))
             .collect();
-        let path = self.path("environment/network/resolv.conf")?;
+        let path = self.path(keys::RESOLVER)?;
         persist::atomic(&path, text.as_bytes())?;
         fs::set_permissions(path, fs::Permissions::from_mode(0o644))?;
         Ok(())
     }
     pub fn begin_upload(&self) -> Result<UploadStage> {
-        let path = self.path(&format!("uploads/{}", uuid::Uuid::new_v4()))?;
+        let path = self.path(&format!("{}/{}", keys::UPLOADS, uuid::Uuid::new_v4()))?;
         fs::create_dir_all(path.parent().unwrap())?;
         let file = OpenOptions::new()
             .create_new(true)
@@ -363,9 +363,27 @@ pub mod keys {
     use crate::{Result, persist::identifier};
     pub const WORKSPACE_STATE: &str = "state/workspace.json";
     pub const TERMINAL_STATE: &str = "state/terminals.json";
+    /// Revisioned configuration, including the `environment` declaration.
     pub const CONFIG: &str = "config.json";
-    pub const DECLARATION: &str = "env.json";
     pub const SERVICE_REPORTS: &str = "state/services";
+    /// The private environment lifecycle record.
+    pub const ENVIRONMENT_STATE: &str = "environment/environment.json";
+    /// Persistent image stores, such as the guest home.
+    pub const PERSISTENT_STORES: &str = "environment/stores";
+    /// Disposable data: everything below is rebuilt on demand, so deleting the directory is safe.
+    pub const CACHE: &str = "cache";
+    /// Built environment generations.
+    pub const GENERATIONS: &str = "cache/generations";
+    /// Customized image archives extracted from the APK.
+    pub const IMAGES: &str = "cache/images";
+    /// The rebuildable `/opt/toolchains` store.
+    pub const TOOLCHAINS: &str = "cache/toolchains";
+    /// The verified Engine tools payload, launchers, optional Claude and measured tool state.
+    pub const TOOLS: &str = "cache/tools";
+    /// The guest resolver derived from the reported host DNS.
+    pub const RESOLVER: &str = "cache/network/resolv.conf";
+    /// Incomplete restricted uploads.
+    pub const UPLOADS: &str = "cache/uploads";
     pub fn document(namespace: &str, key: &str) -> Result<String> {
         Ok(format!(
             "documents/{}/{}.json",

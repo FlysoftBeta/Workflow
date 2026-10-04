@@ -12,7 +12,16 @@
       "archiveBytes": 100264936,
       "member": "codex-aarch64-unknown-linux-musl",
       "sha256": "9cbc3cdcc18ca336523ffa7d64207a1ae1f5991f823081d0a37bcb3a748de093",
-      "bytes": 246724968
+      "bytes": 246724968,
+      "codeModeHost": {
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+        "archive": "tar.gz",
+        "archiveSha256": "e83742806da98e9a77ad24309ebd1629e8227755a341ad0b428f885c97bb318e",
+        "archiveBytes": 25988177,
+        "member": "codex-code-mode-host-aarch64-unknown-linux-musl",
+        "sha256": "86ad54f94a0473cac795d02bd461904c4d7dad7603c7cfc4f9d6a19c2fd1256d",
+        "bytes": 66855936
+      }
     },
     "x86_64": {
       "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-x86_64-unknown-linux-musl.tar.gz",
@@ -21,7 +30,16 @@
       "archiveBytes": 107868387,
       "member": "codex-x86_64-unknown-linux-musl",
       "sha256": "3e2584f3f3829a43a0495011a1cecb2facbe64a2403e2b682351fd9c2983f970",
-      "bytes": 285340072
+      "bytes": 285340072,
+      "codeModeHost": {
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+        "archive": "tar.gz",
+        "archiveSha256": "3516f9b8bbe6bc06ee7bdb92b293a17eab194b3f10b9b9ea10c5b839e972d7fc",
+        "archiveBytes": 27470020,
+        "member": "codex-code-mode-host-x86_64-unknown-linux-musl",
+        "sha256": "67b86142bac5cead11b8420cf32d3a2bf88c8868d71733f351ed7c5d95a953e0",
+        "bytes": 73962384
+      }
     }
   },
   "distribution": "engine-tools-payload"
