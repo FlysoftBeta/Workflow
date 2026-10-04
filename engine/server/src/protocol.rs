@@ -180,15 +180,11 @@ pub struct Notification<T> {
     pub params: T,
 }
 
+#[cfg(test)]
 pub fn parse<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T> {
     strict_json(bytes).map_err(|e| Error::invalid(&e.to_string()))
 }
 pub fn params<T: serde::de::DeserializeOwned>(value: &OpaqueObject) -> Result<T> {
-    strict_json(&serde_json::to_vec(value).map_err(|e| Error::invalid(&e.to_string()))?)
-        .map_err(|e| Error::invalid(&e.to_string()))
-}
-#[cfg(test)]
-pub fn object<T: Serialize>(value: &T) -> Result<OpaqueObject> {
     strict_json(&serde_json::to_vec(value).map_err(|e| Error::invalid(&e.to_string()))?)
         .map_err(|e| Error::invalid(&e.to_string()))
 }
