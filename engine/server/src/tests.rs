@@ -502,3 +502,46 @@ fn nested_service_assets_are_explicit_safe_paths() {
     );
     assert_eq!(file["diskText"], "items: []\n");
 }
+
+#[test]
+fn list_directory_shows_protected_workspace_configuration_without_credentials() {
+    let (t, mut w) = temp_workspace();
+    let private = t.path().join(".workspace");
+    fs::create_dir_all(private.join("agents/codex")).unwrap();
+    fs::write(private.join("agents/codex/config.toml"), "model = \"x\"\n").unwrap();
+    fs::write(private.join("agents/codex/auth.json"), "{\"token\":\"secret\"}").unwrap();
+    let paths = |value: V| -> Vec<String> {
+        value
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["path"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let root = paths(cmd(&mut w, "listDirectory", json!({"path":"","showHidden":false})));
+    assert_eq!(root.first().map(String::as_str), Some(".workspace"));
+    let internal = paths(cmd(&mut w, "listDirectory", json!({"path":".workspace","showHidden":true})));
+    assert!(internal.contains(&".workspace/agents".to_owned()));
+    assert!(internal.contains(&".workspace/env.json".to_owned()));
+    assert!(!internal.iter().any(|p| p.contains("state") || p.ends_with("engine.lock")));
+    assert_eq!(
+        paths(cmd(&mut w, "listDirectory", json!({"path":".workspace/agents/codex","showHidden":true}))),
+        [".workspace/agents/codex/config.toml"]
+    );
+    assert_eq!(
+        cmd(&mut w, "openFile", json!({"path":".workspace/agents/codex/config.toml"}))["diskText"],
+        "model = \"x\"\n"
+    );
+    for (name, args) in [
+        ("openFile", json!({"path":".workspace/agents/codex/auth.json"})),
+        ("listDirectory", json!({"path":".workspace/state","showHidden":true})),
+        ("deletePath", json!({"path":".workspace"})),
+    ] {
+        let refused = w
+            .command(name, &args)
+            .map(|reply| j(&reply.value)["kind"] == "failed")
+            .unwrap_or(true);
+        assert!(refused, "{name} {args}");
+    }
+    assert!(private.join("agents/codex/auth.json").exists());
+}

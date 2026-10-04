@@ -69,8 +69,38 @@ internal object ExplorerModel {
         }
     }
 
-    /** Whether [paths] may be moved into [folder]: not into itself, a descendant, or where they already are. */
-    fun canMoveInto(paths: List<String>, folder: String): Boolean = paths.isNotEmpty() && paths.all { path ->
-        !WorkspacePaths.isWithin(folder, path) && WorkspacePaths.parent(path) != folder
+    /**
+     * `.workspace` and everything listed below it. The Engine shows this protected folder with only
+     * its allowlisted configuration and tools, and refuses renames, moves, copies and deletions there.
+     */
+    fun isProtected(path: String): Boolean =
+        path == WorkspacePaths.INTERNAL || path.startsWith(WorkspacePaths.INTERNAL + "/")
+
+    /**
+     * Whether [paths] may be moved into [folder]: not into itself, a descendant, or where they already
+     * are, and never into or out of the protected `.workspace` folder.
+     */
+    fun canMoveInto(paths: List<String>, folder: String): Boolean = paths.isNotEmpty() && !isProtected(folder) && paths.all { path ->
+        !isProtected(path) && !WorkspacePaths.isWithin(folder, path) && WorkspacePaths.parent(path) != folder
     }
+
+    /** Uploads and dropped external content go only to ordinary folders. */
+    fun canImportInto(folder: String): Boolean = !isProtected(folder)
+
+    /**
+     * Whether revealing [path] needs "show hidden files": a dot-named component other than the
+     * protected `.workspace` folder, which is always listed.
+     */
+    fun needsHiddenFiles(path: String): Boolean =
+        (ancestors(path) + path).any { it != WorkspacePaths.INTERNAL && WorkspacePaths.name(it).startsWith(".") }
+
+    /** Row-menu capabilities of an entry; protected entries keep opening, creation and path actions only. */
+    data class RowCapabilities(val structural: Boolean, val upload: Boolean, val terminal: Boolean)
+
+    fun rowCapabilities(path: String): RowCapabilities =
+        if (isProtected(path)) RowCapabilities(structural = false, upload = false, terminal = false)
+        else RowCapabilities(structural = true, upload = true, terminal = true)
+
+    /** Where a terminal opens for [directory]: the Engine starts terminals only in ordinary folders. */
+    fun terminalDirectory(directory: String): String = if (isProtected(directory)) "" else directory
 }

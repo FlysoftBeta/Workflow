@@ -159,14 +159,13 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
     override fun reveal(path: String) = reveal(path, updateSelection = true)
 
     private fun reveal(path: String, updateSelection: Boolean) {
-        if (WorkspacePaths.isHiddenInExplorer(path)) return
         val view = context.view.value
         val ancestors = ExplorerModel.ancestors(path)
         val expanded = (view.expanded + ancestors).distinct()
         if (expanded != view.expanded || (updateSelection && view.selected != path)) {
             context.updateView(view.copy(expanded = expanded, selected = if (updateSelection) path else view.selected))
         }
-        if (!showHidden && ancestors.plus(path).any { WorkspacePaths.name(it).startsWith(".") }) changeShowHidden(true)
+        if (!showHidden && ExplorerModel.needsHiddenFiles(path)) changeShowHidden(true)
         scrollTarget = path
     }
 
@@ -322,10 +321,12 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
     // ---- Import ------------------------------------------------------------------------------------
 
     fun upload(kind: ImportKind, directory: String = targetDirectory()) {
+        if (!ExplorerModel.canImportInto(directory)) { context.commands.snackbar(PROTECTED); return }
         context.scope.launch { reportImport(directory, importer.pick(kind, directory, OWNER)) }
     }
 
     fun importExternal(uris: List<android.net.Uri>, directory: String) {
+        if (!ExplorerModel.canImportInto(directory)) { context.commands.snackbar(PROTECTED); return }
         context.scope.launch { reportImport(directory, importer.importUris(uris, directory)) }
     }
 
@@ -365,13 +366,16 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
         MenuEntry.Action("collapseAll", "全部折叠", Sym.UnfoldLess) { collapseAll() },
         MenuEntry.Action("refresh", "刷新", Sym.Refresh) { refresh() },
         MenuEntry.Toggle("hidden", "显示隐藏文件", showHidden) { changeShowHidden(it) },
-        MenuEntry.Action("terminal", "在终端中打开", Sym.Terminal) { context.commands.newTerminal(targetDirectory()) },
+        MenuEntry.Action("terminal", "在终端中打开", Sym.Terminal) {
+            context.commands.newTerminal(ExplorerModel.terminalDirectory(targetDirectory()))
+        },
     )
 
-    /** Long-press menu of a row (docs/ux/README.md §4.2). */
+    /** Long-press menu of a row (docs/ux/README.md §4.2); `.workspace` entries are protected. */
     fun rowMenu(entry: FileEntry): List<MenuGroup> {
         val path = entry.path
         val folder = if (entry.isDirectory) path else WorkspacePaths.parent(path)
+        val can = ExplorerModel.rowCapabilities(path)
         return buildList {
             if (!entry.isDirectory) add(MenuGroup("open", listOf(
                 MenuEntry.Action("open", "打开", Sym.OpenInNew) { open(entry) },
@@ -380,9 +384,9 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
             add(MenuGroup("new", buildList {
                 add(MenuEntry.Action("newFile", "新建文件", Sym.NoteAdd) { beginCreate(folder, false) })
                 add(MenuEntry.Action("newFolder", "新建文件夹", Sym.CreateNewFolder) { beginCreate(folder, true) })
-                if (entry.isDirectory) add(MenuEntry.Submenu("upload", "上传…", Sym.UploadFile, listOf(uploadGroup { path })))
+                if (entry.isDirectory && can.upload) add(MenuEntry.Submenu("upload", "上传…", Sym.UploadFile, listOf(uploadGroup { path })))
             }))
-            add(MenuGroup("edit", listOf(
+            if (can.structural) add(MenuGroup("edit", listOf(
                 MenuEntry.Action("rename", "重命名", Sym.Edit) { beginRename(path) },
                 MenuEntry.Action("duplicate", "复制", Sym.ContentCopy) { duplicate(path) },
                 MenuEntry.Action("moveTo", "移动到…", Sym.DriveFileMove) { moving = listOf(path) },
@@ -398,7 +402,7 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
                     context.commands.snackbar("已复制")
                 })
                 add(MenuEntry.Action("attach", "附加到对话", Sym.AddComment) { context.commands.attachToConversation(listOf(path)) })
-                add(MenuEntry.Action("terminal", "在终端中打开", Sym.Terminal) { context.commands.newTerminal(folder) })
+                if (can.terminal) add(MenuEntry.Action("terminal", "在终端中打开", Sym.Terminal) { context.commands.newTerminal(folder) })
                 if (!entry.isDirectory) add(MenuEntry.Action("openWith", "用其他应用打开", Sym.OpenInNew) {
                     context.scope.launch {
                         if (!WorkspaceIntents.openWith(appContext, path)) context.commands.snackbar("无法读取文件或没有可用的应用")
@@ -418,6 +422,7 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
 
     companion object {
         const val OWNER = "explorer"
+        private const val PROTECTED = "该位置由应用保留"
 
         /** Store/file-system messages are English and technical; keep them short for the UI. */
         fun shortReason(message: String): String = when {
@@ -425,7 +430,9 @@ internal class FilesExplorer(val context: ExplorerContext, private val appContex
             message.startsWith("Nothing to") -> "文件不存在"
             message.startsWith("Cannot move a directory into itself") || message.startsWith("Cannot copy a folder into itself") -> "不能移动到自身内部"
             message.startsWith("File too large") -> "文件过大"
-            message.startsWith("Not an editable workspace path") -> "该位置由应用保留"
+            message.startsWith("Not an editable workspace path", ignoreCase = true) -> PROTECTED
+            message.contains("protected and read-only") -> "受保护的只读项"
+            message.startsWith("configuration cannot be", ignoreCase = true) -> "受保护的配置不能移动或删除"
             else -> message.take(60)
         }
     }

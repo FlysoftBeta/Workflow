@@ -1,5 +1,6 @@
 //! Workspace persistence, environment lifecycle and the sole guest execution API.
 //! Wire formats and client transport are owned by the Server.
+pub mod access;
 pub mod config;
 pub mod documents;
 pub mod services;
