@@ -1,9 +1,5 @@
 //! The backend-neutral control surface used only by the Chat service, plus small concurrency helpers.
-use crate::{
-    error::Result,
-    model::*,
-    service::launch_env::Secret,
-};
+use crate::{error::Result, model::*, service::launch_env::Secret};
 use std::{
     sync::{Arc, Condvar, Mutex},
     time::{Duration, Instant},

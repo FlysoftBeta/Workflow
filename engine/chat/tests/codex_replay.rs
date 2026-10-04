@@ -69,7 +69,9 @@ fn backend(envelopes: Vec<Envelope>) -> (CodexBackend, Arc<FakeRuntime>, Arc<Eve
     (codex, runtime, store)
 }
 fn t(state: &AgentState) -> ThreadState {
-    thread(state, BackendKind::Codex, THREAD).cloned().expect("thread")
+    thread(state, BackendKind::Codex, THREAD)
+        .cloned()
+        .expect("thread")
 }
 fn text(parts: &str) -> Vec<UserPart> {
     vec![UserPart::Text { text: parts.into() }]
@@ -107,9 +109,17 @@ fn full_session_replay() {
     assert!(limits.upsell.is_some());
     let models = status.models.unwrap();
     assert_eq!(models.models.len(), 7);
-    let astra = models.models.iter().find(|m| m.id == "gpt-6-astra").unwrap();
+    let astra = models
+        .models
+        .iter()
+        .find(|m| m.id == "gpt-6-astra")
+        .unwrap();
     assert_eq!(
-        astra.efforts.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(),
+        astra
+            .efforts
+            .iter()
+            .map(|e| e.id.as_str())
+            .collect::<Vec<_>>(),
         ["low", "medium", "high", "xhigh", "max", "ultra"]
     );
 
@@ -119,7 +129,12 @@ fn full_session_replay() {
 
     // ---- turn 1: markdown + math
     codex
-        .send(THREAD, text("Answer in Markdown only…"), settings(), SendMode::Auto)
+        .send(
+            THREAD,
+            text("Answer in Markdown only…"),
+            settings(),
+            SendMode::Auto,
+        )
         .unwrap();
     store.wait("turn 1 completed", |s| {
         thread(s, BackendKind::Codex, THREAD)
@@ -148,16 +163,28 @@ fn full_session_replay() {
         })
         .collect();
     assert_eq!(reasoning.len(), 1);
-    assert_eq!(reasoning[0].summary, ["**Planning concise markdown response**"]);
+    assert_eq!(
+        reasoning[0].summary,
+        ["**Planning concise markdown response**"]
+    );
     let answer = final_message(&turn1).unwrap();
     assert_eq!(answer.status, ItemStatus::Completed);
     assert!(answer.text.contains("$e^{i\\pi}+1=0$"));
-    assert!(answer.text.contains("$$x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}$$"));
+    assert!(
+        answer
+            .text
+            .contains("$$x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}$$")
+    );
     assert_eq!(turn1.usage.as_ref().unwrap().total_tokens, 14781);
 
     // ---- turn 2: command approval, never answered without the user
     codex
-        .send(THREAD, text("Create a file named hello.txt…"), settings(), SendMode::Auto)
+        .send(
+            THREAD,
+            text("Create a file named hello.txt…"),
+            settings(),
+            SendMode::Auto,
+        )
         .unwrap();
     let key = RequestKey {
         backend: BackendKind::Codex,
@@ -174,7 +201,11 @@ fn full_session_replay() {
         Some("exec-ce9fed29-e98f-49e8-8463-345c427750b8")
     );
     assert_eq!(
-        pending.decisions.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
+        pending
+            .decisions
+            .iter()
+            .map(|d| d.id.as_str())
+            .collect::<Vec<_>>(),
         ["accept", "acceptWithExecpolicyAmendment", "cancel"]
     );
     assert_eq!(pending.decisions[1].kind, DecisionKind::AllowPersistent);
@@ -190,10 +221,16 @@ fn full_session_replay() {
     std::thread::sleep(Duration::from_millis(200));
     let process = runtime.process(0);
     assert!(
-        process.written().iter().all(|f| f.get("id") != Some(&json!(0))),
+        process
+            .written()
+            .iter()
+            .all(|f| f.get("id") != Some(&json!(0))),
         "nothing may answer id 0 before the user"
     );
-    assert_eq!(request(&store.state(), &key).unwrap().status, RequestStatus::Pending);
+    assert_eq!(
+        request(&store.state(), &key).unwrap().status,
+        RequestStatus::Pending
+    );
     let refused = codex
         .respond(
             &key,
@@ -297,7 +334,11 @@ fn full_session_replay() {
     codex.load_history(THREAD, None).unwrap();
     let state = store.state();
     assert_eq!(
-        t(&state).turns.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+        t(&state)
+            .turns
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
         [T1, T2, T3]
     );
     assert!(
@@ -329,13 +370,13 @@ fn full_session_replay() {
     // ---- invariants over everything the client wrote
     let written = process.written();
     for frame in &written {
-        if let Some(method) = frame["method"].as_str() {
-            if params::REVIEWER_METHODS.contains(&method) {
-                assert_eq!(
-                    frame["params"]["approvalsReviewer"], "user",
-                    "{method} must route approvals to the user"
-                );
-            }
+        if let Some(method) = frame["method"].as_str()
+            && params::REVIEWER_METHODS.contains(&method)
+        {
+            assert_eq!(
+                frame["params"]["approvalsReviewer"], "user",
+                "{method} must route approvals to the user"
+            );
         }
     }
     assert_eq!(
@@ -362,7 +403,9 @@ fn full_session_replay() {
 fn inherited_auto_reviewer_blocks_sending() {
     let (codex, _runtime, store) = backend(fixture());
     codex.start().unwrap();
-    codex.start_thread(&ThreadOptions::new("/workspace")).unwrap();
+    codex
+        .start_thread(&ThreadOptions::new("/workspace"))
+        .unwrap();
     let state = store.state();
     let notice = t(&state)
         .notices

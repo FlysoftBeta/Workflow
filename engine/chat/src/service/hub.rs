@@ -14,11 +14,7 @@ use crate::{
         backend::{ClaudeBackend, ClaudeConfig},
         launch::LaunchConfig,
     },
-    codex::{
-        self,
-        backend::CodexBackend,
-        launch::CodexConfig,
-    },
+    codex::{self, backend::CodexBackend, launch::CodexConfig},
     config::{AgentPatch, BackendPatch},
     error::{ChatError, ErrorKind, Result},
     journal::Journal,
@@ -35,11 +31,7 @@ use std::{
     },
     time::Duration,
 };
-use workflow_environment::{
-    access::AGENT_HOMES,
-    config::FieldPatch,
-    tools::ToolPhase,
-};
+use workflow_environment::{access::AGENT_HOMES, config::FieldPatch, tools::ToolPhase};
 
 /// 128 + SIGSYS: what a wait reports for a seccomp kill.
 pub const SIGSYS_EXIT: i32 = 128 + 31;
@@ -328,7 +320,10 @@ impl Hub {
                 Some(b) => b.clone(),
                 None => {
                     if !self.setups.lock().unwrap().contains(&kind) {
-                        return Err(ChatError::unavailable(format!("{} is not available", kind.id())));
+                        return Err(ChatError::unavailable(format!(
+                            "{} is not available",
+                            kind.id()
+                        )));
                     }
                     let b = self.create(kind);
                     backends.insert(kind, b.clone());
@@ -353,8 +348,13 @@ impl Hub {
                 ProcessState::Exited { .. } | ProcessState::Failed { .. } => {
                     // Killed by a syscall restriction before its handshake: this launcher cannot
                     // run here.
-                    if matches!(state, ProcessState::Exited { exit_code: Some(SIGSYS_EXIT), .. })
-                        && !self.ready_seen.lock().unwrap().contains(backend)
+                    if matches!(
+                        state,
+                        ProcessState::Exited {
+                            exit_code: Some(SIGSYS_EXIT),
+                            ..
+                        }
+                    ) && !self.ready_seen.lock().unwrap().contains(backend)
                     {
                         self.unsupported.lock().unwrap().insert(*backend);
                         self.publish_metadata();
@@ -363,11 +363,21 @@ impl Hub {
                 }
                 _ => (),
             },
-            AgentEvent::ThreadUpserted { backend, thread_id, .. }
-            | AgentEvent::ThreadRenamed { backend, thread_id, .. }
-            | AgentEvent::TurnSubmitted { backend, thread_id, .. }
-            | AgentEvent::TurnCompleted { backend, thread_id, .. }
-            | AgentEvent::HistoryLoaded { backend, thread_id, .. } => {
+            AgentEvent::ThreadUpserted {
+                backend, thread_id, ..
+            }
+            | AgentEvent::ThreadRenamed {
+                backend, thread_id, ..
+            }
+            | AgentEvent::TurnSubmitted {
+                backend, thread_id, ..
+            }
+            | AgentEvent::TurnCompleted {
+                backend, thread_id, ..
+            }
+            | AgentEvent::HistoryLoaded {
+                backend, thread_id, ..
+            } => {
                 if let Some(sender) = self.dirty.lock().unwrap().as_ref() {
                     let _ = sender.send(ThreadKey {
                         backend: *backend,
@@ -456,7 +466,11 @@ impl Hub {
     }
 
     /// Creates a thread-less conversation on `backend` (default: the last chosen one).
-    pub(super) fn new_conversation(&self, backend: Option<BackendKind>, id: String) -> Result<String> {
+    pub(super) fn new_conversation(
+        &self,
+        backend: Option<BackendKind>,
+        id: String,
+    ) -> Result<String> {
         let kind = backend.unwrap_or_else(|| self.default_backend());
         let (model, effort) = self.remembered(kind);
         let now = self.ports.clock.now_ms();
@@ -510,7 +524,12 @@ impl Hub {
         };
         let lock = self.lock(id);
         let _guard = lock.lock().unwrap();
-        if self.resumed.lock().unwrap().contains(&(key.backend, key.id.clone())) {
+        if self
+            .resumed
+            .lock()
+            .unwrap()
+            .contains(&(key.backend, key.id.clone()))
+        {
             return Ok(());
         }
         if !self.logged_in(entry.backend) {
@@ -521,12 +540,17 @@ impl Hub {
         Ok(())
     }
     pub(super) fn load_earlier(&self, id: &str) -> Result<()> {
-        let Some(entry) = self.entry(id) else { return Ok(()) };
-        let Some(key) = Self::thread_key(&entry) else { return Ok(()) };
+        let Some(entry) = self.entry(id) else {
+            return Ok(());
+        };
+        let Some(key) = Self::thread_key(&entry) else {
+            return Ok(());
+        };
         let Some(cursor) = self.journal.thread(&key).and_then(|t| t.history_cursor) else {
             return Ok(());
         };
-        self.connect(entry.backend)?.load_history(&key.id, Some(&cursor))
+        self.connect(entry.backend)?
+            .load_history(&key.id, Some(&cursor))
     }
     /// Sends a user message, creating the backend thread on the first message. Returns the
     /// client message ID.
@@ -550,11 +574,19 @@ impl Hub {
                 .mime_type
                 .clone()
                 .or_else(|| paths::guess_mime(&a.path).map(str::to_owned));
-            parts.push(if mime.as_deref().is_some_and(|m| m.starts_with("image/")) {
-                UserPart::Image { path, mime_type: mime }
-            } else {
-                UserPart::File { path, mime_type: mime }
-            });
+            parts.push(
+                if mime.as_deref().is_some_and(|m| m.starts_with("image/")) {
+                    UserPart::Image {
+                        path,
+                        mime_type: mime,
+                    }
+                } else {
+                    UserPart::File {
+                        path,
+                        mime_type: mime,
+                    }
+                },
+            );
         }
         if parts.is_empty() {
             return Err(ChatError::invalid("Nothing to send"));
@@ -593,9 +625,17 @@ impl Hub {
         };
         backend.send(&thread, parts, Some(settings.clone()), mode)
     }
-    pub(super) fn with_thread(&self, id: &str, action: impl FnOnce(Arc<dyn Backend>, &str) -> Result<()>) -> Result<()> {
-        let Some(entry) = self.entry(id) else { return Ok(()) };
-        let Some(key) = Self::thread_key(&entry) else { return Ok(()) };
+    pub(super) fn with_thread(
+        &self,
+        id: &str,
+        action: impl FnOnce(Arc<dyn Backend>, &str) -> Result<()>,
+    ) -> Result<()> {
+        let Some(entry) = self.entry(id) else {
+            return Ok(());
+        };
+        let Some(key) = Self::thread_key(&entry) else {
+            return Ok(());
+        };
         action(self.connect(entry.backend)?, &key.id)
     }
     pub(super) fn respond(&self, key: &RequestKey, response: &RequestResponse) -> Result<()> {
@@ -611,10 +651,10 @@ impl Hub {
         else {
             return Ok(());
         };
-        if let (Some(key), Some(backend)) = (Self::thread_key(&entry), self.running(entry.backend)) {
-            if !clean.is_empty() {
-                let _ = backend.rename(&key.id, &clean);
-            }
+        if let (Some(key), Some(backend)) = (Self::thread_key(&entry), self.running(entry.backend))
+            && !clean.is_empty()
+        {
+            let _ = backend.rename(&key.id, &clean);
         }
         Ok(())
     }
@@ -627,17 +667,23 @@ impl Hub {
         else {
             return Ok(());
         };
-        if let (Some(key), Some(backend)) = (Self::thread_key(&entry), self.running(entry.backend)) {
+        if let (Some(key), Some(backend)) = (Self::thread_key(&entry), self.running(entry.backend))
+        {
             let _ = backend.archive(&key.id, archived);
         }
         Ok(())
     }
     /// Called only after the user confirmed deletion, including the composer draft.
     pub(super) fn delete_conversation(&self, id: &str) -> Result<()> {
-        let Some(entry) = self.entry(id) else { return Ok(()) };
+        let Some(entry) = self.entry(id) else {
+            return Ok(());
+        };
         if let Some(key) = Self::thread_key(&entry) {
             if self.active_turn(&key) {
-                return Err(ChatError::new(ErrorKind::TurnActive, "请先停止正在进行的回答"));
+                return Err(ChatError::new(
+                    ErrorKind::TurnActive,
+                    "请先停止正在进行的回答",
+                ));
             }
             self.connect(entry.backend)?.delete(&key.id)?;
             self.resumed.lock().unwrap().remove(&(key.backend, key.id));
@@ -649,16 +695,28 @@ impl Hub {
         Ok(())
     }
     pub(super) fn compact(&self, id: &str) -> Result<()> {
-        let Some(entry) = self.entry(id) else { return Ok(()) };
-        let Some(key) = Self::thread_key(&entry) else { return Ok(()) };
+        let Some(entry) = self.entry(id) else {
+            return Ok(());
+        };
+        let Some(key) = Self::thread_key(&entry) else {
+            return Ok(());
+        };
         if self.active_turn(&key) {
-            return Err(ChatError::new(ErrorKind::TurnActive, "请先停止正在进行的回答"));
+            return Err(ChatError::new(
+                ErrorKind::TurnActive,
+                "请先停止正在进行的回答",
+            ));
         }
         self.open(id)?;
         self.connect(entry.backend)?.compact(&key.id)
     }
     /// The explicit advanced console keeps the backend's approval policy checks.
-    pub(super) fn raw_request(&self, id: &str, method: &str, params: Option<OpaqueJson>) -> Result<OpaqueJson> {
+    pub(super) fn raw_request(
+        &self,
+        id: &str,
+        method: &str,
+        params: Option<OpaqueJson>,
+    ) -> Result<OpaqueJson> {
         let entry = self.ensure_conversation(id)?;
         self.open(id)?;
         let method = method.trim();
@@ -673,9 +731,11 @@ impl Hub {
         let entry = self
             .entry(id)
             .ok_or_else(|| ChatError::invalid("unknown conversation"))?;
-        let key = Self::thread_key(&entry).ok_or_else(|| ChatError::state("nothing to fork yet"))?;
+        let key =
+            Self::thread_key(&entry).ok_or_else(|| ChatError::state("nothing to fork yet"))?;
         let backend = self.connect(entry.backend)?;
-        let created = backend.fork_thread(&key.id, at_turn, &self.options(&TurnSettings::default()))?;
+        let created =
+            backend.fork_thread(&key.id, at_turn, &self.options(&TurnSettings::default()))?;
         self.resumed
             .lock()
             .unwrap()
@@ -700,15 +760,24 @@ impl Hub {
             permissions: FieldPatch::Value(Some(preset_name(preset).into())),
             ..Default::default()
         })?;
-        let Some(entry) = self.entry(id) else { return Ok(()) };
-        let Some(key) = Self::thread_key(&entry) else { return Ok(()) };
+        let Some(entry) = self.entry(id) else {
+            return Ok(());
+        };
+        let Some(key) = Self::thread_key(&entry) else {
+            return Ok(());
+        };
         match self.running(entry.backend) {
             Some(backend) => backend.set_permissions(&key.id, preset),
             None => Ok(()),
         }
     }
     /// Remembers the slider position for this conversation and as the backend default.
-    pub(super) fn remember_selection(&self, id: &str, model: Option<String>, effort: Option<String>) -> Result<()> {
+    pub(super) fn remember_selection(
+        &self,
+        id: &str,
+        model: Option<String>,
+        effort: Option<String>,
+    ) -> Result<()> {
         let Some(entry) = self.index.update(id, |e| {
             e.model = model.clone();
             e.effort = effort.clone();
@@ -728,7 +797,12 @@ impl Hub {
             ..Default::default()
         })
     }
-    pub(super) fn login(&self, kind: BackendKind, method: LoginMethod, secret: Option<Secret>) -> Result<LoginFlow> {
+    pub(super) fn login(
+        &self,
+        kind: BackendKind,
+        method: LoginMethod,
+        secret: Option<Secret>,
+    ) -> Result<LoginFlow> {
         self.connect(kind)?.login(method, secret)
     }
 }

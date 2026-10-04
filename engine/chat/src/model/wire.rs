@@ -26,39 +26,20 @@ impl Default for ChatMetadata {
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ChatSnapshot {
     pub epoch: String,
     pub revision: i64,
     pub state: AgentState,
     pub metadata: ChatMetadata,
 }
-impl Default for ChatSnapshot {
-    fn default() -> Self {
-        Self {
-            epoch: Default::default(),
-            revision: Default::default(),
-            state: Default::default(),
-            metadata: Default::default(),
-        }
-    }
-}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ChatUpdate {
     pub epoch: String,
     pub revision: i64,
     pub events: Vec<AgentEvent>,
     pub metadata: ChatMetadata,
     pub resnapshot: bool,
-}
-impl Default for ChatUpdate {
-    fn default() -> Self {
-        Self {
-            epoch: Default::default(),
-            revision: Default::default(),
-            events: Default::default(),
-            metadata: Default::default(),
-            resnapshot: false,
-        }
-    }
 }

@@ -161,19 +161,11 @@ pub enum LoginMethod {
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct TurnSettings {
     pub model: Option<String>,
     pub effort: Option<String>,
     pub permissions: Option<PermissionPreset>,
-}
-impl Default for TurnSettings {
-    fn default() -> Self {
-        Self {
-            model: None,
-            effort: None,
-            permissions: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -305,17 +297,10 @@ impl Default for ReasoningItem {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct PlanStep {
     pub text: String,
     pub status: PlanStepStatus,
-}
-impl Default for PlanStep {
-    fn default() -> Self {
-        Self {
-            text: Default::default(),
-            status: Default::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -343,21 +328,12 @@ impl Default for PlanItem {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct CommandAction {
     pub kind: String,
     pub command: String,
     pub path: Option<String>,
     pub query: Option<String>,
-}
-impl Default for CommandAction {
-    fn default() -> Self {
-        Self {
-            kind: Default::default(),
-            command: Default::default(),
-            path: None,
-            query: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -399,21 +375,12 @@ impl Default for CommandItem {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct FileDelta {
     pub path: String,
     pub kind: FileChangeKind,
     pub diff: Option<String>,
     pub move_path: Option<String>,
-}
-impl Default for FileDelta {
-    fn default() -> Self {
-        Self {
-            path: Default::default(),
-            kind: Default::default(),
-            diff: None,
-            move_path: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -594,6 +561,7 @@ impl Default for MarkerItem {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct Notice {
     pub level: NoticeLevel,
     pub message: String,
@@ -601,18 +569,6 @@ pub struct Notice {
     pub will_retry: bool,
     pub detail: Option<String>,
     pub raw: Option<OpaqueJson>,
-}
-impl Default for Notice {
-    fn default() -> Self {
-        Self {
-            level: Default::default(),
-            message: Default::default(),
-            code: None,
-            will_retry: false,
-            detail: None,
-            raw: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -660,57 +616,34 @@ impl Default for UnknownItem {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct RequestKey {
     pub backend: BackendKind,
     pub raw_id: OpaqueJson,
 }
-impl Default for RequestKey {
-    fn default() -> Self {
-        Self {
-            backend: Default::default(),
-            raw_id: Default::default(),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct Decision {
     pub id: String,
     pub kind: DecisionKind,
     pub detail: Option<String>,
     pub wire: Option<OpaqueJson>,
 }
-impl Default for Decision {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            kind: Default::default(),
-            detail: None,
-            wire: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct QuestionOption {
     pub label: String,
     pub description: Option<String>,
     pub preview: Option<String>,
 }
-impl Default for QuestionOption {
-    fn default() -> Self {
-        Self {
-            label: Default::default(),
-            description: None,
-            preview: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct Question {
     pub id: String,
     pub question: String,
@@ -719,19 +652,6 @@ pub struct Question {
     pub multi_select: bool,
     pub allow_free_text: bool,
     pub secret: bool,
-}
-impl Default for Question {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            question: Default::default(),
-            header: None,
-            options: Default::default(),
-            multi_select: false,
-            allow_free_text: false,
-            secret: false,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -829,51 +749,28 @@ pub enum RequestKind {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ThreadKey {
     pub backend: BackendKind,
     pub id: String,
 }
-impl Default for ThreadKey {
-    fn default() -> Self {
-        Self {
-            backend: Default::default(),
-            id: Default::default(),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct McpServerStatus {
     pub name: String,
     pub status: String,
     pub error: Option<String>,
 }
-impl Default for McpServerStatus {
-    fn default() -> Self {
-        Self {
-            name: Default::default(),
-            status: Default::default(),
-            error: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct UnknownRecord {
     pub kind: String,
     pub thread_id: Option<String>,
     pub raw: OpaqueJson,
-}
-impl Default for UnknownRecord {
-    fn default() -> Self {
-        Self {
-            kind: Default::default(),
-            thread_id: None,
-            raw: Default::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -907,6 +804,7 @@ impl Default for BackendStatus {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ThreadSettings {
     pub model: Option<String>,
     pub effort: Option<String>,
@@ -915,21 +813,10 @@ pub struct ThreadSettings {
     pub approvals_reviewer: Option<String>,
     pub raw: Option<OpaqueJson>,
 }
-impl Default for ThreadSettings {
-    fn default() -> Self {
-        Self {
-            model: None,
-            effort: None,
-            approval_policy: None,
-            sandbox: None,
-            approvals_reviewer: None,
-            raw: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct TokenUsage {
     pub input_tokens: i64,
     pub cached_input_tokens: i64,
@@ -940,53 +827,23 @@ pub struct TokenUsage {
     pub cost_usd: Option<f64>,
     pub raw: Option<OpaqueJson>,
 }
-impl Default for TokenUsage {
-    fn default() -> Self {
-        Self {
-            input_tokens: 0,
-            cached_input_tokens: 0,
-            output_tokens: 0,
-            reasoning_tokens: 0,
-            total_tokens: 0,
-            context_window: None,
-            cost_usd: None,
-            raw: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct TurnError {
     pub message: String,
     pub code: Option<String>,
     pub detail: Option<String>,
     pub raw: Option<OpaqueJson>,
 }
-impl Default for TurnError {
-    fn default() -> Self {
-        Self {
-            message: Default::default(),
-            code: None,
-            detail: None,
-            raw: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct TurnPlan {
     pub steps: Vec<PlanStep>,
     pub explanation: Option<String>,
-}
-impl Default for TurnPlan {
-    fn default() -> Self {
-        Self {
-            steps: Default::default(),
-            explanation: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1079,19 +936,11 @@ impl Default for ThreadState {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct AgentState {
     pub backends: BTreeMap<BackendKind, BackendStatus>,
     pub threads: Pairs<ThreadKey, ThreadState>,
     pub requests: Pairs<RequestKey, PendingRequest>,
-}
-impl Default for AgentState {
-    fn default() -> Self {
-        Self {
-            backends: Default::default(),
-            threads: Default::default(),
-            requests: Default::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1142,23 +991,16 @@ impl Default for AccountState {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct RateLimitWindow {
     pub used_percent: Option<f64>,
     pub window_minutes: Option<i64>,
     pub resets_at_epoch_sec: Option<i64>,
 }
-impl Default for RateLimitWindow {
-    fn default() -> Self {
-        Self {
-            used_percent: None,
-            window_minutes: None,
-            resets_at_epoch_sec: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct RateLimit {
     pub id: String,
     pub name: Option<String>,
@@ -1168,37 +1010,15 @@ pub struct RateLimit {
     pub reached: bool,
     pub raw: Option<OpaqueJson>,
 }
-impl Default for RateLimit {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            name: None,
-            primary: None,
-            secondary: None,
-            status: None,
-            reached: false,
-            raw: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct RateLimitState {
     pub limits: Vec<RateLimit>,
     pub ordinary_usage_allowed: Option<bool>,
     pub upsell: Option<OpaqueJson>,
     pub raw: Option<OpaqueJson>,
-}
-impl Default for RateLimitState {
-    fn default() -> Self {
-        Self {
-            limits: Default::default(),
-            ordinary_usage_allowed: None,
-            upsell: None,
-            raw: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1231,21 +1051,15 @@ pub enum LoginFlow {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct EffortOption {
     pub id: String,
     pub description: Option<String>,
 }
-impl Default for EffortOption {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            description: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ModelOption {
     pub id: String,
     pub display_name: String,
@@ -1260,42 +1074,18 @@ pub struct ModelOption {
     pub upgrade_message: Option<String>,
     pub raw: Option<OpaqueJson>,
 }
-impl Default for ModelOption {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            display_name: Default::default(),
-            description: None,
-            efforts: Default::default(),
-            default_effort: None,
-            is_default: false,
-            hidden: false,
-            input_modalities: Default::default(),
-            resolved_model: None,
-            upgrade_to: None,
-            upgrade_message: None,
-            raw: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ModelCatalog {
     pub backend: BackendKind,
     pub models: Vec<ModelOption>,
 }
-impl Default for ModelCatalog {
-    fn default() -> Self {
-        Self {
-            backend: Default::default(),
-            models: Default::default(),
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct ConversationEntry {
     pub id: String,
     pub backend: BackendKind,
@@ -1311,39 +1101,13 @@ pub struct ConversationEntry {
     pub effort: Option<String>,
     pub preview: Option<String>,
 }
-impl Default for ConversationEntry {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            backend: Default::default(),
-            backend_thread_id: None,
-            title: None,
-            cwd: Default::default(),
-            created_at_ms: Default::default(),
-            updated_at_ms: Default::default(),
-            archived: false,
-            forked_from: None,
-            forked_at: None,
-            model: None,
-            effort: None,
-            preview: None,
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+#[derive(Default)]
 pub struct QueuedMessage {
     pub client_message_id: String,
     pub parts: Vec<UserPart>,
-}
-impl Default for QueuedMessage {
-    fn default() -> Self {
-        Self {
-            client_message_id: Default::default(),
-            parts: Default::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

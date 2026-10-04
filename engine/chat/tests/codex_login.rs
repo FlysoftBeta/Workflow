@@ -79,7 +79,10 @@ impl Script {
                 self.answer_read(p, id, read);
             }
             "account/login/start" => {
-                let login = format!("login-{}", self.login_ids.fetch_add(1, Ordering::SeqCst) + 1);
+                let login = format!(
+                    "login-{}",
+                    self.login_ids.fetch_add(1, Ordering::SeqCst) + 1
+                );
                 let result = if request["params"]["type"] == "chatgpt" {
                     json!({"type":"chatgpt","loginId":login,"authUrl":"https://auth.example.test/oauth/authorize"})
                 } else {
@@ -120,7 +123,10 @@ fn timings(timeout: u64, poll: u64, read_timeout: u64, confirm: &[u64]) -> Login
         max_poll: Duration::from_millis(poll * 4),
         timeout: Duration::from_millis(timeout),
         read_timeout: Duration::from_millis(read_timeout),
-        confirm: confirm.iter().map(|ms| Duration::from_millis(*ms)).collect(),
+        confirm: confirm
+            .iter()
+            .map(|ms| Duration::from_millis(*ms))
+            .collect(),
         cancel_timeout: Duration::from_secs(10),
     }
 }
@@ -161,9 +167,14 @@ fn harness(timings: LoginTimings, script: Arc<Script>) -> Harness {
     }
 }
 fn start(timeout: u64, poll: u64, read_timeout: u64, confirm: &[u64]) -> Harness {
-    let h = harness(timings(timeout, poll, read_timeout, confirm), Arc::new(Script::default()));
+    let h = harness(
+        timings(timeout, poll, read_timeout, confirm),
+        Arc::new(Script::default()),
+    );
     h.backend.start().unwrap();
-    h.store.wait("initial account", |s| account_of(s).state == LoginState::LoggedOut);
+    h.store.wait("initial account", |s| {
+        account_of(s).state == LoginState::LoggedOut
+    });
     h
 }
 fn start_default() -> Harness {
@@ -180,7 +191,8 @@ impl Harness {
         self.runtime.last()
     }
     fn notify(&self, method: &str, params: Value) {
-        self.process().emit(&json!({"method": method, "params": params}));
+        self.process()
+            .emit(&json!({"method": method, "params": params}));
     }
     fn completed(&self, login: Option<&str>, success: bool, error: Option<&str>) {
         self.notify(
@@ -189,7 +201,10 @@ impl Harness {
         );
     }
     fn updated(&self) {
-        self.notify("account/updated", json!({"authMode":"chatgpt","planType":"plus"}));
+        self.notify(
+            "account/updated",
+            json!({"authMode":"chatgpt","planType":"plus"}),
+        );
     }
     fn wait_written(&self, method: &str, count: usize) {
         let p = self.process();
@@ -229,7 +244,10 @@ fn real_device_code_sequence_ends_logged_in() {
     let h = start(5_000, 60_000, 2_000, &[0, 20, 40]);
     let flow = h.login(LoginMethod::CodexDeviceCode);
     assert_eq!(flow.login_id(), Some("login-1"));
-    assert!(matches!(h.account().login, Some(LoginFlow::DeviceCode { .. })));
+    assert!(matches!(
+        h.account().login,
+        Some(LoginFlow::DeviceCode { .. })
+    ));
     assert_eq!(h.account().state, LoginState::LoggingIn);
     h.script.reads(|_| Read::Authenticated);
     h.completed(Some("login-1"), true, None);
@@ -243,7 +261,8 @@ fn real_device_code_sequence_ends_logged_in() {
             .lock()
             .unwrap()
             .iter()
-            .any(|a| matches!(a.login, Some(LoginFlow::Progress { .. })) && a.state == LoginState::LoggingIn),
+            .any(|a| matches!(a.login, Some(LoginFlow::Progress { .. }))
+                && a.state == LoginState::LoggingIn),
         "the start shows a pending attempt first"
     );
 }
@@ -254,8 +273,13 @@ fn null_reads_after_completion_never_reset_to_logged_out() {
     h.login(LoginMethod::CodexDeviceCode);
     let base = h.script.read_count.load(Ordering::SeqCst);
     // Codex has not reloaded its credentials yet for the first two reads after completion.
-    h.script
-        .reads(move |n| if n <= base + 2 { Read::Anonymous } else { Read::Authenticated });
+    h.script.reads(move |n| {
+        if n <= base + 2 {
+            Read::Anonymous
+        } else {
+            Read::Authenticated
+        }
+    });
     h.completed(Some("login-1"), true, None);
     h.updated();
     h.wait_account("confirmed account", |a| a.email.is_some());
@@ -319,7 +343,10 @@ fn stale_completion_cannot_end_current_login() {
     h.login(LoginMethod::CodexDeviceCode);
     h.completed(Some("older-login"), false, Some("old failure"));
     sleep(100);
-    assert!(matches!(h.account().login, Some(LoginFlow::DeviceCode { .. })));
+    assert!(matches!(
+        h.account().login,
+        Some(LoginFlow::DeviceCode { .. })
+    ));
     h.completed(Some("login-1"), false, Some("test failure"));
     h.wait_account("matching failure", |a| {
         completed_error(a).as_deref() == Some("test failure")
@@ -332,8 +359,13 @@ fn routing_discovery_failure_shows_the_reason_and_the_account_error() {
     let h = start(5_000, 60_000, 2_000, &[0, 20, 40]);
     h.login(LoginMethod::CodexDeviceCode);
     // 0.157.1: credentials were stored, discovery failed, every read now errors.
-    h.script.reads(|_| Read::Error("workspace routing discovery failed"));
-    h.completed(Some("login-1"), false, Some("workspace routing discovery failed"));
+    h.script
+        .reads(|_| Read::Error("workspace routing discovery failed"));
+    h.completed(
+        Some("login-1"),
+        false,
+        Some("workspace routing discovery failed"),
+    );
     let failed = h.wait_account("account error", |a| a.check_error.is_some());
     assert_eq!(failed.state, LoginState::LoggedOut);
     assert_eq!(
@@ -388,15 +420,25 @@ fn cancellation_while_starting_releases_the_server_login() {
         let h = h.clone();
         std::thread::spawn(move || h.login(LoginMethod::CodexDeviceCode))
     };
-    let starting = h.wait_account("starting", |a| matches!(a.login, Some(LoginFlow::Progress { .. })));
-    let attempt = starting.login.as_ref().unwrap().login_id().unwrap().to_string();
+    let starting = h.wait_account("starting", |a| {
+        matches!(a.login, Some(LoginFlow::Progress { .. }))
+    });
+    let attempt = starting
+        .login
+        .as_ref()
+        .unwrap()
+        .login_id()
+        .unwrap()
+        .to_string();
     assert!(attempt.starts_with("attempt:"));
     h.backend.cancel_login(&attempt).unwrap();
     let flow = login.join().unwrap();
     assert!(matches!(&flow, LoginFlow::Completed { error: Some(e), .. } if e == CANCELLED));
     assert_eq!(h.account().state, LoginState::LoggedOut);
     // The start answer arrives afterwards; the adapter cancels the login it created.
-    eventually("start sent", || h.script.held_start.lock().unwrap().is_some());
+    eventually("start sent", || {
+        h.script.held_start.lock().unwrap().is_some()
+    });
     let (id, result) = h.script.held_start.lock().unwrap().take().unwrap();
     h.process().emit(&json!({"id":id,"result":result}));
     h.wait_written("account/login/cancel", 1);
@@ -407,7 +449,10 @@ fn cancellation_while_starting_releases_the_server_login() {
         .rfind(|f| f["method"] == "account/login/cancel")
         .unwrap();
     assert_eq!(cancel["params"]["loginId"], "login-1");
-    assert!(matches!(h.account().login, Some(LoginFlow::Completed { .. })));
+    assert!(matches!(
+        h.account().login,
+        Some(LoginFlow::Completed { .. })
+    ));
 }
 
 #[test]
@@ -432,7 +477,9 @@ fn start_failure_is_returned_as_visible_failure() {
 fn empty_api_key_is_a_visible_start_failure() {
     let h = start_default();
     let flow = h.backend.login(LoginMethod::CodexApiKey, None).unwrap();
-    assert!(matches!(&flow, LoginFlow::Completed { success: false, error: Some(e), .. } if e == "API key required"));
+    assert!(
+        matches!(&flow, LoginFlow::Completed { success: false, error: Some(e), .. } if e == "API key required")
+    );
     assert_eq!(h.process().count("account/login/start"), 0);
 }
 
@@ -508,7 +555,9 @@ fn completion_before_the_start_answer_is_kept_for_that_attempt() {
         let h = h.clone();
         std::thread::spawn(move || h.login(LoginMethod::CodexDeviceCode))
     };
-    eventually("start sent", || h.script.held_start.lock().unwrap().is_some());
+    eventually("start sent", || {
+        h.script.held_start.lock().unwrap().is_some()
+    });
     h.script.reads(|_| Read::Authenticated);
     h.completed(Some("login-1"), true, None);
     sleep(50);

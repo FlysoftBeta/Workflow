@@ -155,7 +155,9 @@ impl ControlConnection {
         let owner = connection.clone();
         connection
             .threads
-            .add(channel::spawn_dispatcher(receiver, move |m| handler(&owner, m)));
+            .add(channel::spawn_dispatcher(receiver, move |m| {
+                handler(&owner, m)
+            }));
         connection
     }
 
@@ -374,4 +376,3 @@ impl ControlConnection {
         self.threads.join();
     }
 }
-

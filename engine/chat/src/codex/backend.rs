@@ -157,7 +157,14 @@ impl CodexBackend {
     }
     /// Test hook: currently open (unanswered) server request IDs.
     pub fn open_request_ids(&self) -> Vec<String> {
-        let mut ids: Vec<_> = self.0.open_requests.lock().unwrap().keys().cloned().collect();
+        let mut ids: Vec<_> = self
+            .0
+            .open_requests
+            .lock()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
         ids.sort();
         ids
     }
@@ -353,24 +360,24 @@ impl Inner {
                         me.refresh(&connection);
                     });
                 }
-                if method == "thread/queue/changed" {
-                    if let Some(thread) = p.thread_id.owned() {
-                        let connection = connection.clone();
-                        self.background("codex-queue", move |me| {
-                            if me.refresh_queue(&thread, &connection).is_err() {
-                                me.emit(AgentEvent::ThreadNotice {
-                                    backend: B,
-                                    thread_id: thread,
-                                    notice: notice(
-                                        NoticeLevel::Warning,
-                                        "队列更新失败",
-                                        "queueRefreshFailed",
-                                        None,
-                                    ),
-                                });
-                            }
-                        });
-                    }
+                if method == "thread/queue/changed"
+                    && let Some(thread) = p.thread_id.owned()
+                {
+                    let connection = connection.clone();
+                    self.background("codex-queue", move |me| {
+                        if me.refresh_queue(&thread, &connection).is_err() {
+                            me.emit(AgentEvent::ThreadNotice {
+                                backend: B,
+                                thread_id: thread,
+                                notice: notice(
+                                    NoticeLevel::Warning,
+                                    "队列更新失败",
+                                    "queueRefreshFailed",
+                                    None,
+                                ),
+                            });
+                        }
+                    });
                 }
             }
             RpcInbound::Request {
@@ -416,7 +423,8 @@ impl Inner {
                         active.remove(thread_id);
                     }
                     self.open_requests.lock().unwrap().retain(|_, r| {
-                        !(r.thread_id.as_ref() == Some(thread_id) && r.turn_id.as_ref() == Some(turn_id))
+                        !(r.thread_id.as_ref() == Some(thread_id)
+                            && r.turn_id.as_ref() == Some(turn_id))
                     });
                 }
                 AgentEvent::RequestClosed { key, .. } => {
@@ -518,16 +526,20 @@ impl Inner {
         let shared = {
             let mut slot = self.read.lock().unwrap();
             match slot.as_ref() {
-                Some((c, shared)) if Arc::ptr_eq(c, connection) && !shared.is_done() => shared.clone(),
+                Some((c, shared)) if Arc::ptr_eq(c, connection) && !shared.is_done() => {
+                    shared.clone()
+                }
                 _ => {
                     let shared = Shared::new();
                     *slot = Some((connection.clone(), shared.clone()));
                     let (c, s) = (connection.clone(), shared.clone());
                     spawn("codex-account-read", move || {
-                        s.set(match c.request("account/read", Some(params::account_read())) {
-                            Ok(result) => AccountRead::Answered(events::account(&result)),
-                            Err(e) => AccountRead::Failed(describe(&e)),
-                        });
+                        s.set(
+                            match c.request("account/read", Some(params::account_read())) {
+                                Ok(result) => AccountRead::Answered(events::account(&result)),
+                                Err(e) => AccountRead::Failed(describe(&e)),
+                            },
+                        );
                     });
                     shared
                 }
@@ -548,7 +560,11 @@ impl Inner {
                 .is_some_and(|a| Arc::ptr_eq(&a.connection, connection))
         {
             let attempt = slot.attempt.take().unwrap();
-            let done = completed(Some(attempt.vendor_id.clone().unwrap_or(attempt.id.clone())), true, None);
+            let done = completed(
+                Some(attempt.vendor_id.clone().unwrap_or(attempt.id.clone())),
+                true,
+                None,
+            );
             if attempt.phase != Phase::Confirming {
                 self.emit(AgentEvent::LoginChanged {
                     backend: B,
@@ -582,7 +598,9 @@ impl Inner {
     }
 
     fn refresh_rate_limits(&self) -> Result<()> {
-        let result = self.connection()?.request("account/rateLimits/read", None)?;
+        let result = self
+            .connection()?
+            .request("account/rateLimits/read", None)?;
         self.emit(AgentEvent::RateLimitsChanged {
             backend: B,
             limits: events::rate_limits(&result),
@@ -635,7 +653,8 @@ impl Inner {
                     false,
                     Some(CANCELLED),
                 ));
-                p.vendor_id.filter(|_| Arc::ptr_eq(&p.connection, &connection))
+                p.vendor_id
+                    .filter(|_| Arc::ptr_eq(&p.connection, &connection))
             });
             slot.early.clear();
             slot.attempt = Some(Attempt {
@@ -659,11 +678,15 @@ impl Inner {
         };
         if let Some(id) = superseded {
             let connection = connection.clone();
-            self.background("codex-login-cancel", move |me| me.cancel_on_server(&connection, &id));
+            self.background("codex-login-cancel", move |me| {
+                me.cancel_on_server(&connection, &id)
+            });
         }
         {
             let handle = handle.clone();
-            self.background("codex-login", move |me| me.run_attempt(handle, method, secret));
+            self.background("codex-login", move |me| {
+                me.run_attempt(handle, method, secret)
+            });
         }
         loop {
             if let Some(flow) = outcome.wait(Duration::from_secs(3600)) {
@@ -690,13 +713,13 @@ impl Inner {
             let mut slot = self.login.lock().unwrap();
             if slot.current(handle.serial).is_none() {
                 // Cancelled or superseded while starting: release the server-side login it created.
-                if !matches!(flow, LoginFlow::Completed { .. }) {
-                    if let Some(id) = flow.login_id().map(str::to_owned) {
-                        let connection = handle.connection.clone();
-                        self.background("codex-login-cancel", move |me| {
-                            me.cancel_on_server(&connection, &id)
-                        });
-                    }
+                if !matches!(flow, LoginFlow::Completed { .. })
+                    && let Some(id) = flow.login_id().map(str::to_owned)
+                {
+                    let connection = handle.connection.clone();
+                    self.background("codex-login-cancel", move |me| {
+                        me.cancel_on_server(&connection, &id)
+                    });
                 }
                 return;
             }
@@ -805,7 +828,8 @@ impl Inner {
             if !self.login.lock().unwrap().is(handle.serial, Phase::Waiting) {
                 return false;
             }
-            let read = self.read_account(&handle.connection, timings.read_timeout.min(deadline - now));
+            let read =
+                self.read_account(&handle.connection, timings.read_timeout.min(deadline - now));
             if Instant::now() >= deadline {
                 return true;
             }
@@ -916,7 +940,12 @@ impl Inner {
             if !token.sleep(wait) {
                 return;
             }
-            if !self.login.lock().unwrap().is(handle.serial, Phase::Confirming) {
+            if !self
+                .login
+                .lock()
+                .unwrap()
+                .is(handle.serial, Phase::Confirming)
+            {
                 return;
             }
             match self.read_account(&handle.connection, self.config.timings.read_timeout) {
@@ -971,7 +1000,12 @@ impl Inner {
         let mut slot = self.login.lock().unwrap();
         self.finish_locked(&mut slot, connection, error);
     }
-    fn finish_locked(&self, slot: &mut LoginSlot, connection: Option<&Arc<RpcConnection>>, error: &str) {
+    fn finish_locked(
+        &self,
+        slot: &mut LoginSlot,
+        connection: Option<&Arc<RpcConnection>>,
+        error: &str,
+    ) {
         if !slot
             .attempt
             .as_ref()
@@ -982,7 +1016,11 @@ impl Inner {
         let attempt = slot.attempt.take().unwrap();
         slot.early.clear();
         attempt.job.cancel();
-        let ended = completed(Some(attempt.vendor_id.clone().unwrap_or(attempt.id.clone())), false, Some(error));
+        let ended = completed(
+            Some(attempt.vendor_id.clone().unwrap_or(attempt.id.clone())),
+            false,
+            Some(error),
+        );
         if attempt.phase != Phase::Confirming {
             self.emit(AgentEvent::LoginChanged {
                 backend: B,
@@ -1081,7 +1119,12 @@ impl Inner {
         Ok(id)
     }
 
-    fn fork_thread(&self, thread: &str, at_turn: Option<&str>, options: &ThreadOptions) -> Result<String> {
+    fn fork_thread(
+        &self,
+        thread: &str,
+        at_turn: Option<&str>,
+        options: &ThreadOptions,
+    ) -> Result<String> {
         let result = self.connection()?.request(
             "thread/fork",
             Some(params::thread_fork(
@@ -1103,10 +1146,17 @@ impl Inner {
     fn load_history(&self, thread: &str, older_than: Option<&str>) -> Result<()> {
         let result = self.connection()?.request(
             "thread/turns/list",
-            Some(params::turns_list(thread, self.config.history_page_size, older_than)),
+            Some(params::turns_list(
+                thread,
+                self.config.history_page_size,
+                older_than,
+            )),
         )?;
         // The server pages newest first; the model is oldest first.
-        let mut turns: Vec<Turn> = events::page_items(&result).iter().map(super::items::turn).collect();
+        let mut turns: Vec<Turn> = events::page_items(&result)
+            .iter()
+            .map(super::items::turn)
+            .collect();
         turns.reverse();
         self.emit(AgentEvent::HistoryLoaded {
             backend: B,
@@ -1147,12 +1197,12 @@ impl Inner {
         settings: Option<TurnSettings>,
         mode: SendMode,
     ) -> Result<String> {
-        if let Some(value) = self.reviewer.lock().unwrap().get(thread) {
-            if value != params::REVIEWER_USER {
-                return Err(ChatError::state(format!(
-                    "approvalsReviewer is {value}; refusing to send"
-                )));
-            }
+        if let Some(value) = self.reviewer.lock().unwrap().get(thread)
+            && value != params::REVIEWER_USER
+        {
+            return Err(ChatError::state(format!(
+                "approvalsReviewer is {value}; refusing to send"
+            )));
         }
         let client = self.ids.new_id();
         let running = self.active_turn.lock().unwrap().get(thread).cloned();
@@ -1204,7 +1254,12 @@ impl Inner {
                 _ => {
                     let result = self.connection()?.request(
                         "turn/start",
-                        Some(params::turn_start(thread, &parts, settings.as_ref(), &client)?),
+                        Some(params::turn_start(
+                            thread,
+                            &parts,
+                            settings.as_ref(),
+                            &client,
+                        )?),
                     )?;
                     let r: codex_wire::TurnStartResult = wire::project(&result);
                     if let Some(turn) = r.turn.get().and_then(|t| t.id.owned()) {
@@ -1255,10 +1310,14 @@ impl Inner {
             .cloned()
             .ok_or_else(|| ChatError::state(format!("{client} is not queued")))?;
         if owner != thread {
-            return Err(ChatError::state("queued message belongs to a different thread"));
+            return Err(ChatError::state(
+                "queued message belongs to a different thread",
+            ));
         }
-        self.connection()?
-            .request("thread/queue/delete", Some(params::queue_delete(thread, &submission)))?;
+        self.connection()?.request(
+            "thread/queue/delete",
+            Some(params::queue_delete(thread, &submission)),
+        )?;
         self.queued.lock().unwrap().remove(client);
         self.emit(AgentEvent::TurnCancelled {
             backend: B,
@@ -1291,7 +1350,8 @@ impl Inner {
             )?;
             for item in events::page_items(&page) {
                 let q: codex_wire::QueuedSubmission = wire::project(&item);
-                let (Some(client), Some(submission)) = (q.client_user_message_id.owned(), q.id.owned())
+                let (Some(client), Some(submission)) =
+                    (q.client_user_message_id.owned(), q.id.owned())
                 else {
                     continue;
                 };
@@ -1369,7 +1429,12 @@ impl Inner {
             .unwrap()
             .get(&id)
             .cloned()
-            .ok_or_else(|| ChatError::new(ErrorKind::RequestExpired, format!("request {id} is not open")))?;
+            .ok_or_else(|| {
+                ChatError::new(
+                    ErrorKind::RequestExpired,
+                    format!("request {id} is not open"),
+                )
+            })?;
         let connection = self.connection()?;
         let summary = match requests::answer(&request, response)? {
             UserReply::Result { value, summary } => {
@@ -1429,7 +1494,12 @@ impl Backend for CodexBackend {
     fn resume_thread(&self, thread: &str, options: &ThreadOptions) -> Result<String> {
         self.0.resume_thread(thread, options)
     }
-    fn fork_thread(&self, thread: &str, at_turn: Option<&str>, options: &ThreadOptions) -> Result<String> {
+    fn fork_thread(
+        &self,
+        thread: &str,
+        at_turn: Option<&str>,
+        options: &ThreadOptions,
+    ) -> Result<String> {
         self.0.fork_thread(thread, at_turn, options)
     }
     fn load_history(&self, thread: &str, older_than: Option<&str>) -> Result<()> {
@@ -1439,8 +1509,14 @@ impl Backend for CodexBackend {
         self.0.rename(thread, title)
     }
     fn archive(&self, thread: &str, archived: bool) -> Result<()> {
-        self.0
-            .simple(if archived { "thread/archive" } else { "thread/unarchive" }, thread)
+        self.0.simple(
+            if archived {
+                "thread/archive"
+            } else {
+                "thread/unarchive"
+            },
+            thread,
+        )
     }
     fn delete(&self, thread: &str) -> Result<()> {
         self.0.simple("thread/delete", thread)
@@ -1466,13 +1542,21 @@ impl Backend for CodexBackend {
     fn set_permissions(&self, thread: &str, preset: PermissionPreset) -> Result<()> {
         self.0
             .connection()?
-            .request("thread/settings/update", Some(params::permissions(thread, preset)))
+            .request(
+                "thread/settings/update",
+                Some(params::permissions(thread, preset)),
+            )
             .map(|_| ())
     }
     fn respond(&self, key: &RequestKey, response: &RequestResponse) -> Result<()> {
         self.0.respond(key, response)
     }
-    fn raw_request(&self, method: &str, params: Option<OpaqueJson>, _thread: Option<&str>) -> Result<OpaqueJson> {
+    fn raw_request(
+        &self,
+        method: &str,
+        params: Option<OpaqueJson>,
+        _thread: Option<&str>,
+    ) -> Result<OpaqueJson> {
         self.0
             .connection()?
             .request(method, params::enforce_reviewer(method, params))

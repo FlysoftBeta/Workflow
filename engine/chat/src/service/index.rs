@@ -108,13 +108,11 @@ impl IndexDocument {
         for raw in p.conversations {
             if let Ok(candidate) =
                 workflow_environment::json::strict_json::<IndexEntry>(&serde_json::to_vec(&raw)?)
+                && !candidate.id.trim().is_empty()
+                && matches!(candidate.backend.as_str(), "codex" | "claude")
+                && !conversations.iter().any(|v| v.id == candidate.id)
             {
-                if !candidate.id.trim().is_empty()
-                    && matches!(candidate.backend.as_str(), "codex" | "claude")
-                    && !conversations.iter().any(|v| v.id == candidate.id)
-                {
-                    conversations.push(candidate);
-                }
+                conversations.push(candidate);
             }
         }
         Ok(Self {

@@ -18,4 +18,3 @@ pub fn filtered(base: &BTreeMap<String, String>) -> BTreeMap<String, String> {
 /// A credential held in memory only. Its `Debug` form is redacted and it is never persisted.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Secret(pub String);
-

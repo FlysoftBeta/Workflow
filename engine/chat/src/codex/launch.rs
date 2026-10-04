@@ -26,7 +26,9 @@ impl Default for LoginTimings {
             max_poll: Duration::from_secs(15),
             timeout: Duration::from_secs(15 * 60),
             read_timeout: Duration::from_secs(30),
-            confirm: [0, 500, 1000, 2000, 4000].map(Duration::from_millis).to_vec(),
+            confirm: [0, 500, 1000, 2000, 4000]
+                .map(Duration::from_millis)
+                .to_vec(),
             cancel_timeout: Duration::from_secs(10),
         }
     }

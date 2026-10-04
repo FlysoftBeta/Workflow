@@ -15,7 +15,10 @@ pub fn normalize(raw: &str) -> Result<String> {
     if raw.contains('\0') {
         return Err(ChatError::invalid("Invalid path"));
     }
-    let parts: Vec<&str> = raw.split('/').filter(|p| !p.is_empty() && *p != ".").collect();
+    let parts: Vec<&str> = raw
+        .split('/')
+        .filter(|p| !p.is_empty() && *p != ".")
+        .collect();
     if parts.contains(&"..") {
         return Err(ChatError::invalid("Path is outside the workspace"));
     }
@@ -56,7 +59,11 @@ pub fn to_workspace(agent_path: &str) -> Option<String> {
         for (guest, visible) in homes() {
             if path == guest || path.starts_with(&format!("{guest}/")) {
                 let rest = normalize(path[guest.len()..].trim_start_matches('/')).ok()?;
-                return Some(if rest.is_empty() { visible } else { format!("{visible}/{rest}") });
+                return Some(if rest.is_empty() {
+                    visible
+                } else {
+                    format!("{visible}/{rest}")
+                });
             }
         }
     }
@@ -114,14 +121,26 @@ mod tests {
     fn agent_paths_match_the_retained_resolution() {
         assert_eq!(to_agent("").unwrap(), "/workspace");
         assert_eq!(to_agent("src/a.rs").unwrap(), "/workspace/src/a.rs");
-        assert_eq!(to_agent(".workspace/agents/codex/config.toml").unwrap(), "/home/work/.codex/config.toml");
-        assert_eq!(to_agent(".workspace/agents/claude").unwrap(), "/home/work/.claude");
+        assert_eq!(
+            to_agent(".workspace/agents/codex/config.toml").unwrap(),
+            "/home/work/.codex/config.toml"
+        );
+        assert_eq!(
+            to_agent(".workspace/agents/claude").unwrap(),
+            "/home/work/.claude"
+        );
         assert!(to_agent("../x").is_err());
         assert!(to_agent("/etc/passwd").is_err());
-        assert_eq!(to_workspace("/workspace/src/a.rs").as_deref(), Some("src/a.rs"));
+        assert_eq!(
+            to_workspace("/workspace/src/a.rs").as_deref(),
+            Some("src/a.rs")
+        );
         assert_eq!(to_workspace("file:///workspace/a").as_deref(), Some("a"));
         assert_eq!(to_workspace("./b").as_deref(), Some("b"));
-        assert_eq!(to_workspace("/home/work/.claude/CLAUDE.md").as_deref(), Some(".workspace/agents/claude/CLAUDE.md"));
+        assert_eq!(
+            to_workspace("/home/work/.claude/CLAUDE.md").as_deref(),
+            Some(".workspace/agents/claude/CLAUDE.md")
+        );
         assert_eq!(to_workspace("/workspace/.workspace/state"), None);
         assert_eq!(to_workspace("/etc/passwd"), None);
         assert_eq!(to_workspace("/workspace/../etc"), None);

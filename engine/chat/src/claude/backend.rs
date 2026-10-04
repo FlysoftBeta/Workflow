@@ -77,7 +77,12 @@ struct Inner {
     api_key: Mutex<Option<Secret>>,
 }
 
-fn notice(level: NoticeLevel, message: impl Into<String>, code: &str, detail: Option<String>) -> Notice {
+fn notice(
+    level: NoticeLevel,
+    message: impl Into<String>,
+    code: &str,
+    detail: Option<String>,
+) -> Notice {
     Notice {
         level,
         message: message.into(),
@@ -150,7 +155,14 @@ impl ClaudeBackend {
     }
     /// Test hook: request IDs currently open on any session.
     pub fn open_request_ids(&self) -> Vec<String> {
-        let mut ids: Vec<_> = self.0.open_requests.lock().unwrap().keys().cloned().collect();
+        let mut ids: Vec<_> = self
+            .0
+            .open_requests
+            .lock()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
         ids.sort();
         ids
     }
@@ -163,7 +175,12 @@ impl Inner {
 
     // ---------------------------------------------------------------- process lifecycle
 
-    fn launch(&self, attach: Attach<'_>, cwd: &str, settings: &TurnSettings) -> Result<Arc<Session>> {
+    fn launch(
+        &self,
+        attach: Attach<'_>,
+        cwd: &str,
+        settings: &TurnSettings,
+    ) -> Result<Arc<Session>> {
         let id = attach.id().to_string();
         let mut config = self.config.launch.clone();
         if let Some(key) = self.api_key.lock().unwrap().clone() {
@@ -248,9 +265,13 @@ impl Inner {
                 });
                 // Re-arm prompts a previous worker left pending (CLI 2.1.268 and later).
                 for pending in init.pending_permission_requests.items() {
-                    let Some(frame) = pending.object() else { continue };
+                    let Some(frame) = pending.object() else {
+                        continue;
+                    };
                     let p: cw::PendingFrame = wire::project(frame);
-                    let (Some(request_id), Some(request)) = (p.request_id.owned(), p.request.object()) else {
+                    let (Some(request_id), Some(request)) =
+                        (p.request_id.owned(), p.request.object())
+                    else {
                         continue;
                     };
                     let subtype = wire::project::<cw::ControlBody>(request).subtype.or("");
@@ -412,7 +433,9 @@ impl Inner {
             .unwrap()
             .get(thread)
             .cloned()
-            .ok_or_else(|| ChatError::state(format!("session {thread} is not running; resume it first")))
+            .ok_or_else(|| {
+                ChatError::state(format!("session {thread} is not running; resume it first"))
+            })
     }
 
     // ---------------------------------------------------------------- inbound
@@ -459,12 +482,20 @@ impl Inner {
         self.emit(AgentEvent::RequestOpened { request });
     }
 
-    fn control_request(&self, s: &Arc<Session>, id: &str, subtype: &str, request: &OpaqueJson, raw: &OpaqueJson) {
+    fn control_request(
+        &self,
+        s: &Arc<Session>,
+        id: &str,
+        subtype: &str,
+        request: &OpaqueJson,
+        raw: &OpaqueJson,
+    ) {
         let turn = s.mapper.lock().unwrap().running_turn();
         let now = self.clock.now_ms();
         match subtype {
             "can_use_tool" | "elicitation" | "request_user_dialog" => {
-                let card = requests::pending(id, subtype, request, raw, Some(&s.id), turn.as_deref(), now);
+                let card =
+                    requests::pending(id, subtype, request, raw, Some(&s.id), turn.as_deref(), now);
                 if subtype == "request_user_dialog" {
                     // It must never be answered by us.
                     s.connection.forget(id);
@@ -483,7 +514,10 @@ impl Inner {
                     None => {
                         let _ = s.connection.respond_error(
                             id,
-                            &format!("no hook registered for {}", callback.as_deref().unwrap_or("?")),
+                            &format!(
+                                "no hook registered for {}",
+                                callback.as_deref().unwrap_or("?")
+                            ),
                         );
                         self.emit(AgentEvent::Unknown {
                             backend: B,
@@ -493,8 +527,16 @@ impl Inner {
                         });
                     }
                     Some(hook) => {
-                        let input = body.input.object().cloned().unwrap_or_else(wire::empty_object);
-                        let events = s.mapper.lock().unwrap().hook_marker(&hook.callback_id, &input);
+                        let input = body
+                            .input
+                            .object()
+                            .cloned()
+                            .unwrap_or_else(wire::empty_object);
+                        let events = s
+                            .mapper
+                            .lock()
+                            .unwrap()
+                            .hook_marker(&hook.callback_id, &input);
                         events.into_iter().for_each(|e| self.emit(e));
                         let _ = match (hook.handler)(&input) {
                             Ok(output) => s.connection.respond(id, Some(&output)),
@@ -534,11 +576,11 @@ impl Inner {
         let _lifecycle = self.lifecycle.lock().unwrap();
         {
             let mut spare = self.spare.lock().unwrap();
-            if let Some(s) = spare.as_ref() {
-                if s.state.lock().unwrap().submitted.is_empty() {
-                    s.process.kill(false);
-                    *spare = None;
-                }
+            if let Some(s) = spare.as_ref()
+                && s.state.lock().unwrap().submitted.is_empty()
+            {
+                s.process.kill(false);
+                *spare = None;
             }
         }
         let id = self.ids.new_id();
@@ -548,7 +590,10 @@ impl Inner {
     }
 
     fn refresh_rate_limits(&self) -> Result<()> {
-        let usage = self.any_session()?.connection.control("get_usage", &OpaqueObject::new())?;
+        let usage = self
+            .any_session()?
+            .connection
+            .control("get_usage", &OpaqueObject::new())?;
         let r: cw::UsageResponse = wire::project(&usage);
         let limits = r
             .rate_limits
@@ -564,7 +609,9 @@ impl Inner {
                         used_percent: window
                             .utilization
                             .get()
-                            .filter(|v| !wire::is_object(v) && !wire::is_array(v) && !wire::is_null(v))
+                            .filter(|v| {
+                                !wire::is_object(v) && !wire::is_array(v) && !wire::is_null(v)
+                            })
                             .and_then(|v| Json(Some(v.clone())).display_text())
                             .and_then(|t| t.parse().ok()),
                         window_minutes: None,
@@ -588,7 +635,10 @@ impl Inner {
     }
 
     fn refresh_models(&self) -> Result<ModelCatalog> {
-        let response = self.any_session()?.connection.control("list_models", &OpaqueObject::new())?;
+        let response = self
+            .any_session()?
+            .connection
+            .control("list_models", &OpaqueObject::new())?;
         let catalog = mapper::models(wire::project::<cw::Initialized>(&response).models.get());
         self.emit(AgentEvent::ModelsChanged {
             backend: B,
@@ -606,8 +656,12 @@ impl Inner {
 
     fn login(&self, method: LoginMethod, secret: Option<Secret>) -> Result<LoginFlow> {
         let flow = match method {
-            LoginMethod::ClaudeTerminalLogin => self.terminal(launch::login_argv(&self.config.launch)),
-            LoginMethod::ClaudeSetupToken => self.terminal(launch::setup_token_argv(&self.config.launch)),
+            LoginMethod::ClaudeTerminalLogin => {
+                self.terminal(launch::login_argv(&self.config.launch))
+            }
+            LoginMethod::ClaudeSetupToken => {
+                self.terminal(launch::setup_token_argv(&self.config.launch))
+            }
             LoginMethod::ClaudeApiKey => {
                 let key = secret
                     .filter(|s| !s.0.trim().is_empty())
@@ -623,7 +677,9 @@ impl Inner {
             other => {
                 return Err(ChatError::invalid(format!(
                     "{} is not a Claude login method",
-                    serde_json::to_string(&other).unwrap_or_default().trim_matches('"')
+                    serde_json::to_string(&other)
+                        .unwrap_or_default()
+                        .trim_matches('"')
                 )));
             }
         };
@@ -636,7 +692,14 @@ impl Inner {
 
     // ---------------------------------------------------------------- threads
 
-    fn upserted(&self, s: &Session, thread: &str, cwd: &str, forked_from: Option<&str>, settings: bool) -> Result<()> {
+    fn upserted(
+        &self,
+        s: &Session,
+        thread: &str,
+        cwd: &str,
+        forked_from: Option<&str>,
+        settings: bool,
+    ) -> Result<()> {
         let state = s.state.lock().unwrap();
         self.emit(AgentEvent::ThreadUpserted {
             backend: B,
@@ -644,7 +707,11 @@ impl Inner {
             title: None,
             preview: None,
             cwd: Some(cwd.into()),
-            path: Some(launch::transcript_path(&self.config.launch.config_dir, cwd, thread)?),
+            path: Some(launch::transcript_path(
+                &self.config.launch.config_dir,
+                cwd,
+                thread,
+            )?),
             forked_from: forked_from.map(str::to_owned),
             ephemeral: None,
             run_state: Some(RunState::Idle),
@@ -665,10 +732,9 @@ impl Inner {
         let reuse = {
             let _lifecycle = self.lifecycle.lock().unwrap();
             let mut spare = self.spare.lock().unwrap();
-            if spare
-                .as_ref()
-                .is_some_and(|s| s.cwd == options.cwd && options.settings == TurnSettings::default())
-            {
+            if spare.as_ref().is_some_and(|s| {
+                s.cwd == options.cwd && options.settings == TurnSettings::default()
+            }) {
                 spare.take()
             } else {
                 None
@@ -711,7 +777,12 @@ impl Inner {
         }))
     }
 
-    fn fork_thread(&self, thread: &str, at_turn: Option<&str>, options: &ThreadOptions) -> Result<String> {
+    fn fork_thread(
+        &self,
+        thread: &str,
+        at_turn: Option<&str>,
+        options: &ThreadOptions,
+    ) -> Result<String> {
         let anchor = match at_turn {
             None => None,
             Some(turn) => {
@@ -727,7 +798,9 @@ impl Inner {
                         .transcript(&options.cwd, thread)?
                         .and_then(|lines| transcript::last_uuid(&lines, turn)),
                 };
-                Some(anchor.ok_or_else(|| ChatError::invalid(format!("turn {turn} not found in {thread}")))?)
+                Some(anchor.ok_or_else(|| {
+                    ChatError::invalid(format!("turn {turn} not found in {thread}"))
+                })?)
             }
         };
         let id = self.ids.new_id();
@@ -813,8 +886,13 @@ impl Inner {
             let st = s.state.lock().unwrap();
             (st.model.clone(), st.effort.clone())
         };
-        if let Some(model) = settings.model.as_ref().filter(|m| Some(*m) != current.0.as_ref()) {
-            s.connection.control("set_model", &fields(&Model { model }))?;
+        if let Some(model) = settings
+            .model
+            .as_ref()
+            .filter(|m| Some(*m) != current.0.as_ref())
+        {
+            s.connection
+                .control("set_model", &fields(&Model { model }))?;
             s.state.lock().unwrap().model = Some(model.clone());
             self.emit(AgentEvent::ThreadSettingsChanged {
                 backend: B,
@@ -825,7 +903,11 @@ impl Inner {
                 },
             });
         }
-        if let Some(effort) = settings.effort.as_ref().filter(|e| Some(*e) != current.1.as_ref()) {
+        if let Some(effort) = settings
+            .effort
+            .as_ref()
+            .filter(|e| Some(*e) != current.1.as_ref())
+        {
             s.connection.control(
                 "apply_flag_settings",
                 &fields(&FlagSettings {
@@ -852,17 +934,26 @@ impl Inner {
 
     fn set_mode(&self, s: &Session, mode: &str) -> Result<()> {
         if !ALLOWED_MODES.contains(&mode) {
-            return Err(ChatError::state(format!("permission mode {mode} is not allowed")));
+            return Err(ChatError::state(format!(
+                "permission mode {mode} is not allowed"
+            )));
         }
         if s.state.lock().unwrap().mode == mode {
             return Ok(());
         }
-        s.connection.control("set_permission_mode", &fields(&Mode { mode }))?;
+        s.connection
+            .control("set_permission_mode", &fields(&Mode { mode }))?;
         s.state.lock().unwrap().mode = mode.into();
         Ok(())
     }
 
-    fn send(&self, thread: &str, parts: Vec<UserPart>, settings: Option<TurnSettings>, mode: SendMode) -> Result<String> {
+    fn send(
+        &self,
+        thread: &str,
+        parts: Vec<UserPart>,
+        settings: Option<TurnSettings>,
+        mode: SendMode,
+    ) -> Result<String> {
         let existing = self.sessions.lock().unwrap().get(thread).cloned();
         let s = match existing {
             Some(s) => s,
@@ -881,14 +972,15 @@ impl Inner {
             settings: settings.clone(),
             at_ms: Some(self.clock.now_ms()),
         });
-        let sent = requests::content(&parts, &*self.attachments, self.config.max_inline_bytes).and_then(|content| {
-            s.state.lock().unwrap().submitted.push(client.clone());
-            s.connection.send(&requests::user_message(
-                &client,
-                &content,
-                (mode == SendMode::Steer).then_some("now"),
-            ))
-        });
+        let sent = requests::content(&parts, &*self.attachments, self.config.max_inline_bytes)
+            .and_then(|content| {
+                s.state.lock().unwrap().submitted.push(client.clone());
+                s.connection.send(&requests::user_message(
+                    &client,
+                    &content,
+                    (mode == SendMode::Steer).then_some("now"),
+                ))
+            });
         if let Err(e) = sent {
             s.state.lock().unwrap().submitted.retain(|c| *c != client);
             self.emit(AgentEvent::TurnCompleted {
@@ -897,7 +989,11 @@ impl Inner {
                 turn_id: client,
                 status: TurnStatus::Failed,
                 error: Some(TurnError {
-                    message: if e.message.is_empty() { "send failed".into() } else { e.message.clone() },
+                    message: if e.message.is_empty() {
+                        "send failed".into()
+                    } else {
+                        e.message.clone()
+                    },
                     code: Some("sendFailed".into()),
                     ..Default::default()
                 }),
@@ -917,14 +1013,20 @@ impl Inner {
         if key.backend != B {
             return Err(ChatError::invalid("request belongs to another backend"));
         }
-        let id: String = wire::decode(&key.raw_id).map_err(|_| ChatError::state("bad request key"))?;
+        let id: String =
+            wire::decode(&key.raw_id).map_err(|_| ChatError::state("bad request key"))?;
         let (session, request) = self
             .open_requests
             .lock()
             .unwrap()
             .get(&id)
             .cloned()
-            .ok_or_else(|| ChatError::new(ErrorKind::RequestExpired, format!("request {id} is not open")))?;
+            .ok_or_else(|| {
+                ChatError::new(
+                    ErrorKind::RequestExpired,
+                    format!("request {id} is not open"),
+                )
+            })?;
         let s = self.session(&session)?;
         let answer = requests::answer(&request, response)?;
         let summary = match answer.reply {
@@ -932,22 +1034,25 @@ impl Inner {
                 s.connection.respond(&id, Some(&value))?;
                 summary
             }
-            UserReply::Error { message, summary, .. } => {
+            UserReply::Error {
+                message, summary, ..
+            } => {
                 s.connection.respond_error(&id, &message)?;
                 summary
             }
         };
         self.open_requests.lock().unwrap().remove(&id);
-        if answer.denied && matches!(request.kind, RequestKind::ToolApproval { .. }) {
-            if let Some(item) = &request.item_id {
-                s.mapper.lock().unwrap().mark_denied(item);
-                self.emit(AgentEvent::ItemDeclined {
-                    backend: B,
-                    thread_id: session.clone(),
-                    turn_id: request.turn_id.clone(),
-                    item_id: item.clone(),
-                });
-            }
+        if answer.denied
+            && matches!(request.kind, RequestKind::ToolApproval { .. })
+            && let Some(item) = &request.item_id
+        {
+            s.mapper.lock().unwrap().mark_denied(item);
+            self.emit(AgentEvent::ItemDeclined {
+                backend: B,
+                thread_id: session.clone(),
+                turn_id: request.turn_id.clone(),
+                item_id: item.clone(),
+            });
         }
         self.emit(AgentEvent::RequestClosed {
             key: key.clone(),
@@ -957,7 +1062,12 @@ impl Inner {
         Ok(())
     }
 
-    fn raw_request(&self, method: &str, params: Option<OpaqueJson>, thread: Option<&str>) -> Result<OpaqueJson> {
+    fn raw_request(
+        &self,
+        method: &str,
+        params: Option<OpaqueJson>,
+        thread: Option<&str>,
+    ) -> Result<OpaqueJson> {
         if method == "initialize" {
             return Err(ChatError::invalid("initialize is sent once per process"));
         }
@@ -966,7 +1076,9 @@ impl Inner {
             .map(|p| wire::project(&p))
             .unwrap_or_default();
         if method == "set_permission_mode" {
-            let mode = body.get("mode").and_then(|m| Json(Some(m.clone())).string());
+            let mode = body
+                .get("mode")
+                .and_then(|m| Json(Some(m.clone())).string());
             if !mode.as_deref().is_some_and(|m| ALLOWED_MODES.contains(&m)) {
                 return Err(ChatError::state("permission mode not allowed"));
             }
@@ -1029,7 +1141,12 @@ impl Backend for ClaudeBackend {
     fn resume_thread(&self, thread: &str, options: &ThreadOptions) -> Result<String> {
         self.0.resume_thread(thread, options)
     }
-    fn fork_thread(&self, thread: &str, at_turn: Option<&str>, options: &ThreadOptions) -> Result<String> {
+    fn fork_thread(
+        &self,
+        thread: &str,
+        at_turn: Option<&str>,
+        options: &ThreadOptions,
+    ) -> Result<String> {
         self.0.fork_thread(thread, at_turn, options)
     }
     fn load_history(&self, thread: &str, older_than: Option<&str>) -> Result<()> {
@@ -1059,10 +1176,23 @@ impl Backend for ClaudeBackend {
     }
     fn compact(&self, thread: &str) -> Result<()> {
         self.0
-            .send(thread, vec![UserPart::Text { text: "/compact".into() }], None, SendMode::Start)
+            .send(
+                thread,
+                vec![UserPart::Text {
+                    text: "/compact".into(),
+                }],
+                None,
+                SendMode::Start,
+            )
             .map(|_| ())
     }
-    fn send(&self, thread: &str, parts: Vec<UserPart>, settings: Option<TurnSettings>, mode: SendMode) -> Result<String> {
+    fn send(
+        &self,
+        thread: &str,
+        parts: Vec<UserPart>,
+        settings: Option<TurnSettings>,
+        mode: SendMode,
+    ) -> Result<String> {
         self.0.send(thread, parts, settings, mode)
     }
     fn cancel_queued(&self, thread: &str, client_message_id: &str) -> Result<()> {
@@ -1073,11 +1203,11 @@ impl Backend for ClaudeBackend {
                 message_uuid: client_message_id,
             }),
         )?;
-        let events = s
-            .mapper
-            .lock()
-            .unwrap()
-            .end_turn(client_message_id, TurnStatus::Cancelled, None);
+        let events =
+            s.mapper
+                .lock()
+                .unwrap()
+                .end_turn(client_message_id, TurnStatus::Cancelled, None);
         events.into_iter().for_each(|e| self.0.emit(e));
         Ok(())
     }
@@ -1095,7 +1225,12 @@ impl Backend for ClaudeBackend {
     fn respond(&self, key: &RequestKey, response: &RequestResponse) -> Result<()> {
         self.0.respond(key, response)
     }
-    fn raw_request(&self, method: &str, params: Option<OpaqueJson>, thread: Option<&str>) -> Result<OpaqueJson> {
+    fn raw_request(
+        &self,
+        method: &str,
+        params: Option<OpaqueJson>,
+        thread: Option<&str>,
+    ) -> Result<OpaqueJson> {
         self.0.raw_request(method, params, thread)
     }
 }

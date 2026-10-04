@@ -93,9 +93,10 @@ impl Write for Capture {
         for byte in bytes {
             if *byte == b'\n' {
                 let line = std::mem::take(&mut self.buffer);
-                let frame: Value = crate::wire::parse(std::str::from_utf8(&line).expect("UTF-8 frame"))
-                    .expect("adapter wrote JSON")
-                    .0;
+                let frame: Value =
+                    crate::wire::parse(std::str::from_utf8(&line).expect("UTF-8 frame"))
+                        .expect("adapter wrote JSON")
+                        .0;
                 if let Some(process) = self.process.upgrade() {
                     if process.exit.lock().unwrap().is_some() {
                         return Err(std::io::ErrorKind::BrokenPipe.into());
@@ -195,7 +196,9 @@ pub struct FakeRuntime {
     pub fail: Mutex<Option<String>>,
 }
 impl FakeRuntime {
-    pub fn new(factory: impl Fn(usize, &SpawnSpec) -> Arc<FakeProcess> + Send + Sync + 'static) -> Arc<Self> {
+    pub fn new(
+        factory: impl Fn(usize, &SpawnSpec) -> Arc<FakeProcess> + Send + Sync + 'static,
+    ) -> Arc<Self> {
         Arc::new(Self {
             factory: Box::new(factory),
             launched: Mutex::new(Vec::new()),
@@ -212,7 +215,12 @@ impl FakeRuntime {
         self.launched.lock().unwrap()[n].clone()
     }
     pub fn last(&self) -> Arc<FakeProcess> {
-        self.launched.lock().unwrap().last().cloned().expect("a process was launched")
+        self.launched
+            .lock()
+            .unwrap()
+            .last()
+            .cloned()
+            .expect("a process was launched")
     }
     pub fn count(&self) -> usize {
         self.launched.lock().unwrap().len()
@@ -249,7 +257,11 @@ pub fn envelopes(text: &str) -> Vec<Envelope> {
             Envelope {
                 phase: v["phase"].as_str().unwrap_or("").into(),
                 dir: v["dir"].as_str().unwrap_or("").into(),
-                msg: if v["msg"].is_object() { v["msg"].clone() } else { json!({}) },
+                msg: if v["msg"].is_object() {
+                    v["msg"].clone()
+                } else {
+                    json!({})
+                },
             }
         })
         .collect()
@@ -309,7 +321,12 @@ impl ScriptedServer {
         }
     }
     pub fn remaining(&self) -> usize {
-        self.steps.lock().unwrap().iter().filter(|s| !s.consumed).count()
+        self.steps
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|s| !s.consumed)
+            .count()
     }
     /// A runtime whose n-th process replays `servers[n]`.
     pub fn runtime(servers: Vec<Arc<ScriptedServer>>) -> Arc<FakeRuntime> {
@@ -334,19 +351,24 @@ impl ScriptedServer {
         let index = steps.iter().position(|s| {
             !s.consumed
                 && match (method, id) {
-                    (Some(m), Some(_)) => s.out["method"].as_str() == Some(m) && s.out.get("id").is_some(),
-                    (Some(m), None) => s.out["method"].as_str() == Some(m) && s.out.get("id").is_none(),
-                    (None, Some(id)) => s.out.get("method").is_none() && s.out.get("id") == Some(id),
+                    (Some(m), Some(_)) => {
+                        s.out["method"].as_str() == Some(m) && s.out.get("id").is_some()
+                    }
+                    (Some(m), None) => {
+                        s.out["method"].as_str() == Some(m) && s.out.get("id").is_none()
+                    }
+                    (None, Some(id)) => {
+                        s.out.get("method").is_none() && s.out.get("id") == Some(id)
+                    }
                     _ => false,
                 }
         });
         let Some(index) = index else {
             self.unmatched.lock().unwrap().push(frame.clone());
             if let (Some(method), Some(id)) = (method, id) {
-                let previous = steps
-                    .iter()
-                    .rev()
-                    .find(|s| s.out["method"].as_str() == Some(method) && s.out.get("id").is_some());
+                let previous = steps.iter().rev().find(|s| {
+                    s.out["method"].as_str() == Some(method) && s.out.get("id").is_some()
+                });
                 let response = previous.and_then(|p| {
                     p.inbound
                         .iter()
@@ -368,7 +390,11 @@ impl ScriptedServer {
                 && msg.get("method").is_none()
                 && msg.get("id") == recorded.as_ref()
                 && (msg.get("result").is_some() || msg.get("error").is_some());
-            process.emit(&if ours { with(msg, "id", id.unwrap().clone()) } else { msg.clone() });
+            process.emit(&if ours {
+                with(msg, "id", id.unwrap().clone())
+            } else {
+                msg.clone()
+            });
         }
     }
     fn control(&self, steps: &mut [Step], process: &FakeProcess, frame: &Value) {
@@ -378,7 +404,8 @@ impl ScriptedServer {
             !s.consumed
                 && match kind {
                     Some("control_request") => {
-                        s.out["type"].as_str() == Some("control_request") && subtype(&s.out) == subtype(frame)
+                        s.out["type"].as_str() == Some("control_request")
+                            && subtype(&s.out) == subtype(frame)
                     }
                     Some("control_response") => {
                         s.out["type"].as_str() == Some("control_response")
@@ -394,7 +421,8 @@ impl ScriptedServer {
             if kind == Some("control_request") {
                 let id = ours.unwrap_or(Value::Null);
                 let previous = steps.iter().rev().find(|s| {
-                    s.out["type"].as_str() == Some("control_request") && subtype(&s.out) == subtype(frame)
+                    s.out["type"].as_str() == Some("control_request")
+                        && subtype(&s.out) == subtype(frame)
                 });
                 let response = previous.and_then(|p| {
                     p.inbound.iter().find(|m| {
@@ -417,7 +445,11 @@ impl ScriptedServer {
             let is_ours = kind == Some("control_request")
                 && msg["type"].as_str() == Some("control_response")
                 && msg["response"]["request_id"] == recorded;
-            process.emit(&if is_ours { rewrite(msg, ours.clone().unwrap_or(Value::Null)) } else { msg.clone() });
+            process.emit(&if is_ours {
+                rewrite(msg, ours.clone().unwrap_or(Value::Null))
+            } else {
+                msg.clone()
+            });
         }
     }
 }
@@ -456,7 +488,12 @@ impl EventStore {
     pub fn wait(&self, what: &str, predicate: impl Fn(&AgentState) -> bool) -> AgentState {
         self.wait_for(Duration::from_secs(10), what, predicate)
     }
-    pub fn wait_for(&self, timeout: Duration, what: &str, predicate: impl Fn(&AgentState) -> bool) -> AgentState {
+    pub fn wait_for(
+        &self,
+        timeout: Duration,
+        what: &str,
+        predicate: impl Fn(&AgentState) -> bool,
+    ) -> AgentState {
         let deadline = Instant::now() + timeout;
         let mut guard = self.state.lock().unwrap();
         loop {
@@ -575,7 +612,10 @@ pub mod ports {
     };
     use std::{
         collections::BTreeMap,
-        sync::{Mutex, atomic::{AtomicUsize, Ordering}},
+        sync::{
+            Mutex,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
     use workflow_environment::{
         config::ConfigSection,
@@ -608,7 +648,10 @@ pub mod ports {
             Ok(self.sends.lock().unwrap().get(key).cloned())
         }
         fn write_send(&self, key: &str, record: &SendRecord) -> Result<()> {
-            self.sends.lock().unwrap().insert(key.into(), record.clone());
+            self.sends
+                .lock()
+                .unwrap()
+                .insert(key.into(), record.clone());
             Ok(())
         }
         fn remove_sends(&self, conversation: &str) -> Result<()> {
@@ -643,7 +686,12 @@ pub mod ports {
     }
     impl WorkspaceBridge for MemoryWorkspace {
         fn read_attachment(&self, path: &str, max: usize) -> Result<Option<Vec<u8>>> {
-            Ok(self.files.lock().unwrap().get(path).map(|b| b[..b.len().min(max)].to_vec()))
+            Ok(self
+                .files
+                .lock()
+                .unwrap()
+                .get(path)
+                .map(|b| b[..b.len().min(max)].to_vec()))
         }
         fn acknowledge_composer(&self, submitted: &SubmittedComposer) -> Result<()> {
             self.acknowledged.lock().unwrap().push(submitted.clone());
@@ -674,7 +722,10 @@ pub mod ports {
     impl FakeTools {
         pub fn new(codex: ToolPhase, claude: ToolPhase) -> Self {
             Self {
-                phases: Mutex::new(BTreeMap::from([("codex".into(), codex), ("claude".into(), claude)])),
+                phases: Mutex::new(BTreeMap::from([
+                    ("codex".into(), codex),
+                    ("claude".into(), claude),
+                ])),
                 installs: AtomicUsize::new(0),
             }
         }

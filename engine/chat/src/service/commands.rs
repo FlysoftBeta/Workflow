@@ -129,7 +129,8 @@ pub(super) fn dispatch(hub: &Hub, name: &str, a: &OpaqueObject) -> Result<Opaque
         "newConversation" => {
             let p: NewConversation = args(a)?;
             let kind = p.backend.as_deref().map(backend).transpose()?;
-            let created = hub.new_conversation(kind, p.id.unwrap_or_else(|| hub.ports.ids.new_id()))?;
+            let created =
+                hub.new_conversation(kind, p.id.unwrap_or_else(|| hub.ports.ids.new_id()))?;
             hub.refresh_tools(hub.entry(&created).map(|e| e.backend))?;
             wire::string_value(&created)
         }
@@ -163,7 +164,9 @@ pub(super) fn dispatch(hub: &Hub, name: &str, a: &OpaqueObject) -> Result<Opaque
                 || p.submitted.text != p.text
                 || p.submitted.attachments != p.attachments
             {
-                return Err(ChatError::invalid("Submitted composer does not match the message"));
+                return Err(ChatError::invalid(
+                    "Submitted composer does not match the message",
+                ));
             }
             let settings = p.settings.unwrap_or_default();
             let mode = match p.mode.as_deref() {
@@ -188,7 +191,9 @@ pub(super) fn dispatch(hub: &Hub, name: &str, a: &OpaqueObject) -> Result<Opaque
         }
         "cancelQueued" => {
             let p: CancelQueued = args(a)?;
-            hub.with_thread(&p.id, |b, thread| b.cancel_queued(thread, &p.client_message_id))?;
+            hub.with_thread(&p.id, |b, thread| {
+                b.cancel_queued(thread, &p.client_message_id)
+            })?;
             null()
         }
         "respond" => {
@@ -216,10 +221,14 @@ pub(super) fn dispatch(hub: &Hub, name: &str, a: &OpaqueObject) -> Result<Opaque
             null()
         }
         "refreshUsage" => {
-            hub.connect(backend(&args::<Kind>(a)?.kind)?)?.refresh_rate_limits()?;
+            hub.connect(backend(&args::<Kind>(a)?.kind)?)?
+                .refresh_rate_limits()?;
             null()
         }
-        "refreshModels" => wire::encode(&hub.connect(backend(&args::<Kind>(a)?.kind)?)?.refresh_models()?),
+        "refreshModels" => wire::encode(
+            &hub.connect(backend(&args::<Kind>(a)?.kind)?)?
+                .refresh_models()?,
+        ),
         "rawRequest" => {
             let p: Raw = args(a)?;
             hub.raw_request(&p.id, &p.method, p.params.filter(|v| !wire::is_null(v)))?
@@ -253,7 +262,8 @@ pub(super) fn dispatch(hub: &Hub, name: &str, a: &OpaqueObject) -> Result<Opaque
             null()
         }
         "refreshAccount" => {
-            hub.connect(backend(&args::<Kind>(a)?.kind)?)?.refresh_account()?;
+            hub.connect(backend(&args::<Kind>(a)?.kind)?)?
+                .refresh_account()?;
             null()
         }
         "warmUp" => {

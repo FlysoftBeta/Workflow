@@ -107,7 +107,10 @@ struct NetworkRule {
 pub enum Disposition {
     Ask(PendingRequest),
     /// A harmless factual or negative capability answer (current time, no dynamic tools).
-    Fact { record: PendingRequest, result: OpaqueJson },
+    Fact {
+        record: PendingRequest,
+        result: OpaqueJson,
+    },
     /// Unsupported known method: answered with a JSON-RPC error and recorded as rejected.
     Unsupported {
         record: PendingRequest,
@@ -147,9 +150,11 @@ pub fn command_decisions(available: Option<&OpaqueJson>) -> Vec<Decision> {
         let keys = Json(Some(member.clone())).keys();
         let mut d = match text.as_deref() {
             Some("accept") => decision("accept", DecisionKind::AllowOnce, Some(member.clone())),
-            Some("acceptForSession") => {
-                decision("acceptForSession", DecisionKind::AllowSession, Some(member.clone()))
-            }
+            Some("acceptForSession") => decision(
+                "acceptForSession",
+                DecisionKind::AllowSession,
+                Some(member.clone()),
+            ),
             Some("decline") => decision("decline", DecisionKind::Deny, Some(member.clone())),
             Some("cancel") => decision("cancel", DecisionKind::Abort, Some(member.clone())),
             _ if keys.iter().any(|k| k == "acceptWithExecpolicyAmendment") => {
@@ -318,7 +323,10 @@ pub fn pending(
                         }
                     })
                     .collect(),
-                network_host: p.network_approval_context.get().and_then(|n| n.host.owned()),
+                network_host: p
+                    .network_approval_context
+                    .get()
+                    .and_then(|n| n.host.owned()),
             },
             command_decisions(p.available_decisions.get()),
             p.item_id.owned(),
@@ -338,7 +346,11 @@ pub fn pending(
             p.item_id.owned(),
         ),
         "item/permissions/requestApproval" => {
-            let requested = p.permissions.get().cloned().unwrap_or_else(wire::empty_object);
+            let requested = p
+                .permissions
+                .get()
+                .cloned()
+                .unwrap_or_else(wire::empty_object);
             let empty = wire::empty_object();
             card(
                 RequestKind::PermissionsApproval {
@@ -350,17 +362,26 @@ pub fn pending(
                     decision(
                         "grantTurn",
                         DecisionKind::AllowOnce,
-                        Some(wire::encode(&Grant { permissions: &requested, scope: "turn" })),
+                        Some(wire::encode(&Grant {
+                            permissions: &requested,
+                            scope: "turn",
+                        })),
                     ),
                     decision(
                         "grantSession",
                         DecisionKind::AllowSession,
-                        Some(wire::encode(&Grant { permissions: &requested, scope: "session" })),
+                        Some(wire::encode(&Grant {
+                            permissions: &requested,
+                            scope: "session",
+                        })),
                     ),
                     decision(
                         "decline",
                         DecisionKind::Deny,
-                        Some(wire::encode(&Grant { permissions: &empty, scope: "turn" })),
+                        Some(wire::encode(&Grant {
+                            permissions: &empty,
+                            scope: "turn",
+                        })),
                     ),
                 ],
                 p.item_id.owned(),
@@ -424,7 +445,11 @@ pub fn pending(
         ),
         "execCommandApproval" => card(
             RequestKind::CommandApproval {
-                command: Some(project::<Strings>(p.command.get().unwrap_or(&OpaqueJson::default())).0.join(" ")),
+                command: Some(
+                    project::<Strings>(p.command.get().unwrap_or(&OpaqueJson::default()))
+                        .0
+                        .join(" "),
+                ),
                 cwd: p.cwd.owned(),
                 reason: p.reason.owned(),
                 actions: vec![],
@@ -492,8 +517,15 @@ fn legacy_decisions() -> Vec<Decision> {
 /// The JSON-RPC answer for a user's response on `request`.
 #[derive(Debug, PartialEq)]
 pub enum UserReply {
-    Result { value: OpaqueJson, summary: String },
-    Error { code: i64, message: String, summary: String },
+    Result {
+        value: OpaqueJson,
+        summary: String,
+    },
+    Error {
+        code: i64,
+        message: String,
+        summary: String,
+    },
 }
 
 fn not_offered(request: &PendingRequest, id: &str) -> ChatError {
@@ -567,9 +599,13 @@ pub fn answer(request: &PendingRequest, response: &RequestResponse) -> Result<Us
                             denied: Rejection { rejection: m },
                         }),
                     }),
-                    _ => wire::encode(&DecisionValue { decision: wire_value }),
+                    _ => wire::encode(&DecisionValue {
+                        decision: wire_value,
+                    }),
                 },
-                _ => wire::encode(&DecisionValue { decision: wire_value }),
+                _ => wire::encode(&DecisionValue {
+                    decision: wire_value,
+                }),
             };
             Ok(UserReply::Result {
                 value,
@@ -578,9 +614,7 @@ pub fn answer(request: &PendingRequest, response: &RequestResponse) -> Result<Us
         }
         RequestResponse::Answer { answers } => {
             let RequestKind::UserInput { questions, .. } = &request.kind else {
-                return Err(ChatError::invalid(
-                    "request is not a question".to_string(),
-                ));
+                return Err(ChatError::invalid("request is not a question".to_string()));
             };
             if let Some(unknown) = answers
                 .keys()

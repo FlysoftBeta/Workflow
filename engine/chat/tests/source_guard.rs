@@ -13,12 +13,26 @@ fn chat_sources_use_no_direct_io_or_process_apis() {
         }
     }
     let mut files = Vec::new();
-    visit(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut files);
+    visit(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
     assert!(files.len() > 20);
     for file in files {
         let text = std::fs::read_to_string(&file).unwrap();
-        for forbidden in ["std::fs", "std::process", "libc::", "Command::new", "File::open", "unsafe "] {
-            assert!(!text.contains(forbidden), "{} uses {forbidden}", file.display());
+        for forbidden in [
+            "std::fs",
+            "std::process",
+            "libc::",
+            "Command::new",
+            "File::open",
+            "unsafe ",
+        ] {
+            assert!(
+                !text.contains(forbidden),
+                "{} uses {forbidden}",
+                file.display()
+            );
         }
     }
 }

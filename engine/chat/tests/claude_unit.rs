@@ -19,7 +19,15 @@ fn o(v: Value) -> OpaqueJson {
 }
 fn can_use_tool(request: Value) -> PendingRequest {
     let raw = json!({"type":"control_request","request_id":"r1","request":request});
-    requests::pending("r1", "can_use_tool", &o(request), &o(raw), Some("s"), Some("t"), 1)
+    requests::pending(
+        "r1",
+        "can_use_tool",
+        &o(request),
+        &o(raw),
+        Some("s"),
+        Some("t"),
+        1,
+    )
 }
 fn decide(id: &str, message: Option<&str>) -> RequestResponse {
     RequestResponse::Decide {
@@ -39,9 +47,11 @@ fn ids(request: &PendingRequest) -> Vec<&str> {
 
 #[test]
 fn tool_approval_offers_only_what_the_cli_allows() {
-    let req = can_use_tool(json!({"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"rm x"},"tool_use_id":"tu",
+    let req = can_use_tool(
+        json!({"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"rm x"},"tool_use_id":"tu",
         "decision_reason":"\u{1b}[31mdangerous\u{1b}[0m","default_to_no":true,"suppress_always_allow_rule":true,
-        "permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"rm x"}],"behavior":"allow","destination":"localSettings"}]}));
+        "permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"rm x"}],"behavior":"allow","destination":"localSettings"}]}),
+    );
     assert_eq!(ids(&req), ["allow", "deny", "denyAndStop"]);
     let RequestKind::ToolApproval {
         reason,
@@ -56,13 +66,19 @@ fn tool_approval_offers_only_what_the_cli_allows() {
     let interactive = can_use_tool(
         json!({"subtype":"can_use_tool","tool_name":"Bash","input":{},"tool_use_id":"tu","requires_user_interaction":true}),
     );
-    assert_eq!(ids(&interactive), ["deny", "denyAndStop"], "no one-tap approve");
+    assert_eq!(
+        ids(&interactive),
+        ["deny", "denyAndStop"],
+        "no one-tap approve"
+    );
 }
 
 #[test]
 fn answers_are_built_from_the_offered_decision_only() {
-    let req = can_use_tool(json!({"subtype":"can_use_tool","tool_name":"Edit","input":{"file_path":"/workspace/a"},"tool_use_id":"tu",
-        "permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}]}));
+    let req = can_use_tool(
+        json!({"subtype":"can_use_tool","tool_name":"Edit","input":{"file_path":"/workspace/a"},"tool_use_id":"tu",
+        "permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}]}),
+    );
     assert_eq!(
         payload(&req, &decide("allowAlways:0", None)),
         json!({"behavior":"allow","updatedInput":{"file_path":"/workspace/a"},
@@ -74,7 +90,9 @@ fn answers_are_built_from_the_offered_decision_only() {
         json!({"behavior":"deny","message":"no","interrupt":true})
     );
     assert_eq!(
-        requests::answer(&req, &decide("allowAlways:5", None)).unwrap_err().kind,
+        requests::answer(&req, &decide("allowAlways:5", None))
+            .unwrap_err()
+            .kind,
         ErrorKind::DecisionNotOffered
     );
     assert!(
@@ -90,9 +108,11 @@ fn answers_are_built_from_the_offered_decision_only() {
 
 #[test]
 fn ask_user_question_and_plan_approval() {
-    let ask = can_use_tool(json!({"subtype":"can_use_tool","tool_name":"AskUserQuestion","tool_use_id":"tu","input":{"questions":[
+    let ask = can_use_tool(
+        json!({"subtype":"can_use_tool","tool_name":"AskUserQuestion","tool_use_id":"tu","input":{"questions":[
         {"question":"Which DB?","header":"DB","multiSelect":false,"options":[{"label":"Postgres","description":"p"},{"label":"SQLite","description":"s"}]},
-        {"question":"Features?","header":"F","multiSelect":true,"options":[{"label":"A","description":""},{"label":"B","description":""}]}]}}));
+        {"question":"Features?","header":"F","multiSelect":true,"options":[{"label":"A","description":""},{"label":"B","description":""}]}]}}),
+    );
     let RequestKind::UserInput { questions, .. } = &ask.kind else {
         panic!()
     };
@@ -106,7 +126,10 @@ fn ask_user_question_and_plan_approval() {
         &RequestResponse::Answer {
             answers: BTreeMap::from([
                 ("Which DB?".to_string(), vec!["SQLite".to_string()]),
-                ("Features?".to_string(), vec!["A".to_string(), "B".to_string()]),
+                (
+                    "Features?".to_string(),
+                    vec!["A".to_string(), "B".to_string()],
+                ),
             ]),
         },
     );
@@ -115,7 +138,13 @@ fn ask_user_question_and_plan_approval() {
         answer["updatedInput"]["answers"],
         json!({"Which DB?":"SQLite","Features?":"A, B"})
     );
-    assert_eq!(answer["updatedInput"]["questions"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        answer["updatedInput"]["questions"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
     let plan = can_use_tool(
         json!({"subtype":"can_use_tool","tool_name":"ExitPlanMode","tool_use_id":"tu","input":{"plan":"1. do it"}}),
     );
@@ -128,7 +157,9 @@ fn elicitation_and_undeclared_dialogs() {
     let elicit = requests::pending(
         "e1",
         "elicitation",
-        &o(json!({"subtype":"elicitation","mcp_server_name":"gh","message":"Token?","mode":"form","requested_schema":{"type":"object"}})),
+        &o(
+            json!({"subtype":"elicitation","mcp_server_name":"gh","message":"Token?","mode":"form","requested_schema":{"type":"object"}}),
+        ),
         &o(json!({})),
         Some("s"),
         None,
@@ -148,7 +179,9 @@ fn elicitation_and_undeclared_dialogs() {
     let dialog = requests::pending(
         "d1",
         "request_user_dialog",
-        &o(json!({"subtype":"request_user_dialog","dialog_kind":"refusal_fallback_prompt","payload":{}})),
+        &o(
+            json!({"subtype":"request_user_dialog","dialog_kind":"refusal_fallback_prompt","payload":{}}),
+        ),
         &o(json!({})),
         Some("s"),
         None,
@@ -156,7 +189,9 @@ fn elicitation_and_undeclared_dialogs() {
     );
     assert!(dialog.decisions.is_empty());
     assert_eq!(
-        requests::answer(&dialog, &decide("x", None)).unwrap_err().kind,
+        requests::answer(&dialog, &decide("x", None))
+            .unwrap_err()
+            .kind,
         ErrorKind::State
     );
 }
@@ -166,7 +201,9 @@ fn attachments_map_to_content_blocks() {
     let reader = |path: &str, _: usize| Ok(path.as_bytes().to_vec());
     let content = requests::content(
         &[
-            UserPart::Text { text: "look".into() },
+            UserPart::Text {
+                text: "look".into(),
+            },
             UserPart::Image {
                 path: "/workspace/a.jpg".into(),
                 mime_type: None,
@@ -200,7 +237,10 @@ fn attachments_map_to_content_blocks() {
     )
     .unwrap()
     .0;
-    assert_eq!(only, json!([{"type":"text","text":"@/workspace/notes.txt"}]));
+    assert_eq!(
+        only,
+        json!([{"type":"text","text":"@/workspace/notes.txt"}])
+    );
 }
 
 #[test]
@@ -209,10 +249,17 @@ fn launch_contract_never_weakens_permissions() {
         executable: "claude".into(),
         config_dir: "/home/work/.claude-app".into(),
         tmp_dir: "/tmp".into(),
-        base_env: [("ANTHROPIC_API_KEY", "leak"), ("CLAUDECODE", "1"), ("LANG", "C.UTF-8")]
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .into(),
-        credentials: BTreeMap::from([("CLAUDE_CODE_OAUTH_TOKEN".to_string(), Secret("app-token".into()))]),
+        base_env: [
+            ("ANTHROPIC_API_KEY", "leak"),
+            ("CLAUDECODE", "1"),
+            ("LANG", "C.UTF-8"),
+        ]
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .into(),
+        credentials: BTreeMap::from([(
+            "CLAUDE_CODE_OAUTH_TOKEN".to_string(),
+            Secret("app-token".into()),
+        )]),
         default_permissions: PermissionPreset::Ask,
         extra_args: vec![],
     };
@@ -226,7 +273,15 @@ fn launch_contract_never_weakens_permissions() {
     .unwrap();
     let at = argv.iter().position(|a| a == "--permission-mode").unwrap();
     assert_eq!(argv[at + 1], "acceptEdits");
-    for arg in ["--resume", "s1", "--model", "sonnet", "--effort", "high", "--replay-user-messages"] {
+    for arg in [
+        "--resume",
+        "s1",
+        "--model",
+        "sonnet",
+        "--effort",
+        "high",
+        "--replay-user-messages",
+    ] {
         assert!(argv.iter().any(|a| a == arg), "{arg}");
     }
     let env = launch::env(&config);
@@ -234,7 +289,10 @@ fn launch_contract_never_weakens_permissions() {
     assert!(!env.contains_key("CLAUDECODE"));
     assert_eq!(env["CLAUDE_CODE_OAUTH_TOKEN"], "app-token");
     assert_eq!(env["DISABLE_AUTOUPDATER"], "1");
-    assert_eq!(format!("{:?}", config.credentials), r#"{"CLAUDE_CODE_OAUTH_TOKEN": <redacted>}"#);
+    assert_eq!(
+        format!("{:?}", config.credentials),
+        r#"{"CLAUDE_CODE_OAUTH_TOKEN": <redacted>}"#
+    );
     for bad in [
         "--dangerously-skip-permissions",
         "--dangerously-skip-permissions=true",
@@ -245,7 +303,10 @@ fn launch_contract_never_weakens_permissions() {
         "auto",
     ] {
         config.extra_args = vec![bad.into()];
-        assert!(launch::argv(&config, &Session::New("s"), None, None, None).is_err(), "{bad}");
+        assert!(
+            launch::argv(&config, &Session::New("s"), None, None, None).is_err(),
+            "{bad}"
+        );
     }
     assert_eq!(
         launch::transcript_path("/home/work/.claude-app", "/workspace", "s1").unwrap(),
@@ -262,7 +323,11 @@ fn transcript_hydration() {
     let history = transcript::history("1577088f-7864-4263-aee6-9afe1b2f4a73", &lines);
     assert_eq!(history.title.as_deref(), Some("workflow protocol research"));
     assert_eq!(
-        history.turns.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+        history
+            .turns
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
         [
             "47397f51-ee05-4bf1-912e-296866b9da74",
             "01b893ae-40c7-451c-b444-9f3f82ab80f2",
@@ -293,7 +358,13 @@ fn transcript_hydration() {
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].parts.len(), 2);
     assert!(matches!(users[0].parts[1], UserPart::InlineData { .. }));
-    assert_eq!(t1.items.iter().filter(|i| matches!(i, Item::Reasoning(_))).count(), 1);
+    assert_eq!(
+        t1.items
+            .iter()
+            .filter(|i| matches!(i, Item::Reasoning(_)))
+            .count(),
+        1
+    );
     assert_eq!(final_message(t1).unwrap().phase, MessagePhase::Final);
     let writes: Vec<_> = t2
         .items
@@ -328,7 +399,11 @@ fn transcript_hydration() {
             .any(|i| matches!(i, Item::Marker(m) if m.kind == MarkerKind::Interrupted))
     );
     // Fork anchor for "branch after turn 2".
-    assert!(transcript::last_uuid(&lines, &t2.id).unwrap().starts_with("5366cf09"));
+    assert!(
+        transcript::last_uuid(&lines, &t2.id)
+            .unwrap()
+            .starts_with("5366cf09")
+    );
 }
 
 #[test]
@@ -341,12 +416,27 @@ fn models_and_account_from_initialize() {
         .clone();
     let catalog = mapper::models(Some(&o(init["models"].clone())));
     assert!(catalog.models.iter().all(|m| {
-        m.input_modalities.iter().any(|x| x == "image") && m.input_modalities.iter().any(|x| x == "pdf")
+        m.input_modalities.iter().any(|x| x == "image")
+            && m.input_modalities.iter().any(|x| x == "pdf")
     }));
     assert_eq!(
-        catalog.models.iter().find(|m| m.id == "opus").unwrap().default_effort.as_deref(),
+        catalog
+            .models
+            .iter()
+            .find(|m| m.id == "opus")
+            .unwrap()
+            .default_effort
+            .as_deref(),
         Some("medium")
     );
-    assert!(catalog.models.iter().find(|m| m.id == "haiku").unwrap().efforts.is_empty());
+    assert!(
+        catalog
+            .models
+            .iter()
+            .find(|m| m.id == "haiku")
+            .unwrap()
+            .efforts
+            .is_empty()
+    );
     assert_eq!(mapper::account(&o(init)).state, LoginState::LoggedOut);
 }

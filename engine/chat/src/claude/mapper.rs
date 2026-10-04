@@ -45,7 +45,13 @@ pub struct ClaudeMapper {
     marker_seq: i64,
 }
 
-fn notice(level: NoticeLevel, message: impl Into<String>, code: Option<String>, retry: bool, raw: &OpaqueJson) -> Notice {
+fn notice(
+    level: NoticeLevel,
+    message: impl Into<String>,
+    code: Option<String>,
+    retry: bool,
+    raw: &OpaqueJson,
+) -> Notice {
     Notice {
         level,
         message: message.into(),
@@ -56,7 +62,12 @@ fn notice(level: NoticeLevel, message: impl Into<String>, code: Option<String>, 
     }
 }
 fn join(parts: &[Option<String>], separator: &str) -> String {
-    parts.iter().flatten().cloned().collect::<Vec<_>>().join(separator)
+    parts
+        .iter()
+        .flatten()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(separator)
 }
 fn enum_name<T: Serialize>(value: &T) -> String {
     serde_json::to_string(value)
@@ -195,7 +206,12 @@ impl ClaudeMapper {
     }
 
     /// Transcript mode and process exit: closes `turn` unless a `result` already did.
-    pub fn end_turn(&mut self, turn: &str, status: TurnStatus, error: Option<TurnError>) -> Vec<AgentEvent> {
+    pub fn end_turn(
+        &mut self,
+        turn: &str,
+        status: TurnStatus,
+        error: Option<TurnError>,
+    ) -> Vec<AgentEvent> {
         let Some(t) = self.session_id.clone() else {
             return vec![];
         };
@@ -223,14 +239,24 @@ impl ClaudeMapper {
         };
         let i: cw::HookInput = project(input);
         let text = join(
-            &[i.hook_event_name.owned(), i.tool_name.owned(), Some(callback_id.into())],
+            &[
+                i.hook_event_name.owned(),
+                i.tool_name.owned(),
+                Some(callback_id.into()),
+            ],
             " · ",
         );
         let Some(turn) = self.current_turn.clone() else {
             return vec![AgentEvent::ThreadNotice {
                 backend: B,
                 thread_id: t,
-                notice: notice(NoticeLevel::Info, format!("Hook: {text}"), Some("hook_callback".into()), false, input),
+                notice: notice(
+                    NoticeLevel::Info,
+                    format!("Hook: {text}"),
+                    Some("hook_callback".into()),
+                    false,
+                    input,
+                ),
             }];
         };
         let id = format!("hook-{}", self.marker_seq);
@@ -255,15 +281,17 @@ impl ClaudeMapper {
     }
 
     fn turn_of(&self, f: &Frame) -> Option<String> {
-        f.user_message_uuid.owned().or_else(|| self.current_turn.clone())
+        f.user_message_uuid
+            .owned()
+            .or_else(|| self.current_turn.clone())
     }
 
     pub fn map(&mut self, raw: &OpaqueJson) -> Vec<AgentEvent> {
         let f: Frame = project(raw);
-        if let Some(s) = f.session_id.get().filter(|s| !s.is_empty()) {
-            if self.session_id.is_none() {
-                self.session_id = Some(s.into());
-            }
+        if let Some(s) = f.session_id.get().filter(|s| !s.is_empty())
+            && self.session_id.is_none()
+        {
+            self.session_id = Some(s.into());
         }
         let unknown = |kind: &str, thread: Option<String>| AgentEvent::Unknown {
             backend: B,
@@ -291,19 +319,21 @@ impl ClaudeMapper {
             }],
             Some("auth_status") => vec![AgentEvent::LoginChanged {
                 backend: B,
-                flow: Some(if f.is_authenticating.is_true() || f.error.get().is_some() {
-                    LoginFlow::Progress {
-                        login_id: None,
-                        output: project_opt::<wire::Strings>(f.output.get()).0,
-                        error: f.error.owned(),
-                    }
-                } else {
-                    LoginFlow::Completed {
-                        login_id: None,
-                        success: true,
-                        error: None,
-                    }
-                }),
+                flow: Some(
+                    if f.is_authenticating.is_true() || f.error.get().is_some() {
+                        LoginFlow::Progress {
+                            login_id: None,
+                            output: project_opt::<wire::Strings>(f.output.get()).0,
+                            error: f.error.owned(),
+                        }
+                    } else {
+                        LoginFlow::Completed {
+                            login_id: None,
+                            success: true,
+                            error: None,
+                        }
+                    },
+                ),
             }],
             Some("tool_progress") => match f.tool_use_id.get().and_then(|id| self.tools.get(id)) {
                 None => vec![unknown("tool_progress", Some(t))],
@@ -313,7 +343,10 @@ impl ClaudeMapper {
                     turn_id: tool.turn_id.clone(),
                     item_id: tool.id.clone(),
                     delta: ItemDelta::ToolProgress {
-                        message: format!("{}s", f.elapsed_time_seconds.0.map(|s| s as i64).unwrap_or(0)),
+                        message: format!(
+                            "{}s",
+                            f.elapsed_time_seconds.0.map(|s| s as i64).unwrap_or(0)
+                        ),
                     },
                 }],
             },
@@ -326,19 +359,20 @@ impl ClaudeMapper {
     fn system(&mut self, t: String, f: &Frame, raw: &OpaqueJson) -> Vec<AgentEvent> {
         let subtype = f.subtype.owned();
         let turn = self.turn_of(f);
-        let note = |level: NoticeLevel, message: String, code: Option<String>, retry: bool| match &turn {
-            Some(u) => AgentEvent::TurnNotice {
-                backend: B,
-                thread_id: t.clone(),
-                turn_id: Some(u.clone()),
-                notice: notice(level, message, code, retry, raw),
-            },
-            None => AgentEvent::ThreadNotice {
-                backend: B,
-                thread_id: t.clone(),
-                notice: notice(level, message, code, retry, raw),
-            },
-        };
+        let note =
+            |level: NoticeLevel, message: String, code: Option<String>, retry: bool| match &turn {
+                Some(u) => AgentEvent::TurnNotice {
+                    backend: B,
+                    thread_id: t.clone(),
+                    turn_id: Some(u.clone()),
+                    notice: notice(level, message, code, retry, raw),
+                },
+                None => AgentEvent::ThreadNotice {
+                    backend: B,
+                    thread_id: t.clone(),
+                    notice: notice(level, message, code, retry, raw),
+                },
+            };
         let info = |message: String| note(NoticeLevel::Info, message, subtype.clone(), false);
         let marker = |me: &mut Self, kind: MarkerKind, text: Option<String>| match &turn {
             Some(u) => AgentEvent::ItemCompleted {
@@ -432,7 +466,9 @@ impl ClaudeMapper {
                     f.attempt.get().map_or("?".into(), |v| v.to_string()),
                     f.max_retries.get().map_or("?".into(), |v| v.to_string())
                 ),
-                f.error.owned().or_else(|| f.error_status.get().map(|v| v.to_string())),
+                f.error
+                    .owned()
+                    .or_else(|| f.error_status.get().map(|v| v.to_string())),
                 true,
             )],
             Some("compact_boundary") => {
@@ -493,7 +529,11 @@ impl ClaudeMapper {
                 message.unwrap_or_else(|| {
                     format!(
                         "Model refused; {}",
-                        if s == "model_refusal_fallback" { "switched model" } else { "no fallback" }
+                        if s == "model_refusal_fallback" {
+                            "switched model"
+                        } else {
+                            "no fallback"
+                        }
                     )
                 }),
                 subtype.clone(),
@@ -501,7 +541,10 @@ impl ClaudeMapper {
             )],
             Some(s @ ("task_started" | "task_progress" | "task_updated" | "task_notification")) => {
                 let tool = f.tool_use_id.get().and_then(|id| self.tools.get(id));
-                let text = join(&[f.description.owned(), f.summary.owned(), f.status.owned()], " · ");
+                let text = join(
+                    &[f.description.owned(), f.summary.owned(), f.status.owned()],
+                    " · ",
+                );
                 let text = if text.is_empty() { s.to_string() } else { text };
                 match tool {
                     Some(tool) => vec![AgentEvent::ItemUpdated {
@@ -514,7 +557,13 @@ impl ClaudeMapper {
                     None => vec![AgentEvent::ThreadNotice {
                         backend: B,
                         thread_id: t.clone(),
-                        notice: notice(NoticeLevel::Info, format!("Background task: {text}"), subtype.clone(), false, raw),
+                        notice: notice(
+                            NoticeLevel::Info,
+                            format!("Background task: {text}"),
+                            subtype.clone(),
+                            false,
+                            raw,
+                        ),
                     }],
                 }
             }
@@ -592,7 +641,10 @@ impl ClaudeMapper {
             self.current_turn = None;
         }
         let terminal = f.terminal_reason.owned();
-        let status = if terminal.as_deref().is_some_and(|r| r.starts_with("aborted")) {
+        let status = if terminal
+            .as_deref()
+            .is_some_and(|r| r.starts_with("aborted"))
+        {
             TurnStatus::Interrupted
         } else if f.is_error.is_true() || f.subtype.get() != Some("success") {
             TurnStatus::Failed
@@ -689,7 +741,9 @@ impl ClaudeMapper {
                 self.start_block(&t, &turn, &message, index, block, parent)
             }
             Some("content_block_delta") => {
-                let (Some(message), Some(index)) = (self.streaming.get(&parent).cloned(), e.index.int()) else {
+                let (Some(message), Some(index)) =
+                    (self.streaming.get(&parent).cloned(), e.index.int())
+                else {
                     return vec![];
                 };
                 let Some(item) = self
@@ -702,7 +756,9 @@ impl ClaudeMapper {
                 };
                 let d = e.delta.or_default();
                 let delta = match d.kind.get() {
-                    Some("text_delta") => ItemDelta::AgentText { text: d.text.or("") },
+                    Some("text_delta") => ItemDelta::AgentText {
+                        text: d.text.or(""),
+                    },
                     Some("thinking_delta") => ItemDelta::ReasoningText {
                         index: 0,
                         text: d.thinking.or(""),
@@ -777,7 +833,14 @@ impl ClaudeMapper {
                         parent_id: parent.clone(),
                     },
                 );
-                tool_item(&id, &name, None, parent, ItemStatus::InProgress, Some(block.clone()))
+                tool_item(
+                    &id,
+                    &name,
+                    None,
+                    parent,
+                    ItemStatus::InProgress,
+                    Some(block.clone()),
+                )
             }
             _ => Item::Unknown(UnknownItem {
                 id: block_id,
@@ -834,7 +897,13 @@ impl ClaudeMapper {
                 backend: B,
                 thread_id: t.clone(),
                 turn_id: Some(turn),
-                notice: notice(NoticeLevel::Error, text.unwrap_or(error.clone()), Some(error.clone()), false, raw),
+                notice: notice(
+                    NoticeLevel::Error,
+                    text.unwrap_or(error.clone()),
+                    Some(error.clone()),
+                    false,
+                    raw,
+                ),
             }];
             if error == "authentication_failed" {
                 out.push(AgentEvent::AccountChanged {
@@ -848,7 +917,10 @@ impl ClaudeMapper {
             }
             return out;
         }
-        let message_id = m.id.owned().or(f.uuid.owned()).unwrap_or_else(|| "msg".into());
+        let message_id =
+            m.id.owned()
+                .or(f.uuid.owned())
+                .unwrap_or_else(|| "msg".into());
         let aborted = f.aborted.is_true() || f.aborted_mid_stream.is_true();
         let mut out = Vec::new();
         self.blocks.entry(message_id.clone()).or_default();
@@ -871,7 +943,14 @@ impl ClaudeMapper {
                         .int()
                         .filter(|i| list.iter().all(|x| x.index != *i))
                         .unwrap_or_else(|| list.iter().map(|x| x.index).max().unwrap_or(-1) + 1);
-                    out.extend(self.start_block(&t, &turn, &message_id, index, content, parent.clone()));
+                    out.extend(self.start_block(
+                        &t,
+                        &turn,
+                        &message_id,
+                        index,
+                        content,
+                        parent.clone(),
+                    ));
                     self.blocks[&message_id]
                         .iter()
                         .position(|x| x.index == index)
@@ -881,7 +960,11 @@ impl ClaudeMapper {
             let entry = &mut self.blocks.get_mut(&message_id).unwrap()[position];
             entry.completed = true;
             let item_id = entry.item_id.clone();
-            let status = if aborted { ItemStatus::Incomplete } else { ItemStatus::Completed };
+            let status = if aborted {
+                ItemStatus::Incomplete
+            } else {
+                ItemStatus::Completed
+            };
             let done = |item: Item| AgentEvent::ItemCompleted {
                 backend: B,
                 thread_id: t.clone(),
@@ -929,11 +1012,23 @@ impl ClaudeMapper {
                         backend: B,
                         thread_id: t.clone(),
                         turn_id: turn.clone(),
-                        item: tool_item(&id, &name, tool.input.as_ref(), parent.clone(), ItemStatus::InProgress, Some(content.clone())),
+                        item: tool_item(
+                            &id,
+                            &name,
+                            tool.input.as_ref(),
+                            parent.clone(),
+                            ItemStatus::InProgress,
+                            Some(content.clone()),
+                        ),
                     }
                 }
                 "web_search_tool_result" | "web_fetch_tool_result" => {
-                    match b.tool_use_id.get().and_then(|id| self.tools.get(id)).cloned() {
+                    match b
+                        .tool_use_id
+                        .get()
+                        .and_then(|id| self.tools.get(id))
+                        .cloned()
+                    {
                         Some(tool) => AgentEvent::ItemCompleted {
                             backend: B,
                             thread_id: t.clone(),
@@ -1002,7 +1097,13 @@ impl ClaudeMapper {
                     _ => AgentEvent::ThreadNotice {
                         backend: B,
                         thread_id: t.into(),
-                        notice: notice(NoticeLevel::Info, stripped, Some("local_command".into()), false, raw),
+                        notice: notice(
+                            NoticeLevel::Info,
+                            stripped,
+                            Some("local_command".into()),
+                            false,
+                            raw,
+                        ),
                     },
                 }];
             }
@@ -1010,7 +1111,10 @@ impl ClaudeMapper {
         let blocks: Vec<OpaqueJson> = if content.array().is_some() {
             content.elements()
         } else if let Some(value) = &primitive {
-            vec![wire::encode(&TextBlock { kind: "text", text: value })]
+            vec![wire::encode(&TextBlock {
+                kind: "text",
+                text: value,
+            })]
         } else {
             return vec![];
         };
@@ -1020,7 +1124,11 @@ impl ClaudeMapper {
             .filter(|b| b.kind.get() == Some("tool_result"))
             .collect();
         if !results.is_empty() {
-            let structured = f.tool_use_result.get().or(f.tool_use_result_camel.get()).cloned();
+            let structured = f
+                .tool_use_result
+                .get()
+                .or(f.tool_use_result_camel.get())
+                .cloned();
             if let (Some(u), Some(turn)) = (&uuid, &turn) {
                 self.last_uuid.insert(turn.clone(), u.clone());
             }
@@ -1040,7 +1148,8 @@ impl ClaudeMapper {
                         || f.tool_denial_kind.get().is_some()
                         || f.tool_result_meta.items().iter().any(|m| {
                             m.get().is_some_and(|m| {
-                                m.id.get() == Some(id.as_str()) && m.non_execution_kind.get().is_some()
+                                m.id.get() == Some(id.as_str())
+                                    && m.non_execution_kind.get().is_some()
                             })
                         });
                     Some(AgentEvent::ItemCompleted {
@@ -1095,7 +1204,11 @@ impl ClaudeMapper {
             }];
         };
         let own = self.started.contains(&id) || (live && f.is_replay.is_true());
-        let target = if own { id.clone() } else { turn.unwrap_or(id.clone()) };
+        let target = if own {
+            id.clone()
+        } else {
+            turn.unwrap_or(id.clone())
+        };
         vec![AgentEvent::ItemCompleted {
             backend: B,
             thread_id: t.into(),
@@ -1138,7 +1251,9 @@ fn category(kind: &str) -> &str {
 pub fn user_part(block: &OpaqueJson) -> Option<UserPart> {
     let b: cw::Block = project(block);
     match b.kind.get()? {
-        "text" => Some(UserPart::Text { text: b.text.or("") }),
+        "text" => Some(UserPart::Text {
+            text: b.text.or(""),
+        }),
         kind @ ("image" | "document") => {
             let source = b.source.or_default();
             Some(match source.kind.get() {
@@ -1147,7 +1262,9 @@ pub fn user_part(block: &OpaqueJson) -> Option<UserPart> {
                     media_type: source.media_type.owned(),
                     base64: source.data.or(""),
                 },
-                Some("url") => UserPart::ImageUrl { url: source.url.or("") },
+                Some("url") => UserPart::ImageUrl {
+                    url: source.url.or(""),
+                },
                 _ => UserPart::Unknown { raw: block.clone() },
             })
         }
@@ -1278,11 +1395,22 @@ fn finished_tool(
     is_error: bool,
     forced: Option<ItemStatus>,
 ) -> Item {
-    let status = forced.unwrap_or(if is_error { ItemStatus::Failed } else { ItemStatus::Completed });
+    let status = forced.unwrap_or(if is_error {
+        ItemStatus::Failed
+    } else {
+        ItemStatus::Completed
+    });
     let text = result_text(content);
     let s: cw::Structured = project_opt(structured.filter(|v| wire::is_object(v)));
     let raw = structured.or(content).cloned();
-    match tool_item(&tool.id, &tool.name, tool.input.as_ref(), tool.parent_id.clone(), status, raw) {
+    match tool_item(
+        &tool.id,
+        &tool.name,
+        tool.input.as_ref(),
+        tool.parent_id.clone(),
+        status,
+        raw,
+    ) {
         Item::Command(mut c) => {
             let (stdout, stderr) = (s.stdout.owned(), s.stderr.owned());
             c.output = if stdout.is_some() || stderr.is_some() {
@@ -1347,12 +1475,21 @@ fn edit_diff(i: &cw::ToolInput) -> Option<String> {
     } else {
         vec![(i.old_string.owned(), i.new_string.owned())]
     };
-    if edits.iter().all(|(old, new)| old.is_none() && new.is_none()) {
+    if edits
+        .iter()
+        .all(|(old, new)| old.is_none() && new.is_none())
+    {
         return None;
     }
     let side = |text: &Option<String>, sign: char| {
         text.as_deref()
-            .map(|t| lines(t).iter().map(|l| format!("{sign}{l}")).collect::<Vec<_>>().join("\n"))
+            .map(|t| {
+                lines(t)
+                    .iter()
+                    .map(|l| format!("{sign}{l}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default()
     };
     Some(
@@ -1399,7 +1536,10 @@ pub fn rate_limit(info: Option<&OpaqueJson>) -> Option<RateLimit> {
         id: o.rate_limit_type.or("claude"),
         name: None,
         primary: Some(RateLimitWindow {
-            used_percent: o.utilization.0.map(|u| if u <= 1.0 { u * 100.0 } else { u }),
+            used_percent: o
+                .utilization
+                .0
+                .map(|u| if u <= 1.0 { u * 100.0 } else { u }),
             window_minutes: None,
             resets_at_epoch_sec: o.resets_at.get(),
         }),
@@ -1424,7 +1564,11 @@ pub fn models(models: Option<&OpaqueJson>) -> ModelCatalog {
                 let efforts = m.supports_effort.is_true();
                 ModelOption {
                     id: m.value.or(""),
-                    display_name: m.display_name.owned().or(m.value.owned()).unwrap_or_default(),
+                    display_name: m
+                        .display_name
+                        .owned()
+                        .or(m.value.owned())
+                        .unwrap_or_default(),
                     description: m.description.owned(),
                     efforts: if efforts {
                         m.supported_effort_levels
@@ -1438,8 +1582,9 @@ pub fn models(models: Option<&OpaqueJson>) -> ModelCatalog {
                     } else {
                         vec![]
                     },
-                    default_effort: (efforts && m.supported_effort_levels.0.iter().any(|e| e == "medium"))
-                        .then(|| "medium".into()),
+                    default_effort: (efforts
+                        && m.supported_effort_levels.0.iter().any(|e| e == "medium"))
+                    .then(|| "medium".into()),
                     is_default: i == 0 && m.value.get() == Some("default"),
                     input_modalities: vec!["text".into(), "image".into(), "pdf".into()],
                     resolved_model: m.resolved_model.owned(),

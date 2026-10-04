@@ -46,11 +46,19 @@ fn usage_limit_failure_shape() {
         .unwrap();
     // systemError survives the failed turn's completion (not reset to idle)...
     let state = replay_inbound(text, first_failure + 1);
-    let thread = state.threads.values().find(|t| !t.turns.is_empty()).unwrap();
+    let thread = state
+        .threads
+        .values()
+        .find(|t| !t.turns.is_empty())
+        .unwrap();
     assert_eq!(thread.run_state, RunState::Error);
     // ...and the research script archived the thread afterwards.
     let state = replay_inbound(text, usize::MAX);
-    let thread = state.threads.values().find(|t| !t.turns.is_empty()).unwrap();
+    let thread = state
+        .threads
+        .values()
+        .find(|t| !t.turns.is_empty())
+        .unwrap();
     assert!(thread.archived);
     for turn in &thread.turns {
         assert_eq!(turn.status, TurnStatus::Failed);
@@ -67,23 +75,39 @@ fn usage_limit_failure_shape() {
             })
             .collect();
         assert_eq!(notices.len(), 1);
-        assert_eq!(notices[0].notice.code.as_deref(), Some("usageLimitExceeded"));
+        assert_eq!(
+            notices[0].notice.code.as_deref(),
+            Some("usageLimitExceeded")
+        );
     }
 }
 
 #[test]
 fn inbound_only_replay_matches_backend_replay() {
     let state = replay_inbound(include_str!("fixtures/codex/session.jsonl"), usize::MAX);
-    let thread = thread(&state, BackendKind::Codex, "01a0ddb6-d670-70f3-9a62-1320d2a3b41a").unwrap();
+    let thread = thread(
+        &state,
+        BackendKind::Codex,
+        "01a0ddb6-d670-70f3-9a62-1320d2a3b41a",
+    )
+    .unwrap();
     assert_eq!(
         thread.turns.iter().map(|t| t.status).collect::<Vec<_>>(),
-        [TurnStatus::Completed, TurnStatus::Completed, TurnStatus::Interrupted]
+        [
+            TurnStatus::Completed,
+            TurnStatus::Completed,
+            TurnStatus::Interrupted
+        ]
     );
     assert_eq!(thread.title.as_deref(), Some("workflow protocol research"));
     assert!(thread.archived);
     let b = backend_status(&state, BackendKind::Codex);
     assert_eq!(b.mcp_servers["node_repl"].status, "ready");
-    assert!(b.unknown.iter().any(|u| u.kind == "remoteControl/status/changed"));
+    assert!(
+        b.unknown
+            .iter()
+            .any(|u| u.kind == "remoteControl/status/changed")
+    );
     assert_eq!(b.notices.len(), 1);
     assert_eq!(b.notices[0].code.as_deref(), Some("deprecationNotice"));
 }
@@ -111,7 +135,16 @@ fn command_decisions_follow_available_decisions_exactly() {
     use DecisionKind::*;
     assert_eq!(
         d.iter().map(|d| d.kind).collect::<Vec<_>>(),
-        [AllowOnce, AllowPersistent, AllowPersistent, Deny, AllowSession, Deny, Abort, Other]
+        [
+            AllowOnce,
+            AllowPersistent,
+            AllowPersistent,
+            Deny,
+            AllowSession,
+            Deny,
+            Abort,
+            Other
+        ]
     );
     assert_eq!(d[1].detail.as_deref(), Some("git status"));
     assert_eq!(d[3].detail.as_deref(), Some("deny evil.test"));
@@ -130,7 +163,9 @@ fn server_request_dispositions_never_grant_consent() {
     let Disposition::Ask(approval) = requests::pending(
         &o(json!("x1")),
         "item/fileChange/requestApproval",
-        Some(&o(json!({"threadId":"t","turnId":"u","itemId":"i","reason":"write","grantRoot":"/workspace","startedAtMs":1}))),
+        Some(&o(
+            json!({"threadId":"t","turnId":"u","itemId":"i","reason":"write","grantRoot":"/workspace","startedAtMs":1}),
+        )),
         &o(json!({})),
         5,
     ) else {
@@ -138,22 +173,32 @@ fn server_request_dispositions_never_grant_consent() {
     };
     assert_eq!(approval.key.raw_id, o(json!("x1")));
     assert_eq!(
-        approval.decisions.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(),
+        approval
+            .decisions
+            .iter()
+            .map(|d| d.id.as_str())
+            .collect::<Vec<_>>(),
         ["accept", "acceptForSession", "decline", "cancel"]
     );
-    assert!(matches!(&approval.kind, RequestKind::FileChangeApproval { grant_root: Some(r), .. } if r == "/workspace"));
+    assert!(
+        matches!(&approval.kind, RequestKind::FileChangeApproval { grant_root: Some(r), .. } if r == "/workspace")
+    );
 
     let Disposition::Ask(questions) = requests::pending(
         &o(json!(3)),
         "item/tool/requestUserInput",
-        Some(&o(json!({"threadId":"t","turnId":"u","itemId":"i","isBlocking":true,
-            "questions":[{"id":"q1","header":"H","question":"Which?","isOther":true,"isSecret":false,"options":[{"label":"A","description":"a"}]}]}))),
+        Some(&o(
+            json!({"threadId":"t","turnId":"u","itemId":"i","isBlocking":true,
+            "questions":[{"id":"q1","header":"H","question":"Which?","isOther":true,"isSecret":false,"options":[{"label":"A","description":"a"}]}]}),
+        )),
         &o(json!({})),
         5,
     ) else {
         panic!()
     };
-    let RequestKind::UserInput { questions, .. } = questions.kind else { panic!() };
+    let RequestKind::UserInput { questions, .. } = questions.kind else {
+        panic!()
+    };
     assert_eq!(questions[0].id, "q1");
     assert!(questions[0].allow_free_text);
 
@@ -170,9 +215,13 @@ fn server_request_dispositions_never_grant_consent() {
     assert_eq!(record.status, RequestStatus::Answered);
 
     // The production policy shows unknown methods as cards whose only choice rejects them.
-    let Disposition::Ask(unknown) =
-        requests::pending(&o(json!(5)), "future/approveEverything", Some(&o(json!({}))), &o(json!({})), 5)
-    else {
+    let Disposition::Ask(unknown) = requests::pending(
+        &o(json!(5)),
+        "future/approveEverything",
+        Some(&o(json!({}))),
+        &o(json!({})),
+        5,
+    ) else {
         panic!()
     };
     assert_eq!(unknown.decisions.len(), 1);
@@ -180,7 +229,10 @@ fn server_request_dispositions_never_grant_consent() {
     assert!(matches!(
         requests::answer(
             &unknown,
-            &RequestResponse::Decide { decision_id: "reject".into(), message: None }
+            &RequestResponse::Decide {
+                decision_id: "reject".into(),
+                message: None
+            }
         )
         .unwrap(),
         UserReply::Error { code: -32601, .. }
@@ -189,7 +241,9 @@ fn server_request_dispositions_never_grant_consent() {
     let Disposition::Fact { result, record } = requests::pending(
         &o(json!(6)),
         "item/tool/call",
-        Some(&o(json!({"threadId":"t","turnId":"u","callId":"c","tool":"x","arguments":{}}))),
+        Some(&o(
+            json!({"threadId":"t","turnId":"u","callId":"c","tool":"x","arguments":{}}),
+        )),
         &o(json!({})),
         5,
     ) else {
@@ -216,7 +270,9 @@ fn decision_results_use_server_wire_values() {
     let Disposition::Ask(ask) = requests::pending(
         &o(json!(0)),
         "item/permissions/requestApproval",
-        Some(&o(json!({"threadId":"t","turnId":"u","itemId":"i","cwd":"/workspace","permissions":{"network":{"enabled":true}},"startedAtMs":1}))),
+        Some(&o(
+            json!({"threadId":"t","turnId":"u","itemId":"i","cwd":"/workspace","permissions":{"network":{"enabled":true}},"startedAtMs":1}),
+        )),
         &o(json!({})),
         5,
     ) else {
@@ -224,14 +280,20 @@ fn decision_results_use_server_wire_values() {
     };
     let decide = |id: &str| match requests::answer(
         &ask,
-        &RequestResponse::Decide { decision_id: id.into(), message: None },
+        &RequestResponse::Decide {
+            decision_id: id.into(),
+            message: None,
+        },
     )
     .unwrap()
     {
         UserReply::Result { value, .. } => value.0,
         other => panic!("{other:?}"),
     };
-    assert_eq!(decide("grantSession"), json!({"permissions":{"network":{"enabled":true}},"scope":"session"}));
+    assert_eq!(
+        decide("grantSession"),
+        json!({"permissions":{"network":{"enabled":true}},"scope":"session"})
+    );
     assert_eq!(decide("decline"), json!({"permissions":{},"scope":"turn"}));
 }
 
@@ -243,7 +305,10 @@ fn params_always_route_approvals_to_the_user() {
         PermissionPreset::Plan,
         PermissionPreset::DenyUnlisted,
     ] {
-        let settings = TurnSettings { permissions: Some(preset), ..Default::default() };
+        let settings = TurnSettings {
+            permissions: Some(preset),
+            ..Default::default()
+        };
         for body in [
             params::thread_start("/workspace", &settings, PermissionPreset::Ask, false),
             params::thread_resume("t", None, &TurnSettings::default(), preset),
@@ -257,8 +322,14 @@ fn params_always_route_approvals_to_the_user() {
         "t",
         &[
             UserPart::Text { text: "hi".into() },
-            UserPart::Image { path: "/workspace/a.png".into(), mime_type: None },
-            UserPart::File { path: "/workspace/spec.pdf".into(), mime_type: None },
+            UserPart::Image {
+                path: "/workspace/a.png".into(),
+                mime_type: None,
+            },
+            UserPart::File {
+                path: "/workspace/spec.pdf".into(),
+                mime_type: None,
+            },
         ],
         Some(&TurnSettings {
             model: Some("m".into()),
@@ -281,7 +352,9 @@ fn params_always_route_approvals_to_the_user() {
     for method in params::REVIEWER_METHODS {
         let guarded = params::enforce_reviewer(
             method,
-            Some(o(json!({"approvalsReviewer":"auto_review","futureField":"preserved"}))),
+            Some(o(
+                json!({"approvalsReviewer":"auto_review","futureField":"preserved"}),
+            )),
         )
         .unwrap();
         assert_eq!(guarded.0["approvalsReviewer"], "user");
@@ -303,9 +376,17 @@ fn model_catalog_keeps_hidden_models_and_modalities() {
         .clone();
     let catalog = events::models(&[o(result)]);
     assert!(catalog.models.iter().any(|m| m.hidden));
-    let astra = catalog.models.iter().find(|m| m.id == "gpt-6-astra").unwrap();
+    let astra = catalog
+        .models
+        .iter()
+        .find(|m| m.id == "gpt-6-astra")
+        .unwrap();
     assert_eq!(
-        astra.efforts.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(),
+        astra
+            .efforts
+            .iter()
+            .map(|e| e.id.as_str())
+            .collect::<Vec<_>>(),
         ["low", "medium", "high", "xhigh", "max", "ultra"]
     );
     assert_eq!(astra.default_effort.as_deref(), Some("medium"));
@@ -315,7 +396,9 @@ fn model_catalog_keeps_hidden_models_and_modalities() {
 #[test]
 fn queue_notifications_fetch_pages_and_allow_cancelling_external_submissions() {
     let runtime = FakeRuntime::reacting(|process, frame| {
-        let Some(id) = frame.get("id").cloned() else { return };
+        let Some(id) = frame.get("id").cloned() else {
+            return;
+        };
         let result = match frame["method"].as_str() {
             Some("thread/queue/list") if frame["params"].get("cursor").is_none() => {
                 json!({"data":[{"id":"q1","clientUserMessageId":"c1","input":[{"type":"text","text":"first"}]}],"nextCursor":"page2"})
@@ -340,7 +423,11 @@ fn queue_notifications_fetch_pages_and_allow_cancelling_external_submissions() {
     child.emit(&json!({"method":"thread/queue/changed","params":{"threadId":"th"}}));
     let state = store.wait("queue pages", |s| {
         thread(s, BackendKind::Codex, "th").is_some_and(|t| {
-            t.turns.iter().filter(|t| t.status == TurnStatus::Queued).count() == 2
+            t.turns
+                .iter()
+                .filter(|t| t.status == TurnStatus::Queued)
+                .count()
+                == 2
         })
     });
     assert_eq!(
@@ -361,9 +448,12 @@ fn queue_notifications_fetch_pages_and_allow_cancelling_external_submissions() {
         .unwrap();
     assert_eq!(deletion["params"]["queuedSubmissionId"], "q2");
     assert_eq!(
-        turn(thread(&store.state(), BackendKind::Codex, "th").unwrap(), "c2")
-            .unwrap()
-            .status,
+        turn(
+            thread(&store.state(), BackendKind::Codex, "th").unwrap(),
+            "c2"
+        )
+        .unwrap()
+        .status,
         TurnStatus::Cancelled
     );
     backend.stop();

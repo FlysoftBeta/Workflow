@@ -255,7 +255,9 @@ pub fn login(method: LoginMethod, secret: Option<&str>) -> Result<OpaqueJson> {
         other => {
             return Err(ChatError::invalid(format!(
                 "{} is not a Codex login method",
-                serde_json::to_string(&other).unwrap_or_default().trim_matches('"')
+                serde_json::to_string(&other)
+                    .unwrap_or_default()
+                    .trim_matches('"')
             )));
         }
     }))

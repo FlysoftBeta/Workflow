@@ -10,7 +10,7 @@ pub mod journal;
 pub mod ports;
 pub mod reducer;
 pub mod service;
-pub mod transport;
-pub mod wire;
 #[cfg(feature = "testing")]
 pub mod testing;
+pub mod transport;
+pub mod wire;

@@ -1,7 +1,10 @@
 //! History hydration from a Claude transcript (`$CLAUDE_CONFIG_DIR/projects/<cwd>/<session>.jsonl`).
 //! Tolerant: unknown entry types and malformed lines are skipped, and subagent side chains are not
 //! part of the main history. Live mapping and the reducer produce the same items as streaming.
-use super::{mapper::ClaudeMapper, wire::{Block, Frame, Message}};
+use super::{
+    mapper::ClaudeMapper,
+    wire::{Block, Frame, Message},
+};
 use crate::{
     model::*,
     reducer,
@@ -24,9 +27,16 @@ pub fn events(session: &str, lines: &[String]) -> Vec<AgentEvent> {
     let mut out = Vec::new();
     let mut turn: Option<String> = None;
     let mut interrupted = false;
-    let close = |mapper: &mut ClaudeMapper, out: &mut Vec<AgentEvent>, turn: &mut Option<String>, interrupted: &mut bool| {
+    let close = |mapper: &mut ClaudeMapper,
+                 out: &mut Vec<AgentEvent>,
+                 turn: &mut Option<String>,
+                 interrupted: &mut bool| {
         if let Some(t) = turn.take() {
-            let status = if *interrupted { TurnStatus::Interrupted } else { TurnStatus::Completed };
+            let status = if *interrupted {
+                TurnStatus::Interrupted
+            } else {
+                TurnStatus::Completed
+            };
             out.extend(mapper.end_turn(&t, status, None));
         }
         *interrupted = false;
@@ -43,9 +53,9 @@ pub fn events(session: &str, lines: &[String]) -> Vec<AgentEvent> {
                 let m: Message = project_opt(f.message.object());
                 let text = m.content.string();
                 if !f.is_meta.is_true()
-                    && text
-                        .as_deref()
-                        .is_some_and(|t| t.contains("<command-name>") || t.contains("<local-command-"))
+                    && text.as_deref().is_some_and(|t| {
+                        t.contains("<command-name>") || t.contains("<local-command-")
+                    })
                 {
                     close(&mut mapper, &mut out, &mut turn, &mut interrupted);
                 }
@@ -59,7 +69,16 @@ pub fn events(session: &str, lines: &[String]) -> Vec<AgentEvent> {
                 }
                 let mapped = mapper.user(session, &raw, false);
                 if mapped.iter().any(|e| {
-                    matches!(e, AgentEvent::ItemCompleted { item: Item::Marker(MarkerItem { kind: MarkerKind::Interrupted, .. }), .. })
+                    matches!(
+                        e,
+                        AgentEvent::ItemCompleted {
+                            item: Item::Marker(MarkerItem {
+                                kind: MarkerKind::Interrupted,
+                                ..
+                            }),
+                            ..
+                        }
+                    )
                 }) {
                     interrupted = true;
                 }

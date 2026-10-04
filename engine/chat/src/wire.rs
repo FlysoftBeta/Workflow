@@ -43,8 +43,7 @@ fn exact(text: &str, depth: usize) -> Result<serde_json::Value, serde_json::Erro
     let text = raw.get();
     Ok(match text.as_bytes().first() {
         Some(b'{') => {
-            let members: Vec<(String, &RawValue)> =
-                serde_json::from_str::<Ordered>(text)?.0;
+            let members: Vec<(String, &RawValue)> = serde_json::from_str::<Ordered>(text)?.0;
             let mut map = serde_json::Map::new();
             for (key, value) in members {
                 map.insert(key, exact(value.get(), depth + 1)?);
@@ -79,7 +78,9 @@ impl<'de: 'a, 'a> Deserialize<'de> for Ordered<'a> {
             }
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut out = Vec::new();
-                while let Some(entry) = map.next_entry::<String, &'de serde_json::value::RawValue>()? {
+                while let Some(entry) =
+                    map.next_entry::<String, &'de serde_json::value::RawValue>()?
+                {
                     out.push(entry);
                 }
                 Ok(Ordered(out))
@@ -160,7 +161,10 @@ impl<'de> Deserialize<'de> for Str {
             fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
                 Ok(None)
             }
-            fn visit_newtype_struct<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            fn visit_newtype_struct<D: Deserializer<'de>>(
+                self,
+                d: D,
+            ) -> Result<Self::Value, D::Error> {
                 IgnoredAny::deserialize(d).map(|_| None)
             }
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
@@ -223,7 +227,10 @@ impl<'de> Deserialize<'de> for Long {
             fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
                 Ok(None)
             }
-            fn visit_newtype_struct<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            fn visit_newtype_struct<D: Deserializer<'de>>(
+                self,
+                d: D,
+            ) -> Result<Self::Value, D::Error> {
                 IgnoredAny::deserialize(d).map(|_| None)
             }
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
@@ -277,7 +284,10 @@ impl<'de> Deserialize<'de> for Double {
             fn visit_str<E: de::Error>(self, _: &str) -> Result<Self::Value, E> {
                 Ok(None)
             }
-            fn visit_newtype_struct<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            fn visit_newtype_struct<D: Deserializer<'de>>(
+                self,
+                d: D,
+            ) -> Result<Self::Value, D::Error> {
                 Ok(String::deserialize(d)?.parse::<f64>().ok())
             }
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
@@ -355,7 +365,10 @@ impl<'de> Deserialize<'de> for Bool {
             fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
                 Ok(None)
             }
-            fn visit_newtype_struct<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            fn visit_newtype_struct<D: Deserializer<'de>>(
+                self,
+                d: D,
+            ) -> Result<Self::Value, D::Error> {
                 IgnoredAny::deserialize(d).map(|_| None)
             }
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
@@ -378,7 +391,12 @@ impl<'de> Deserialize<'de> for Strings {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let items: Arr<Str> = Arr::deserialize(d)?;
         Ok(Strings(
-            items.0.unwrap_or_default().into_iter().filter_map(|s| s.0).collect(),
+            items
+                .0
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|s| s.0)
+                .collect(),
         ))
     }
 }
@@ -502,7 +520,10 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Obj<T> {
             fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
                 Ok(None)
             }
-            fn visit_newtype_struct<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            fn visit_newtype_struct<D: Deserializer<'de>>(
+                self,
+                d: D,
+            ) -> Result<Self::Value, D::Error> {
                 IgnoredAny::deserialize(d).map(|_| None)
             }
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
@@ -572,7 +593,10 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Arr<T> {
             fn visit_f64<E: de::Error>(self, _: f64) -> Result<Self::Value, E> {
                 Ok(None)
             }
-            fn visit_newtype_struct<D: Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
+            fn visit_newtype_struct<D: Deserializer<'de>>(
+                self,
+                d: D,
+            ) -> Result<Self::Value, D::Error> {
                 IgnoredAny::deserialize(d).map(|_| None)
             }
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
@@ -593,7 +617,6 @@ impl<'de> Deserialize<'de> for Members {
         Ok(Members(object.0.map(|m| m.into_iter().collect())))
     }
 }
-
 
 /// A borrowing deserializer over a parsed vendor tree. Numbers that a primitive cannot represent
 /// exactly are offered as a newtype holding their exact token, which [`OpaqueJson`] keeps verbatim
@@ -659,7 +682,9 @@ impl<'de> Deserializer<'de> for ValueDe<'de> {
     ) -> Result<V::Value, Self::Error> {
         use de::IntoDeserializer;
         match self.0 {
-            serde_json::Value::String(name) => visitor.visit_enum(name.as_str().into_deserializer()),
+            serde_json::Value::String(name) => {
+                visitor.visit_enum(name.as_str().into_deserializer())
+            }
             serde_json::Value::Object(map) if map.len() == 1 => {
                 let (name, value) = map.iter().next().unwrap();
                 visitor.visit_enum(EnumDe(name, ValueDe(value)))

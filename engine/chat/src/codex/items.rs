@@ -293,7 +293,9 @@ pub fn changes(json: Option<&OpaqueJson>) -> Vec<FileDelta> {
 pub fn user_part(json: &OpaqueJson) -> UserPart {
     let p: wire::Input = project(json);
     match p.kind.get() {
-        Some("text") => UserPart::Text { text: p.text.or("") },
+        Some("text") => UserPart::Text {
+            text: p.text.or(""),
+        },
         Some("localImage") => UserPart::Image {
             path: p.path.or(""),
             mime_type: None,

@@ -128,7 +128,9 @@ fn codex_raw_settings_force_user_reviewer_and_preserve_extensions() {
     for method in params::REVIEWER_METHODS {
         let guarded = params::enforce_reviewer(
             method,
-            Some(parse(r#"{"approvalsReviewer":"auto_review","future":{"n":9007199254740993}}"#)),
+            Some(parse(
+                r#"{"approvalsReviewer":"auto_review","future":{"n":9007199254740993}}"#,
+            )),
         )
         .unwrap();
         assert_eq!(
@@ -177,7 +179,10 @@ fn claude_launch_filters_inherited_credentials_and_rejects_permission_override_s
     assert!(!spec.env.contains_key("LD_PRELOAD"));
     assert!(!spec.env.contains_key("CLAUDECODE"));
     assert_eq!(spec.env.get("LANG").unwrap(), "C.UTF-8");
-    assert_eq!(spec.env.get("CLAUDE_CONFIG_DIR").unwrap(), "/home/work/.claude");
+    assert_eq!(
+        spec.env.get("CLAUDE_CONFIG_DIR").unwrap(),
+        "/home/work/.claude"
+    );
     assert!(
         spec.argv
             .windows(2)
@@ -206,7 +211,10 @@ fn claude_launch_filters_inherited_credentials_and_rejects_permission_override_s
             "{flag}"
         );
     }
-    assert!(claude::launch::transcript_path("/home/work/.claude", "/workspace", "../../secret").is_err());
+    assert!(
+        claude::launch::transcript_path("/home/work/.claude", "/workspace", "../../secret")
+            .is_err()
+    );
     assert_eq!(
         claude::launch::transcript_path("/home/work/.claude", "/workspace", "s1").unwrap(),
         "/home/work/.claude/projects/-workspace/s1.jsonl"
@@ -217,8 +225,11 @@ fn claude_undeclared_dialogs_and_unoffered_persistent_decisions_cannot_be_answer
     let raw = parse(
         r#"{"type":"control_request","request_id":"r","request":{"subtype":"can_use_tool","tool_name":"Edit","input":{},"requires_user_interaction":true}}"#,
     );
-    let request = parse(r#"{"subtype":"can_use_tool","tool_name":"Edit","input":{},"requires_user_interaction":true}"#);
-    let card = claude::requests::pending("r", "can_use_tool", &request, &raw, Some("s"), Some("t"), 0);
+    let request = parse(
+        r#"{"subtype":"can_use_tool","tool_name":"Edit","input":{},"requires_user_interaction":true}"#,
+    );
+    let card =
+        claude::requests::pending("r", "can_use_tool", &request, &raw, Some("s"), Some("t"), 0);
     for id in ["allow", "allowAlways:0"] {
         assert!(
             claude::requests::answer(

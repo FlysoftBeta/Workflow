@@ -90,7 +90,9 @@ fn backend(scripts: &[&str], ids: &[&str]) -> Harness {
         SequenceIds::listed(ids),
         Arc::new(|path: &str, _max: usize| {
             assert_eq!(path, "/workspace/red.png");
-            Ok(base64::engine::general_purpose::STANDARD.decode(PNG).unwrap())
+            Ok(base64::engine::general_purpose::STANDARD
+                .decode(PNG)
+                .unwrap())
         }),
         None,
     );
@@ -102,7 +104,9 @@ fn backend(scripts: &[&str], ids: &[&str]) -> Harness {
     }
 }
 fn t(state: &AgentState, id: &str) -> ThreadState {
-    thread(state, BackendKind::Claude, id).cloned().expect("thread")
+    thread(state, BackendKind::Claude, id)
+        .cloned()
+        .expect("thread")
 }
 fn turn_status(state: &AgentState, thread_id: &str, turn_id: &str) -> Option<TurnStatus> {
     thread(state, BackendKind::Claude, thread_id)
@@ -135,14 +139,21 @@ fn full_session_replay() {
     assert!(argv.ends_with(&format!("--session-id {SESSION}")));
     assert!(!argv.contains("dangerously") && !argv.contains("bypassPermissions"));
     assert_eq!(spec.env["CLAUDE_CONFIG_DIR"], "/home/work/.claude-app");
-    assert!(!spec.env.contains_key("ANTHROPIC_API_KEY"), "host credentials are not forwarded");
+    assert!(
+        !spec.env.contains_key("ANTHROPIC_API_KEY"),
+        "host credentials are not forwarded"
+    );
     assert!(!spec.env.contains_key("CLAUDE_CODE_ENTRYPOINT"));
 
     let status = backend_status(&h.store.state(), BackendKind::Claude);
     // The research run used an API key.
     assert_eq!(status.account.state, LoginState::LoggedIn);
     let models = status.models.unwrap();
-    let default = models.models.iter().find(|m| m.is_default).unwrap_or(&models.models[0]);
+    let default = models
+        .models
+        .iter()
+        .find(|m| m.is_default)
+        .unwrap_or(&models.models[0]);
     assert_eq!(default.id, "default");
     let effort = |id: &str| {
         models
@@ -158,12 +169,21 @@ fn full_session_replay() {
     assert!(effort("haiku").is_empty());
     assert_eq!(effort("sonnet"), ["low", "medium", "high", "xhigh", "max"]);
 
-    assert_eq!(h.claude.start_thread(&ThreadOptions::new("/workspace")).unwrap(), SESSION);
+    assert_eq!(
+        h.claude
+            .start_thread(&ThreadOptions::new("/workspace"))
+            .unwrap(),
+        SESSION
+    );
     h.claude.raw_request("mcp_status", None, None).unwrap();
     h.claude.refresh_models().unwrap();
     h.claude.raw_request("get_settings", None, None).unwrap();
     h.claude
-        .raw_request("get_context_usage", Some(opaque(json!({"detail":"summary"}))), None)
+        .raw_request(
+            "get_context_usage",
+            Some(opaque(json!({"detail":"summary"}))),
+            None,
+        )
         .unwrap();
 
     // ---- turn 1: markdown + math + image attachment
@@ -172,7 +192,8 @@ fn full_session_replay() {
             SESSION,
             vec![
                 UserPart::Text {
-                    text: "MATH: answer in markdown with a formula; what colour is the image?".into(),
+                    text: "MATH: answer in markdown with a formula; what colour is the image?"
+                        .into(),
                 },
                 UserPart::Image {
                     path: "/workspace/red.png".into(),
@@ -183,9 +204,15 @@ fn full_session_replay() {
             SendMode::Auto,
         )
         .unwrap();
-    h.store.wait("turn 1", |s| turn_status(s, SESSION, U1) == Some(TurnStatus::Completed));
+    h.store.wait("turn 1", |s| {
+        turn_status(s, SESSION, U1) == Some(TurnStatus::Completed)
+    });
     let p0 = h.runtime.process(0);
-    let written = p0.written().into_iter().find(|f| f["type"] == "user").unwrap();
+    let written = p0
+        .written()
+        .into_iter()
+        .find(|f| f["type"] == "user")
+        .unwrap();
     assert_eq!(written["message"]["content"][1]["source"]["data"], PNG);
     let state = h.store.state();
     let turn1 = turn(&t(&state, SESSION), U1).unwrap().clone();
@@ -228,25 +255,44 @@ fn full_session_replay() {
             .contains("$$x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}$$")
     );
     assert!((turn1.usage.as_ref().unwrap().cost_usd.unwrap() - 0.00128).abs() < 1e-9);
-    assert_eq!(t(&state, SESSION).settings.model.as_deref(), Some("claude-opus-5-5[1m]"));
+    assert_eq!(
+        t(&state, SESSION).settings.model.as_deref(),
+        Some("claude-opus-5-5[1m]")
+    );
 
     // ---- turn 2: hook callback (app-registered) + permission allowed by the user
     h.claude
-        .send(SESSION, text("WRITE: create hello.txt"), None, SendMode::Auto)
+        .send(
+            SESSION,
+            text("WRITE: create hello.txt"),
+            None,
+            SendMode::Auto,
+        )
         .unwrap();
     let allow = requests::key("c071187f-d192-476b-942a-e990906bfdd6");
     h.store.wait("write permission", |s| {
         request(s, &allow).is_some_and(|r| r.status == RequestStatus::Pending)
     });
     assert_eq!(
-        h.hook_calls.lock().unwrap().iter().map(|c| c["hook_event_name"].clone()).collect::<Vec<_>>(),
+        h.hook_calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|c| c["hook_event_name"].clone())
+            .collect::<Vec<_>>(),
         [json!("PreToolUse")]
     );
     let state = h.store.state();
     let write = request(&state, &allow).unwrap().clone();
-    assert_eq!(ids(&write.decisions), ["allow", "allowAlways:0", "deny", "denyAndStop"]);
+    assert_eq!(
+        ids(&write.decisions),
+        ["allow", "allowAlways:0", "deny", "denyAndStop"]
+    );
     assert_eq!(write.decisions[1].kind, DecisionKind::AllowSession);
-    assert_eq!(write.decisions[1].detail.as_deref(), Some("mode acceptEdits → session"));
+    assert_eq!(
+        write.decisions[1].detail.as_deref(),
+        Some("mode acceptEdits → session")
+    );
     assert!(matches!(&write.kind, RequestKind::ToolApproval { tool, .. } if tool == "Write"));
     assert_eq!(t(&state, SESSION).run_state, RunState::WaitingApproval);
     std::thread::sleep(Duration::from_millis(200));
@@ -257,7 +303,9 @@ fn full_session_replay() {
         "no permission answer before the user"
     );
     h.claude.respond(&allow, &decide("allow", None)).unwrap();
-    h.store.wait("turn 2", |s| turn_status(s, SESSION, U2) == Some(TurnStatus::Completed));
+    h.store.wait("turn 2", |s| {
+        turn_status(s, SESSION, U2) == Some(TurnStatus::Completed)
+    });
     let state = h.store.state();
     let turn2 = turn(&t(&state, SESSION), U2).unwrap().clone();
     let files: Vec<_> = turn2
@@ -289,7 +337,10 @@ fn full_session_replay() {
             .iter()
             .any(|i| matches!(i, Item::Marker(m) if m.kind == MarkerKind::Hook))
     );
-    assert_eq!(request(&state, &allow).unwrap().status, RequestStatus::Answered);
+    assert_eq!(
+        request(&state, &allow).unwrap().status,
+        RequestStatus::Answered
+    );
 
     // ---- turn 3: deny
     h.claude
@@ -302,7 +353,13 @@ fn full_session_replay() {
     let bash = request(&h.store.state(), &deny).unwrap().clone();
     assert_eq!(
         ids(&bash.decisions),
-        ["allow", "allowAlways:0", "allowAlways:1", "deny", "denyAndStop"]
+        [
+            "allow",
+            "allowAlways:0",
+            "allowAlways:1",
+            "deny",
+            "denyAndStop"
+        ]
     );
     // A localSettings rule is written to disk; a session rule is not.
     assert_eq!(bash.decisions[1].kind, DecisionKind::AllowPersistent);
@@ -319,7 +376,9 @@ fn full_session_replay() {
         .find(|f| f["response"]["request_id"] == "3d376a32-71e6-44e8-bc27-a708d72b6482")
         .unwrap();
     assert_eq!(denial["response"]["response"]["behavior"], "deny");
-    h.store.wait("turn 3", |s| turn_status(s, SESSION, U3) == Some(TurnStatus::Completed));
+    h.store.wait("turn 3", |s| {
+        turn_status(s, SESSION, U3) == Some(TurnStatus::Completed)
+    });
     let state = h.store.state();
     let turn3 = turn(&t(&state, SESSION), U3).unwrap().clone();
     assert!(
@@ -331,11 +390,21 @@ fn full_session_replay() {
 
     // ---- mid-session controls, then turn 4 with a model and effort switch, interrupted
     h.claude
-        .raw_request("set_max_thinking_tokens", Some(opaque(json!({"max_thinking_tokens":4096}))), None)
+        .raw_request(
+            "set_max_thinking_tokens",
+            Some(opaque(json!({"max_thinking_tokens":4096}))),
+            None,
+        )
         .unwrap();
-    h.claude.set_permissions(SESSION, PermissionPreset::Plan).unwrap();
-    h.claude.set_permissions(SESSION, PermissionPreset::Ask).unwrap();
-    h.claude.rename(SESSION, "workflow protocol research").unwrap();
+    h.claude
+        .set_permissions(SESSION, PermissionPreset::Plan)
+        .unwrap();
+    h.claude
+        .set_permissions(SESSION, PermissionPreset::Ask)
+        .unwrap();
+    h.claude
+        .rename(SESSION, "workflow protocol research")
+        .unwrap();
     h.claude
         .send(
             SESSION,
@@ -351,11 +420,16 @@ fn full_session_replay() {
     h.store.wait("turn 4 streaming", |s| {
         thread(s, BackendKind::Claude, SESSION)
             .and_then(|t| turn(t, U4))
-            .is_some_and(|t| t.items.iter().any(|i| matches!(i, Item::AgentMessage(m) if m.text.len() > 10)))
+            .is_some_and(|t| {
+                t.items
+                    .iter()
+                    .any(|i| matches!(i, Item::AgentMessage(m) if m.text.len() > 10))
+            })
     });
     h.claude.interrupt(SESSION, false).unwrap();
-    h.store
-        .wait("turn 4 interrupted", |s| turn_status(s, SESSION, U4) == Some(TurnStatus::Interrupted));
+    h.store.wait("turn 4 interrupted", |s| {
+        turn_status(s, SESSION, U4) == Some(TurnStatus::Interrupted)
+    });
     let state = h.store.state();
     let turn4 = turn(&t(&state, SESSION), U4).unwrap().clone();
     assert!(
@@ -371,41 +445,58 @@ fn full_session_replay() {
             .any(|i| matches!(i, Item::Marker(m) if m.kind == MarkerKind::Interrupted))
     );
     let thread_state = t(&state, SESSION);
-    assert_eq!(thread_state.title.as_deref(), Some("workflow protocol research"));
+    assert_eq!(
+        thread_state.title.as_deref(),
+        Some("workflow protocol research")
+    );
     // Resolved by the CLI in system/init.
-    assert_eq!(thread_state.settings.model.as_deref(), Some("claude-sonnet-5"));
+    assert_eq!(
+        thread_state.settings.model.as_deref(),
+        Some("claude-sonnet-5")
+    );
     assert_eq!(thread_state.settings.effort.as_deref(), Some("high"));
-    assert_eq!(thread_state.settings.approval_policy.as_deref(), Some("default"));
+    assert_eq!(
+        thread_state.settings.approval_policy.as_deref(),
+        Some("default")
+    );
     let subtypes: Vec<String> = p0
         .written()
         .iter()
         .filter(|f| f["type"] == "control_request")
         .filter_map(|f| f["request"]["subtype"].as_str().map(str::to_owned))
         .collect();
-    for subtype in ["set_model", "apply_flag_settings", "set_permission_mode", "rename_session", "interrupt"] {
+    for subtype in [
+        "set_model",
+        "apply_flag_settings",
+        "set_permission_mode",
+        "rename_session",
+        "interrupt",
+    ] {
         assert!(subtypes.iter().any(|s| s == subtype), "{subtype}");
     }
 
     // ---- fork into a new session ID we chose
     assert_eq!(
-        h.claude.fork_thread(SESSION, None, &ThreadOptions::new("/workspace")).unwrap(),
+        h.claude
+            .fork_thread(SESSION, None, &ThreadOptions::new("/workspace"))
+            .unwrap(),
         FORK
     );
-    assert!(
-        h.runtime
-            .process(1)
-            .spec
-            .argv
-            .join(" ")
-            .contains(&format!("--resume {SESSION} --fork-session --session-id {FORK}"))
-    );
+    assert!(h.runtime.process(1).spec.argv.join(" ").contains(&format!(
+        "--resume {SESSION} --fork-session --session-id {FORK}"
+    )));
     h.claude
         .send(FORK, text("MATH again after fork"), None, SendMode::Auto)
         .unwrap();
-    h.store.wait("fork turn", |s| turn_status(s, FORK, U5) == Some(TurnStatus::Completed));
+    h.store.wait("fork turn", |s| {
+        turn_status(s, FORK, U5) == Some(TurnStatus::Completed)
+    });
     let state = h.store.state();
     assert_eq!(t(&state, FORK).forked_from.as_deref(), Some(SESSION));
-    assert_eq!(t(&state, FORK).settings.model.as_deref(), Some("claude-sonnet-5"));
+    assert_eq!(
+        t(&state, FORK).settings.model.as_deref(),
+        Some("claude-sonnet-5")
+    );
 
     // Exactly the two answers the user gave, plus the app hook responses.
     let answers: Vec<Value> = p0
@@ -431,16 +522,21 @@ fn not_logged_in() {
     let h = backend(&["noauth"], &[noauth, turn_id]);
     h.claude.start().unwrap();
     assert_eq!(
-        backend_status(&h.store.state(), BackendKind::Claude).account.state,
+        backend_status(&h.store.state(), BackendKind::Claude)
+            .account
+            .state,
         LoginState::LoggedOut
     );
-    h.claude.start_thread(&ThreadOptions::new("/workspace")).unwrap();
+    h.claude
+        .start_thread(&ThreadOptions::new("/workspace"))
+        .unwrap();
     h.claude
         .send(
             noauth,
             vec![
                 UserPart::Text {
-                    text: "MATH: answer in markdown with a formula; what colour is the image?".into(),
+                    text: "MATH: answer in markdown with a formula; what colour is the image?"
+                        .into(),
                 },
                 UserPart::Image {
                     path: "/workspace/red.png".into(),
@@ -451,11 +547,19 @@ fn not_logged_in() {
             SendMode::Auto,
         )
         .unwrap();
-    h.store.wait("failed turn", |s| turn_status(s, noauth, turn_id) == Some(TurnStatus::Failed));
+    h.store.wait("failed turn", |s| {
+        turn_status(s, noauth, turn_id) == Some(TurnStatus::Failed)
+    });
     let state = h.store.state();
     let failed = turn(&t(&state, noauth), turn_id).unwrap().clone();
-    assert_eq!(failed.error.as_ref().unwrap().code.as_deref(), Some("api_error"));
-    assert_eq!(failed.error.as_ref().unwrap().message, "Not logged in · Please run /login");
+    assert_eq!(
+        failed.error.as_ref().unwrap().code.as_deref(),
+        Some("api_error")
+    );
+    assert_eq!(
+        failed.error.as_ref().unwrap().message,
+        "Not logged in · Please run /login"
+    );
     let notices: Vec<_> = failed
         .items
         .iter()
@@ -465,18 +569,31 @@ fn not_logged_in() {
         })
         .collect();
     assert_eq!(notices, [Some("authentication_failed".to_string())]);
-    assert!(!failed.items.iter().any(|i| matches!(i, Item::AgentMessage(_))));
+    assert!(
+        !failed
+            .items
+            .iter()
+            .any(|i| matches!(i, Item::AgentMessage(_)))
+    );
 }
 
 #[test]
 fn process_exit_fails_turns_and_expires_requests() {
     let h = backend(&["session"], &[SESSION, U1, U2]);
     h.claude.start().unwrap();
-    h.claude.start_thread(&ThreadOptions::new("/workspace")).unwrap();
+    h.claude
+        .start_thread(&ThreadOptions::new("/workspace"))
+        .unwrap();
     // The scripted server plays recorded turns in order: turn 1, then the write turn's request.
-    h.claude.send(SESSION, text("first"), None, SendMode::Auto).unwrap();
-    h.store.wait("turn 1", |s| turn_status(s, SESSION, U1) == Some(TurnStatus::Completed));
-    h.claude.send(SESSION, text("WRITE"), None, SendMode::Auto).unwrap();
+    h.claude
+        .send(SESSION, text("first"), None, SendMode::Auto)
+        .unwrap();
+    h.store.wait("turn 1", |s| {
+        turn_status(s, SESSION, U1) == Some(TurnStatus::Completed)
+    });
+    h.claude
+        .send(SESSION, text("WRITE"), None, SendMode::Auto)
+        .unwrap();
     let allow = requests::key("c071187f-d192-476b-942a-e990906bfdd6");
     h.store.wait("write permission", |s| {
         request(s, &allow).is_some_and(|r| r.status == RequestStatus::Pending)
@@ -485,7 +602,10 @@ fn process_exit_fails_turns_and_expires_requests() {
     let state = h.store.wait("expired", |s| {
         t(s, SESSION).run_state == RunState::NotLoaded
             && request(s, &allow).is_some_and(|r| r.status == RequestStatus::Expired)
-            && t(s, SESSION).notices.iter().any(|n| n.code.as_deref() == Some("processExited"))
+            && t(s, SESSION)
+                .notices
+                .iter()
+                .any(|n| n.code.as_deref() == Some("processExited"))
     });
     assert_eq!(turn_status(&state, SESSION, U2), Some(TurnStatus::Failed));
     assert!(
@@ -494,14 +614,18 @@ fn process_exit_fails_turns_and_expires_requests() {
             .iter()
             .any(|n| n.code.as_deref() == Some("processExited"))
     );
-    let error: ChatError = h.claude.respond(&allow, &decide("allow", None)).unwrap_err();
+    let error: ChatError = h
+        .claude
+        .respond(&allow, &decide("allow", None))
+        .unwrap_err();
     assert_eq!(error.kind, workflow_chat::error::ErrorKind::RequestExpired);
     assert!(
         h.runtime
             .process(0)
             .written()
             .iter()
-            .all(|f| f["type"] != "control_response" || f["response"]["request_id"] != "c071187f-d192-476b-942a-e990906bfdd6"),
+            .all(|f| f["type"] != "control_response"
+                || f["response"]["request_id"] != "c071187f-d192-476b-942a-e990906bfdd6"),
         "an expired card is never answered"
     );
 }

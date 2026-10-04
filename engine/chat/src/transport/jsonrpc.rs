@@ -35,8 +35,14 @@ pub enum RpcInbound {
         raw: OpaqueJson,
     },
     /// A response for an ID we are not waiting on, or a frame that fits no JSON-RPC shape.
-    Stray { reason: String, raw: OpaqueJson },
-    Malformed { preview: String, reason: String },
+    Stray {
+        reason: String,
+        raw: OpaqueJson,
+    },
+    Malformed {
+        preview: String,
+        reason: String,
+    },
 }
 
 #[derive(Default, Deserialize)]
@@ -134,7 +140,9 @@ impl RpcConnection {
         let owner = connection.clone();
         connection
             .threads
-            .add(channel::spawn_dispatcher(receiver, move |m| handler(&owner, m)));
+            .add(channel::spawn_dispatcher(receiver, move |m| {
+                handler(&owner, m)
+            }));
         connection
     }
 
@@ -182,7 +190,9 @@ impl RpcConnection {
             });
         }
         // Our IDs are JSON numbers; a string ID can never be ours.
-        let ours = wire::project::<Long>(&id).0.and_then(|n| u64::try_from(n).ok());
+        let ours = wire::project::<Long>(&id)
+            .0
+            .and_then(|n| u64::try_from(n).ok());
         let waiter = ours.and_then(|n| self.state.lock().unwrap().pending_out.remove(&n));
         let Some(waiter) = waiter else {
             return Some(RpcInbound::Stray {

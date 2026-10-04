@@ -45,7 +45,8 @@ fn rpc(p: &FakeProcess) -> (Arc<RpcConnection>, mpsc::Receiver<RpcInbound>) {
     (c, rx)
 }
 fn recv<T>(rx: &mpsc::Receiver<T>) -> T {
-    rx.recv_timeout(Duration::from_secs(5)).expect("inbound message")
+    rx.recv_timeout(Duration::from_secs(5))
+        .expect("inbound message")
 }
 
 #[test]
@@ -59,7 +60,10 @@ fn line_reader_handles_crlf_oversize_invalid_utf8_and_final_unterminated_line() 
     assert_eq!(reader.next_line().unwrap(), Line::Text("{\"a\":1}".into()));
     assert_eq!(reader.next_line().unwrap(), Line::TooLarge(50));
     assert_eq!(reader.next_line().unwrap(), Line::BadEncoding(2));
-    assert_eq!(reader.next_line().unwrap(), Line::Text("{\"b\":\"é\"}".into()));
+    assert_eq!(
+        reader.next_line().unwrap(),
+        Line::Text("{\"b\":\"é\"}".into())
+    );
     assert_eq!(reader.next_line().unwrap(), Line::Eof);
 }
 
@@ -80,20 +84,34 @@ fn jsonrpc_keeps_directions_apart_and_echoes_server_ids_verbatim() {
         .request("thread/start", Some(opaque(json!({"cwd":"/workspace"}))))
         .unwrap();
     assert_eq!(text(&result), r#"{"thread":{"id":"t"}}"#);
-    let RpcInbound::Request { id: numeric, method, .. } = recv(&rx) else { panic!() };
+    let RpcInbound::Request {
+        id: numeric,
+        method,
+        ..
+    } = recv(&rx)
+    else {
+        panic!()
+    };
     assert_eq!(text(&numeric), "1");
     assert_eq!(method, "item/commandExecution/requestApproval");
-    let RpcInbound::Request { id: string, .. } = recv(&rx) else { panic!() };
+    let RpcInbound::Request { id: string, .. } = recv(&rx) else {
+        panic!()
+    };
     assert_eq!(text(&string), r#""srv-7""#);
     assert!(matches!(recv(&rx), RpcInbound::Stray { .. }));
-    let RpcInbound::Notification { raw, method, .. } = recv(&rx) else { panic!() };
+    let RpcInbound::Notification { raw, method, .. } = recv(&rx) else {
+        panic!()
+    };
     assert_eq!(method, "future/notification");
     // Every member of an unknown notification is preserved.
     assert_eq!(
         raw.0,
         json!({"method":"future/notification","params":{"x":[1,{"y":null}]},"extra":true})
     );
-    assert_eq!(c.open_server_requests(), vec!["\"srv-7\"".to_string(), "1".to_string()]);
+    assert_eq!(
+        c.open_server_requests(),
+        vec!["\"srv-7\"".to_string(), "1".to_string()]
+    );
     c.respond(&string, &opaque(json!({"answers":{}}))).unwrap();
     c.respond_error(&numeric, -32601, "no", None).unwrap();
     let written: Vec<String> = fake.written().iter().map(|v| v.to_string()).collect();
@@ -114,9 +132,16 @@ fn huge_numeric_ids_string_ids_and_null_results_remain_distinct() {
         }
     });
     let (c, rx) = rpc(&fake);
-    for token in ["900719925474099312345678901", r#""900719925474099312345678901""#, "1.2300e+20", "-0"] {
+    for token in [
+        "900719925474099312345678901",
+        r#""900719925474099312345678901""#,
+        "1.2300e+20",
+        "-0",
+    ] {
         fake.emit_raw(&format!("{{\"id\":{token},\"method\":\"future\"}}\n"));
-        let RpcInbound::Request { id, .. } = recv(&rx) else { panic!() };
+        let RpcInbound::Request { id, .. } = recv(&rx) else {
+            panic!()
+        };
         assert_eq!(text(&id), token);
         c.respond(&id, &OpaqueJson::default()).unwrap();
     }
@@ -152,7 +177,10 @@ fn pending_requests_fail_when_the_process_exits_and_errors_keep_vendor_data() {
     assert_eq!(error.message, "bad params");
     assert_eq!(text(error.data.as_ref().unwrap()), r#"{"f":1}"#);
     assert_eq!(c.request("slow", None).unwrap_err().kind, ErrorKind::Closed);
-    assert_eq!(c.request("after", None).unwrap_err().kind, ErrorKind::Closed);
+    assert_eq!(
+        c.request("after", None).unwrap_err().kind,
+        ErrorKind::Closed
+    );
 }
 
 #[test]
@@ -197,14 +225,23 @@ fn control_ignores_echoes_correlates_ids_and_forgets_cancelled_requests() {
     let (c, rx) = control(&fake);
     let result = c.control("interrupt", &Default::default()).unwrap();
     assert_eq!(text(&result), r#"{"still_queued":[]}"#);
-    let ControlInbound::Request { id, subtype, .. } = recv(&rx) else { panic!() };
+    let ControlInbound::Request { id, subtype, .. } = recv(&rx) else {
+        panic!()
+    };
     assert_eq!((id.as_str(), subtype.as_str()), ("cli-1", "can_use_tool"));
-    let ControlInbound::Cancel { id, .. } = recv(&rx) else { panic!() };
+    let ControlInbound::Cancel { id, .. } = recv(&rx) else {
+        panic!()
+    };
     assert_eq!(id, "cli-1");
-    let ControlInbound::Message { kind, .. } = recv(&rx) else { panic!() };
+    let ControlInbound::Message { kind, .. } = recv(&rx) else {
+        panic!()
+    };
     assert_eq!(kind, "system");
     assert_eq!(c.ignored_responses(), 1);
-    assert_eq!(c.respond("cli-1", None).unwrap_err().kind, ErrorKind::RequestExpired);
+    assert_eq!(
+        c.respond("cli-1", None).unwrap_err().kind,
+        ErrorKind::RequestExpired
+    );
     assert_eq!(
         fake.written()[0],
         json!({"type":"control_request","request_id":"ours-1","request":{"subtype":"interrupt"}})
@@ -220,7 +257,8 @@ fn control_errors_surface_and_undeclared_dialogs_can_be_forgotten() {
         }
     });
     let (c, rx) = control(&fake);
-    let fields = workflow_chat::model::OpaqueObject::from([("model".into(), wire::string_value("x"))]);
+    let fields =
+        workflow_chat::model::OpaqueObject::from([("model".into(), wire::string_value("x"))]);
     let error = c.control("set_model", &fields).unwrap_err();
     assert_eq!(error.message, "nope");
     assert!(matches!(recv(&rx), ControlInbound::Request { .. }));

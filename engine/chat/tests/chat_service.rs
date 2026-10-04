@@ -23,7 +23,10 @@ struct Fixture {
     preferences: Arc<MemoryPreferences>,
 }
 fn reviewer_user(text: &str) -> Vec<Envelope> {
-    envelopes(&text.replace(r#""approvalsReviewer": "auto_review""#, r#""approvalsReviewer": "user""#))
+    envelopes(&text.replace(
+        r#""approvalsReviewer": "auto_review""#,
+        r#""approvalsReviewer": "user""#,
+    ))
 }
 fn fixture(runtime: Arc<FakeRuntime>, tools: FakeTools, default: &str) -> Fixture {
     let store = Arc::new(MemoryStore::default());
@@ -92,7 +95,10 @@ fn wait_snapshot(chat: &Chat, what: &str, f: impl Fn(&ChatSnapshot) -> bool) -> 
         last = Some(s);
         std::thread::sleep(Duration::from_millis(10));
     }
-    panic!("timed out waiting for {what}: revision {}", last.unwrap().revision)
+    panic!(
+        "timed out waiting for {what}: revision {}",
+        last.unwrap().revision
+    )
 }
 fn submitted(id: &str, revision: u64, text: &str) -> Value {
     json!({"format":1,"conversationId":id,"revision":revision,"text":text,"attachments":[]})
@@ -112,38 +118,84 @@ fn metadata_reflects_measured_tools_and_conversation_commands() {
     let snapshot = f.chat.snapshot();
     assert_eq!(snapshot.metadata.available, [BackendKind::Codex]);
     assert_eq!(snapshot.metadata.default_backend, BackendKind::Codex);
-    assert_eq!(snapshot.metadata.login_methods[&BackendKind::Claude].len(), 3);
-    assert_eq!(f.tools.installs.load(Ordering::SeqCst), 0, "Codex use never installs Claude");
+    assert_eq!(
+        snapshot.metadata.login_methods[&BackendKind::Claude].len(),
+        3
+    );
+    assert_eq!(
+        f.tools.installs.load(Ordering::SeqCst),
+        0,
+        "Codex use never installs Claude"
+    );
 
-    let id = command(&f.chat, "newConversation", json!({"id":"c1","backend":"codex"})).unwrap();
+    let id = command(
+        &f.chat,
+        "newConversation",
+        json!({"id":"c1","backend":"codex"}),
+    )
+    .unwrap();
     assert_eq!(id, "c1");
     let entry = command(&f.chat, "ensureConversation", json!({"id":"c1"})).unwrap();
     assert_eq!(entry["backend"], "CODEX");
     assert_eq!(entry["cwd"], "/workspace");
-    assert_eq!(entry["backendThreadId"], Value::Null, "ChatWire writes explicit nulls");
-    command(&f.chat, "rename", json!({"id":"c1","title":"  Engine-owned conversation  "})).unwrap();
+    assert_eq!(
+        entry["backendThreadId"],
+        Value::Null,
+        "ChatWire writes explicit nulls"
+    );
+    command(
+        &f.chat,
+        "rename",
+        json!({"id":"c1","title":"  Engine-owned conversation  "}),
+    )
+    .unwrap();
     command(&f.chat, "archive", json!({"id":"c1","archived":true})).unwrap();
-    command(&f.chat, "rememberSelection", json!({"id":"c1","model":"m","effort":"high"})).unwrap();
-    command(&f.chat, "setPermissions", json!({"id":"c1","preset":"AUTO_EDIT"})).unwrap();
+    command(
+        &f.chat,
+        "rememberSelection",
+        json!({"id":"c1","model":"m","effort":"high"}),
+    )
+    .unwrap();
+    command(
+        &f.chat,
+        "setPermissions",
+        json!({"id":"c1","preset":"AUTO_EDIT"}),
+    )
+    .unwrap();
     let snapshot = f.chat.snapshot();
     let c1 = &snapshot.metadata.conversations[0];
     assert_eq!(c1.title.as_deref(), Some("Engine-owned conversation"));
     assert!(c1.archived);
-    assert_eq!((c1.model.as_deref(), c1.effort.as_deref()), (Some("m"), Some("high")));
+    assert_eq!(
+        (c1.model.as_deref(), c1.effort.as_deref()),
+        (Some("m"), Some("high"))
+    );
     assert_eq!(snapshot.metadata.permissions, PermissionPreset::AutoEdit);
     let prefs = f.preferences.0.lock().unwrap().clone();
     assert_eq!(prefs.permissions.as_deref(), Some("auto_edit"));
     assert_eq!(prefs.backends["codex"].model.as_deref(), Some("m"));
     // The index document keeps the retained format-1 shape.
-    let index: Value = serde_json::from_str(f.store.index.lock().unwrap().as_ref().unwrap()).unwrap();
+    let index: Value =
+        serde_json::from_str(f.store.index.lock().unwrap().as_ref().unwrap()).unwrap();
     assert_eq!(index["format"], 1);
     assert_eq!(index["conversations"][0]["archived"], true);
 
     command(&f.chat, "setBackend", json!({"id":"c1","kind":"claude"})).unwrap();
-    assert_eq!(f.chat.snapshot().metadata.default_backend, BackendKind::Claude);
-    assert_eq!(f.tools.installs.load(Ordering::SeqCst), 1, "Claude demand installs once");
+    assert_eq!(
+        f.chat.snapshot().metadata.default_backend,
+        BackendKind::Claude
+    );
+    assert_eq!(
+        f.tools.installs.load(Ordering::SeqCst),
+        1,
+        "Claude demand installs once"
+    );
     command(&f.chat, "warmUp", json!({"kind":"claude"})).unwrap_err();
-    assert_eq!(f.tools.installs.load(Ordering::SeqCst), 1, "a pending install is not repeated");
+    assert_eq!(
+        f.tools.installs.load(Ordering::SeqCst),
+        1,
+        "a pending install is not repeated"
+    );
 
     let unknown = command(&f.chat, "future", json!({})).unwrap_err();
     assert_eq!(unknown.kind, ErrorKind::InvalidArgument);
@@ -166,54 +218,113 @@ fn watch_replays_events_and_resnapshots_foreign_epochs() {
         .unwrap();
     assert!(!update.resnapshot);
     assert!(update.revision > before.revision);
-    assert!(update.events.iter().any(|e| matches!(e, AgentEvent::ProcessChanged { state: ProcessState::Starting {}, .. })));
-    assert!(update.metadata.process_epochs.contains_key(&BackendKind::Codex));
+    assert!(update.events.iter().any(|e| matches!(
+        e,
+        AgentEvent::ProcessChanged {
+            state: ProcessState::Starting {},
+            ..
+        }
+    )));
+    assert!(
+        update
+            .metadata
+            .process_epochs
+            .contains_key(&BackendKind::Codex)
+    );
     let foreign = f.chat.watch("other-epoch", 0, Duration::ZERO).unwrap();
     assert!(foreign.resnapshot);
-    assert!(f.chat.watch(&before.epoch, 0, Duration::from_secs(31)).is_err());
+    assert!(
+        f.chat
+            .watch(&before.epoch, 0, Duration::from_secs(31))
+            .is_err()
+    );
     f.chat.shutdown();
 }
 
 #[test]
 fn send_dispatches_once_per_composer_revision_and_answers_only_with_the_users_epoch() {
     let f = codex_fixture();
-    command(&f.chat, "newConversation", json!({"id":"c","backend":"codex"})).unwrap();
-    let client = command(&f.chat, "send", send_args("c", 1, "Answer in Markdown only…", "op-1")).unwrap();
+    command(
+        &f.chat,
+        "newConversation",
+        json!({"id":"c","backend":"codex"}),
+    )
+    .unwrap();
+    let client = command(
+        &f.chat,
+        "send",
+        send_args("c", 1, "Answer in Markdown only…", "op-1"),
+    )
+    .unwrap();
     let client = client.as_str().unwrap().to_string();
     // A recreated client retries the same composer revision with a new operation ID.
-    let again = command(&f.chat, "send", send_args("c", 1, "Answer in Markdown only…", "op-2")).unwrap();
+    let again = command(
+        &f.chat,
+        "send",
+        send_args("c", 1, "Answer in Markdown only…", "op-2"),
+    )
+    .unwrap();
     assert_eq!(again, client.as_str());
     let process = f.runtime.process(0);
-    assert_eq!(process.count("turn/start"), 1, "a revision is dispatched once");
+    assert_eq!(
+        process.count("turn/start"),
+        1,
+        "a revision is dispatched once"
+    );
     assert_eq!(f.workspace.acknowledged.lock().unwrap().len(), 2);
     // Different content for the same revision is refused.
-    let conflict = command(&f.chat, "send", send_args("c", 1, "something else", "op-3")).unwrap_err();
+    let conflict =
+        command(&f.chat, "send", send_args("c", 1, "something else", "op-3")).unwrap_err();
     assert_eq!(conflict.kind, ErrorKind::SendConflict);
     // The message must match the submitted composer exactly.
     let mut mismatch = send_args("c", 2, "x", "op-4");
     mismatch["text"] = json!("y");
-    assert_eq!(command(&f.chat, "send", mismatch).unwrap_err().kind, ErrorKind::InvalidArgument);
+    assert_eq!(
+        command(&f.chat, "send", mismatch).unwrap_err().kind,
+        ErrorKind::InvalidArgument
+    );
 
     let thread = "01a0ddb6-d670-70f3-9a62-1320d2a3b41a";
     let snapshot = wait_snapshot(&f.chat, "turn 1", |s| {
         thread_done(s, thread, "01a0ddb6-d741-7293-9b32-d5164341d611")
     });
-    let entry = snapshot.metadata.conversations.iter().find(|e| e.id == "c").unwrap();
+    let entry = snapshot
+        .metadata
+        .conversations
+        .iter()
+        .find(|e| e.id == "c")
+        .unwrap();
     assert_eq!(entry.backend_thread_id.as_deref(), Some(thread));
     assert_eq!(entry.preview.as_deref(), Some("Answer in Markdown only…"));
     assert_eq!(entry.model.as_deref(), Some("gpt-reserve"));
-    let record = f.store.sends.lock().unwrap().values().next().cloned().unwrap();
+    let record = f
+        .store
+        .sends
+        .lock()
+        .unwrap()
+        .values()
+        .next()
+        .cloned()
+        .unwrap();
     assert_eq!(record.client_message_id.as_deref(), Some(client.as_str()));
     assert_eq!(record.conversation_id.as_deref(), Some("c"));
 
     // Turn 2 asks for approval; only the user's explicit answer with the current epoch reaches Codex.
-    command(&f.chat, "send", send_args("c", 2, "Create a file named hello.txt…", "op-5")).unwrap();
+    command(
+        &f.chat,
+        "send",
+        send_args("c", 2, "Create a file named hello.txt…", "op-5"),
+    )
+    .unwrap();
     let key = RequestKey {
         backend: BackendKind::Codex,
         raw_id: opaque(json!(0)),
     };
     let snapshot = wait_snapshot(&f.chat, "approval", |s| {
-        s.state.requests.get(&key).is_some_and(|r| r.status == RequestStatus::Pending)
+        s.state
+            .requests
+            .get(&key)
+            .is_some_and(|r| r.status == RequestStatus::Pending)
     });
     let epoch = snapshot.metadata.process_epochs[&BackendKind::Codex].clone();
     let key_json = serde_json::to_value(&key).unwrap();
@@ -224,7 +335,12 @@ fn send_dispatches_once_per_composer_revision_and_answers_only_with_the_users_ep
     )
     .unwrap_err();
     assert_eq!(stale.kind, ErrorKind::RequestExpired);
-    assert!(process.written().iter().all(|f| f.get("id") != Some(&json!(0))));
+    assert!(
+        process
+            .written()
+            .iter()
+            .all(|f| f.get("id") != Some(&json!(0)))
+    );
     command(
         &f.chat,
         "respond",
@@ -243,10 +359,16 @@ fn send_dispatches_once_per_composer_revision_and_answers_only_with_the_users_ep
         json!({"key":key_json,"response":{"_type":"Decide","decisionId":"accept","message":null},"processEpoch":epoch}),
     )
     .unwrap_err();
-    assert_eq!(replay.kind, ErrorKind::RequestExpired, "an answered card cannot be answered again");
+    assert_eq!(
+        replay.kind,
+        ErrorKind::RequestExpired,
+        "an answered card cannot be answered again"
+    );
 
     // Deleting the conversation removes its ledger records.
-    wait_snapshot(&f.chat, "turn 2", |s| thread_done(s, thread, "01a0ddb6-fe01-77a2-a0a1-deff66d7d2c2"));
+    wait_snapshot(&f.chat, "turn 2", |s| {
+        thread_done(s, thread, "01a0ddb6-fe01-77a2-a0a1-deff66d7d2c2")
+    });
     command(&f.chat, "deleteConversation", json!({"id":"c"})).unwrap();
     assert!(f.store.sends.lock().unwrap().is_empty());
     f.chat.shutdown();
@@ -273,7 +395,11 @@ fn seccomp_killed_launch_marks_backend_unsupported() {
         p.exit(workflow_chat::service::hub::SIGSYS_EXIT);
         p
     });
-    let f = fixture(runtime, FakeTools::new(ToolPhase::Ready, ToolPhase::NotInstalled), "codex");
+    let f = fixture(
+        runtime,
+        FakeTools::new(ToolPhase::Ready, ToolPhase::NotInstalled),
+        "codex",
+    );
     assert!(command(&f.chat, "warmUp", json!({"kind":"codex"})).is_err());
     let snapshot = wait_snapshot(&f.chat, "unsupported", |s| s.metadata.available.is_empty());
     assert!(matches!(
@@ -294,11 +420,15 @@ fn removed_tool_stops_its_backend_and_unknown_backend_is_refused() {
     eventually("backend stopped", || !process.is_alive_fake());
     assert!(f.chat.snapshot().metadata.available.is_empty());
     assert_eq!(
-        command(&f.chat, "warmUp", json!({"kind":"codex"})).unwrap_err().kind,
+        command(&f.chat, "warmUp", json!({"kind":"codex"}))
+            .unwrap_err()
+            .kind,
         ErrorKind::BackendUnavailable
     );
     assert_eq!(
-        command(&f.chat, "warmUp", json!({"kind":"gemini"})).unwrap_err().kind,
+        command(&f.chat, "warmUp", json!({"kind":"gemini"}))
+            .unwrap_err()
+            .kind,
         ErrorKind::InvalidArgument
     );
     f.chat.shutdown();

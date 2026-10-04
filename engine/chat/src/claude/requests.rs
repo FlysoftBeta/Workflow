@@ -110,14 +110,19 @@ pub fn describe_suggestion(raw: &OpaqueJson) -> String {
                     format!(
                         "{}{}",
                         r.tool_name.or(""),
-                        r.rule_content.get().map(|v| format!("({v})")).unwrap_or_default()
+                        r.rule_content
+                            .get()
+                            .map(|v| format!("({v})"))
+                            .unwrap_or_default()
                     )
                 })
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
         Some("setMode") => format!("mode {} → {destination}", s.mode.or("null")),
-        Some("addDirectories") => format!("directories {} → {destination}", s.directories.0.join(", ")),
+        Some("addDirectories") => {
+            format!("directories {} → {destination}", s.directories.0.join(", "))
+        }
         Some(kind @ ("removeRules" | "removeDirectories")) => format!("{kind} → {destination}"),
         _ => wire::text(raw),
     }
@@ -606,7 +611,10 @@ pub fn content(parts: &[UserPart], reader: &AttachmentReader, max: usize) -> Res
                 } else {
                     text.clone()
                 };
-                out.push(wire::encode(&TextBlock { kind: "text", text: &text }));
+                out.push(wire::encode(&TextBlock {
+                    kind: "text",
+                    text: &text,
+                }));
             }
             UserPart::Image { path, mime_type } => out.push(wire::encode(&Block {
                 kind: "image",
@@ -652,7 +660,10 @@ pub fn content(parts: &[UserPart], reader: &AttachmentReader, max: usize) -> Res
         }
     }
     if !mention_added {
-        out.push(wire::encode(&TextBlock { kind: "text", text: &mentions }));
+        out.push(wire::encode(&TextBlock {
+            kind: "text",
+            text: &mentions,
+        }));
     }
     Ok(wire::encode(&out))
 }
@@ -674,7 +685,11 @@ struct MessageBody<'a> {
     content: &'a OpaqueJson,
 }
 /// A stream-json user prompt whose `uuid` is the client message ID (and later the turn ID).
-pub fn user_message(client_message_id: &str, content: &OpaqueJson, priority: Option<&str>) -> OpaqueJson {
+pub fn user_message(
+    client_message_id: &str,
+    content: &OpaqueJson,
+    priority: Option<&str>,
+) -> OpaqueJson {
     wire::encode(&UserMessage {
         kind: "user",
         uuid: client_message_id,

@@ -68,8 +68,13 @@ fn notice(level: NoticeLevel, message: impl Into<String>) -> Notice {
     }
 }
 
-pub fn notification(method: &str, params: Option<&OpaqueJson>, raw: &OpaqueJson) -> Vec<AgentEvent> {
-    let p: wire::Notification = crate::wire::project_opt(params.filter(|v| crate::wire::is_object(v)));
+pub fn notification(
+    method: &str,
+    params: Option<&OpaqueJson>,
+    raw: &OpaqueJson,
+) -> Vec<AgentEvent> {
+    let p: wire::Notification =
+        crate::wire::project_opt(params.filter(|v| crate::wire::is_object(v)));
     let raw_params = params
         .filter(|v| crate::wire::is_object(v))
         .cloned()
@@ -143,13 +148,19 @@ pub fn notification(method: &str, params: Option<&OpaqueJson>, raw: &OpaqueJson)
             thread_id: t,
             run_state: run_state(&p.status),
         }]),
-        "thread/archived" | "thread/unarchived" => need_thread!(t => vec![AgentEvent::ThreadArchived {
-            backend: B,
-            thread_id: t,
-            archived: method == "thread/archived",
-        }]),
-        "thread/deleted" => need_thread!(t => vec![AgentEvent::ThreadDeleted { backend: B, thread_id: t }]),
-        "thread/closed" => need_thread!(t => vec![AgentEvent::ThreadClosed { backend: B, thread_id: t }]),
+        "thread/archived" | "thread/unarchived" => {
+            need_thread!(t => vec![AgentEvent::ThreadArchived {
+                backend: B,
+                thread_id: t,
+                archived: method == "thread/archived",
+            }])
+        }
+        "thread/deleted" => {
+            need_thread!(t => vec![AgentEvent::ThreadDeleted { backend: B, thread_id: t }])
+        }
+        "thread/closed" => {
+            need_thread!(t => vec![AgentEvent::ThreadClosed { backend: B, thread_id: t }])
+        }
         "thread/reverted" => need_thread!(t => vec![AgentEvent::ThreadNotice {
             backend: B,
             thread_id: t,
@@ -260,32 +271,62 @@ pub fn notification(method: &str, params: Option<&OpaqueJson>, raw: &OpaqueJson)
             // Must not happen with approvalsReviewer=user; surfaced loudly if it does.
             let n = with_raw(Notice {
                 code: Some(method.into()),
-                ..notice(NoticeLevel::Error, "Approval was routed to automatic review")
+                ..notice(
+                    NoticeLevel::Error,
+                    "Approval was routed to automatic review",
+                )
             });
             vec![match thread.clone() {
-                Some(t) => AgentEvent::TurnNotice { backend: B, thread_id: t, turn_id: turn.clone(), notice: n },
-                None => AgentEvent::BackendNotice { backend: B, notice: n },
+                Some(t) => AgentEvent::TurnNotice {
+                    backend: B,
+                    thread_id: t,
+                    turn_id: turn.clone(),
+                    notice: n,
+                },
+                None => AgentEvent::BackendNotice {
+                    backend: B,
+                    notice: n,
+                },
             }]
         }
-        "item/agentMessage/delta" => delta(ItemDelta::AgentText { text: p.delta.or("") }),
-        "item/plan/delta" => delta(ItemDelta::PlanText { text: p.delta.or("") }),
-        "item/commandExecution/outputDelta" => delta(ItemDelta::CommandOutput { text: p.delta.or("") }),
-        "item/commandExecution/terminalInteraction" => delta(ItemDelta::TerminalInput { text: p.stdin.or("") }),
-        "item/fileChange/outputDelta" => delta(ItemDelta::FileChangeOutput { text: p.delta.or("") }),
-        "item/fileChange/patchUpdated" => delta(ItemDelta::FileChangePatch { changes: items::changes(p.changes.get()) }),
-        "item/mcpToolCall/progress" => delta(ItemDelta::ToolProgress { message: p.message.or("") }),
+        "item/agentMessage/delta" => delta(ItemDelta::AgentText {
+            text: p.delta.or(""),
+        }),
+        "item/plan/delta" => delta(ItemDelta::PlanText {
+            text: p.delta.or(""),
+        }),
+        "item/commandExecution/outputDelta" => delta(ItemDelta::CommandOutput {
+            text: p.delta.or(""),
+        }),
+        "item/commandExecution/terminalInteraction" => delta(ItemDelta::TerminalInput {
+            text: p.stdin.or(""),
+        }),
+        "item/fileChange/outputDelta" => delta(ItemDelta::FileChangeOutput {
+            text: p.delta.or(""),
+        }),
+        "item/fileChange/patchUpdated" => delta(ItemDelta::FileChangePatch {
+            changes: items::changes(p.changes.get()),
+        }),
+        "item/mcpToolCall/progress" => delta(ItemDelta::ToolProgress {
+            message: p.message.or(""),
+        }),
         "item/reasoning/summaryTextDelta" => delta(ItemDelta::ReasoningSummary {
             index: p.summary_index.int().unwrap_or(0),
             text: p.delta.or(""),
         }),
-        "item/reasoning/summaryPartAdded" => delta(ItemDelta::ReasoningSummaryPart { index: p.summary_index.int().unwrap_or(0) }),
+        "item/reasoning/summaryPartAdded" => delta(ItemDelta::ReasoningSummaryPart {
+            index: p.summary_index.int().unwrap_or(0),
+        }),
         "item/reasoning/textDelta" => delta(ItemDelta::ReasoningText {
             index: p.content_index.int().unwrap_or(0),
             text: p.delta.or(""),
         }),
         "serverRequest/resolved" => match p.request_id.value() {
             Some(id) => vec![AgentEvent::RequestClosed {
-                key: RequestKey { backend: B, raw_id: id.clone() },
+                key: RequestKey {
+                    backend: B,
+                    raw_id: id.clone(),
+                },
                 status: RequestStatus::Resolved,
                 answer: None,
             }],
@@ -299,8 +340,18 @@ pub fn notification(method: &str, params: Option<&OpaqueJson>, raw: &OpaqueJson)
                     code: Some(method.into()),
                     detail: p.error.string(),
                     ..notice(
-                        if failed { NoticeLevel::Warning } else { NoticeLevel::Info },
-                        format!("MCP login {}: {}", if failed { "failed" } else { "completed" }, p.name.or("")).trim().to_string(),
+                        if failed {
+                            NoticeLevel::Warning
+                        } else {
+                            NoticeLevel::Info
+                        },
+                        format!(
+                            "MCP login {}: {}",
+                            if failed { "failed" } else { "completed" },
+                            p.name.or("")
+                        )
+                        .trim()
+                        .to_string(),
                     )
                 }),
             }]
@@ -348,16 +399,22 @@ pub fn notification(method: &str, params: Option<&OpaqueJson>, raw: &OpaqueJson)
             turn_id: turn.clone(),
             notice: with_raw(Notice { code: Some(method.into()), ..notice(NoticeLevel::Info, "Model verification") }),
         }]),
-        "modelProvider/authRecovery/started" | "modelProvider/authRecovery/completed" => vec![AgentEvent::BackendNotice {
-            backend: B,
-            notice: with_raw(Notice {
-                code: Some(method.into()),
-                ..notice(
-                    NoticeLevel::Info,
-                    if method == "modelProvider/authRecovery/started" { "Refreshing sign-in" } else { "Sign-in refreshed" },
-                )
-            }),
-        }],
+        "modelProvider/authRecovery/started" | "modelProvider/authRecovery/completed" => {
+            vec![AgentEvent::BackendNotice {
+                backend: B,
+                notice: with_raw(Notice {
+                    code: Some(method.into()),
+                    ..notice(
+                        NoticeLevel::Info,
+                        if method == "modelProvider/authRecovery/started" {
+                            "Refreshing sign-in"
+                        } else {
+                            "Sign-in refreshed"
+                        },
+                    )
+                }),
+            }]
+        }
         "model/safetyBuffering/updated" => need_thread!(t => if p.show_buffering_ui.is_true() {
             vec![AgentEvent::TurnNotice {
                 backend: B,
@@ -373,10 +430,20 @@ pub fn notification(method: &str, params: Option<&OpaqueJson>, raw: &OpaqueJson)
             vec![]
         }),
         "warning" => {
-            let n = with_raw(Notice { code: Some(method.into()), ..notice(NoticeLevel::Warning, p.message.or("")) });
+            let n = with_raw(Notice {
+                code: Some(method.into()),
+                ..notice(NoticeLevel::Warning, p.message.or(""))
+            });
             vec![match thread.clone() {
-                Some(t) => AgentEvent::ThreadNotice { backend: B, thread_id: t, notice: n },
-                None => AgentEvent::BackendNotice { backend: B, notice: n },
+                Some(t) => AgentEvent::ThreadNotice {
+                    backend: B,
+                    thread_id: t,
+                    notice: n,
+                },
+                None => AgentEvent::BackendNotice {
+                    backend: B,
+                    notice: n,
+                },
             }]
         }
         "guardianWarning" => need_thread!(t => vec![AgentEvent::ThreadNotice {
@@ -393,7 +460,11 @@ pub fn notification(method: &str, params: Option<&OpaqueJson>, raw: &OpaqueJson)
             }),
         }],
         "configWarning" => {
-            let detail = [p.path.owned(), p.details.owned()].into_iter().flatten().collect::<Vec<_>>().join("\n");
+            let detail = [p.path.owned(), p.details.owned()]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join("\n");
             vec![AgentEvent::BackendNotice {
                 backend: B,
                 notice: with_raw(Notice {
@@ -439,7 +510,11 @@ pub fn run_state(status: &Json) -> RunState {
 pub fn settings(json: &Json) -> ThreadSettings {
     let s: wire::Settings = crate::wire::project_opt(json.object());
     // `sandboxPolicy ?: sandbox`: an explicit null policy still wins over the mode.
-    let sandbox = if s.sandbox_policy.get().is_some() { &s.sandbox_policy } else { &s.sandbox };
+    let sandbox = if s.sandbox_policy.get().is_some() {
+        &s.sandbox_policy
+    } else {
+        &s.sandbox
+    };
     ThreadSettings {
         model: s.model.owned(),
         effort: s.effort.owned().or(s.reasoning_effort.owned()),
@@ -523,7 +598,10 @@ pub fn rate_limit(json: Option<&OpaqueJson>) -> Option<RateLimit> {
 pub fn rate_limits(result: &OpaqueJson) -> RateLimitState {
     let r: wire::RateLimits = project(result);
     let limits = match r.rate_limits_by_limit_id.0 {
-        Some(members) => members.iter().filter_map(|(_, v)| rate_limit(Some(v))).collect(),
+        Some(members) => members
+            .iter()
+            .filter_map(|(_, v)| rate_limit(Some(v)))
+            .collect(),
         None => rate_limit(r.rate_limits.get()).into_iter().collect(),
     };
     RateLimitState {
@@ -539,7 +617,11 @@ pub fn account(result: &OpaqueJson) -> AccountState {
     let r: wire::AccountRead = project(result);
     let a: wire::Account = crate::wire::project_opt(r.account.object());
     AccountState {
-        state: if r.account.is_nullish() { LoginState::LoggedOut } else { LoginState::LoggedIn },
+        state: if r.account.is_nullish() {
+            LoginState::LoggedOut
+        } else {
+            LoginState::LoggedIn
+        },
         method: a.kind.owned(),
         email: a.email.owned(),
         plan: a.plan_type.owned(),
@@ -606,7 +688,10 @@ pub fn models(pages: &[OpaqueJson]) -> ModelCatalog {
                 hidden: o.hidden.is_true(),
                 input_modalities: modalities,
                 upgrade_to: o.upgrade.owned(),
-                upgrade_message: o.upgrade_info.get().and_then(|u| u.migration_markdown.owned()),
+                upgrade_message: o
+                    .upgrade_info
+                    .get()
+                    .and_then(|u| u.migration_markdown.owned()),
                 raw: Some(raw),
                 ..Default::default()
             });
