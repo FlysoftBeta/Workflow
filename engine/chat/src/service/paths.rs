@@ -1,4 +1,4 @@
-//! Workspace-relative paths and the agents' guest view, exactly as the retained Kotlin `AgentPaths`
+//! Workspace-relative paths and the agents' guest view, exactly as the client's Kotlin `AgentPaths`
 //! resolves them. Agent homes are visible workspace configuration below `.workspace/agents/<id>`,
 //! but agents see them only at their guest homes; FileWork's allowlist still decides access.
 use crate::error::{ChatError, Result};

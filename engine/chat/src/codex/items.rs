@@ -1,5 +1,5 @@
 //! Codex `ThreadItem`, `UserInput` and `Turn` bodies to and from the neutral model. Missing fields get
-//! defaults, as in the retained adapter.
+//! defaults, as in the former Kotlin adapter.
 use super::wire;
 use crate::{
     error::{ChatError, Result},

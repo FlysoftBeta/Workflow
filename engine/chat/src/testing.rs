@@ -1,5 +1,5 @@
 //! Test-only fakes (feature `testing`): in-memory pipes, a scripted guest process and runtime, the
-//! recorded-transcript `ScriptedServer` ported from the retained Kotlin harness, and a reducing
+//! recorded-transcript `ScriptedServer` ported from the former Kotlin harness, and a reducing
 //! event store. Fixture JSON is manipulated directly here because it is test data, not vendor IO.
 use crate::{
     backend::EventSink,
