@@ -464,12 +464,14 @@ fn rewrite(response: &Value, id: Value) -> Value {
     response
 }
 
-/// Folds every event into `AgentState`, like the retained `AgentStateStore`, and lets tests wait.
+type Listener = Box<dyn Fn(&AgentState, &AgentEvent) + Send + Sync>;
+
+/// Folds every event into `AgentState` and lets tests wait.
 #[derive(Default)]
 pub struct EventStore {
     state: Mutex<(AgentState, Vec<AgentEvent>)>,
     changed: Condvar,
-    listeners: Mutex<Vec<Box<dyn Fn(&AgentState, &AgentEvent) + Send + Sync>>>,
+    listeners: Mutex<Vec<Listener>>,
 }
 impl EventStore {
     pub fn new() -> Arc<Self> {

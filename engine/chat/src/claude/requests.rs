@@ -517,12 +517,16 @@ pub fn answer(request: &PendingRequest, response: &RequestResponse) -> Result<An
     }
 }
 
+/// Answers one hook callback's input with its output, or a refusal message.
+pub type HookHandler =
+    Box<dyn Fn(&OpaqueJson) -> std::result::Result<OpaqueJson, String> + Send + Sync>;
+
 /// An app-registered hook (answers `hook_callback`). It is never a user approval.
 pub struct ClaudeHook {
     pub event: String,
     pub matcher: Option<String>,
     pub callback_id: String,
-    pub handler: Box<dyn Fn(&OpaqueJson) -> std::result::Result<OpaqueJson, String> + Send + Sync>,
+    pub handler: HookHandler,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

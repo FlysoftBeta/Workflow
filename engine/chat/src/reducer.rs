@@ -176,8 +176,7 @@ pub fn reduce(s: &mut AgentState, event: &AgentEvent) {
             merge,
         } => {
             let b = backend(s, *kind);
-            if *merge && b.rate_limits.is_some() {
-                let old = b.rate_limits.as_mut().unwrap();
+            if let (true, Some(old)) = (*merge, b.rate_limits.as_mut()) {
                 for l in &limits.limits {
                     if let Some(v) = old.limits.iter_mut().find(|v| v.id == l.id) {
                         *v = l.clone();
