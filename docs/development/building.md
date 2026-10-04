@@ -102,6 +102,8 @@ To assemble both signed Release APKs without creating a delivery bundle:
 tools/with-build-lock.sh ./gradlew :app:android:assembleRelease
 ```
 
+Release builds enable R8 code and resource optimization. AGP reads the app's own keep rules from `app/android/src/main/keepRules/*.keep`; dependencies supply their consumer rules, and libraries that rely on reflection without shipping rules, such as jlatexmath, are kept there. R8 writes the obfuscation mapping to `app/android/build/outputs/mapping/<flavor>Release/mapping.txt`, which is needed to read Release stack traces.
+
 Use `:app:android:assembleArm64Release` or `:app:android:assembleX86_64Release` for one flavor. These write `app/android/build/outputs/apk/arm64/release/android-arm64-release.apk` and `app/android/build/outputs/apk/x86_64/release/android-x86_64-release.apk`, respectively. Direct Gradle builds can select another compatible PKCS#12 key with `-Pworkflow.keystore=/absolute/path/to/key.p12`; the alias and password expectations stay the same. The delivery helper expects the default local key path.
 
 For the verified release delivery, run:
