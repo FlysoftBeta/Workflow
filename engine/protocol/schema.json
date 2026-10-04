@@ -1305,6 +1305,17 @@
             "theme": "system"
           }
         },
+        "environment": {
+          "description": "The environment declaration. Environment builds from this section alone, so changing the\nrest of the file never rebuilds the environment; an absent section declares the image\ndefaults and stays absent when other settings are saved. Its semantic validation belongs\nto the build and to explicit saves, so a bad declaration never blocks unrelated settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvironmentSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "launcher": {
           "type": "array",
           "default": [
@@ -2696,6 +2707,10 @@
         "appearance": {
           "$ref": "#/$defs/AppearancePatch"
         },
+        "environment": {
+          "description": "Replaces the whole declaration; its lists have no element-wise merge.",
+          "$ref": "#/$defs/EnvironmentSpec2"
+        },
         "launcher": {
           "$ref": "#/$defs/Array_of_string"
         },
@@ -3073,6 +3088,52 @@
       ]
     },
     "EnvironmentSpec": {
+      "type": "object",
+      "properties": {
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "node": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "post_scripts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PostScript"
+          }
+        },
+        "python": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OpaqueJson"
+      },
+      "required": [
+        "version"
+      ]
+    },
+    "EnvironmentSpec2": {
       "type": "object",
       "properties": {
         "env": {

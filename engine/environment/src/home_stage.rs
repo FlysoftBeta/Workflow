@@ -95,7 +95,9 @@ fn remove(path: &Path) -> Result<()> {
     Ok(())
 }
 fn live_home(root: &Path) -> PathBuf {
-    root.join(".workspace/environment/stores/home/work")
+    root.join(crate::access::DIRECTORY)
+        .join(crate::store::keys::PERSISTENT_STORES)
+        .join("home/work")
 }
 pub fn prepare(root: &Path, generation: &Path) -> Result<()> {
     let live = live_home(root);

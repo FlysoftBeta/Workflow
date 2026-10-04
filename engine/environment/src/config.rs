@@ -1,6 +1,6 @@
 //! Workspace-delivered configuration, validation and patch policy.
 //! Domain sections are generic to avoid depending on Chat or Terminal.
-use crate::{Error, Result, Store, json::OpaqueObject, store::keys::CONFIG};
+use crate::{EnvironmentSpec, Error, Result, Store, json::OpaqueObject, store::keys::CONFIG};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -56,8 +56,23 @@ pub struct ClientConfig<A: Default, T: Default> {
     pub launcher: Vec<String>,
     #[serde(default)]
     pub terminal: T,
+    /// The environment declaration. Environment builds from this section alone, so changing the
+    /// rest of the file never rebuilds the environment; an absent section declares the image
+    /// defaults and stays absent when other settings are saved. Its semantic validation belongs
+    /// to the build and to explicit saves, so a bad declaration never blocks unrelated settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<Box<EnvironmentSpec>>,
     #[serde(default, flatten)]
     pub extra: OpaqueObject,
+}
+/// A new workspace spells out the empty lists so the declaration is discoverable when edited.
+fn starter_environment() -> EnvironmentSpec {
+    EnvironmentSpec {
+        packages: Some(vec![]),
+        env: Some(Default::default()),
+        post_scripts: Some(vec![]),
+        ..Default::default()
+    }
 }
 fn default_launcher() -> Vec<String> {
     vec!["workbench".into(), "proxy".into(), "settings".into()]
@@ -71,6 +86,7 @@ impl<A: Default, T: Default> Default for ClientConfig<A, T> {
             overlay: Default::default(),
             launcher: default_launcher(),
             terminal: Default::default(),
+            environment: Some(Box::new(starter_environment())),
             extra: Default::default(),
         }
     }
@@ -141,6 +157,9 @@ impl<A: ConfigSection, T: ConfigSection> ClientConfig<A, T> {
         p.launcher.assign(&mut self.launcher);
         if let FieldPatch::Value(p) = p.terminal {
             self.terminal.apply(p)?;
+        }
+        if let FieldPatch::Value(environment) = p.environment {
+            self.environment = Some(Box::new(environment));
         }
         merge_extra(&mut self.extra, p.extra);
         self.validate()
@@ -253,6 +272,9 @@ pub struct ConfigPatch<A: Default, T: Default> {
     pub launcher: FieldPatch<Vec<String>>,
     #[serde(skip_serializing_if = "FieldPatch::is_missing")]
     pub terminal: FieldPatch<T>,
+    /// Replaces the whole declaration; its lists have no element-wise merge.
+    #[serde(skip_serializing_if = "FieldPatch::is_missing")]
+    pub environment: FieldPatch<EnvironmentSpec>,
     #[serde(flatten)]
     pub extra: OpaqueObject,
 }
@@ -271,7 +293,12 @@ where
     if !matches!(patch.version, FieldPatch::Value(2)) {
         return Err(Error::invalid("config.version must be 2"));
     }
-    let mut config = ClientConfig::default();
+    // Only a new workspace starts from the written-out declaration; a file without the section
+    // keeps it absent.
+    let mut config = ClientConfig {
+        environment: None,
+        ..ClientConfig::default()
+    };
     config.patch(patch)?;
     Ok(config)
 }

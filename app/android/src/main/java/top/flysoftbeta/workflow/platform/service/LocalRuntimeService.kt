@@ -114,7 +114,7 @@ class LocalRuntimeService : Service() {
         internal fun releaseProxy(context: Context, processId: String) = release(context, "proxy:$processId")
         internal suspend fun retainTerminal(context: Context, id: String): Result<Unit> = retain(context, "terminal:$id", Owner.TERMINAL)
         internal fun releaseTerminal(context: Context, id: String) = release(context, "terminal:$id")
-        /** Environment work (image install, device provisioning, an env.json build) keeps running without the UI. */
+        /** Environment work (image install, device provisioning, a declaration build) keeps running without the UI. */
         internal suspend fun retainEnvironment(context: Context, id: String): Result<Unit> = retain(context, "environment:$id", Owner.ENVIRONMENT)
         internal fun releaseEnvironment(context: Context, id: String) = release(context, "environment:$id")
 

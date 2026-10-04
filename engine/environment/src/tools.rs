@@ -4,6 +4,7 @@ use crate::{
     json::OpaqueObject,
     persist,
     runtime::{self, Processes, SpawnOptions},
+    store::keys::TOOLS,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -28,10 +29,12 @@ const REQUIRED: [&str; 4] = [
     "notices/codex-LICENSE",
     "notices/claude-code-LICENSE",
 ];
-/// Host directory of the visible, read-only agent tools below `.workspace/`.
+/// Host directory of the disposable tools cache below `.workspace/`.
 fn agent_tools(opts: &Options) -> PathBuf {
-    opts.root.join(access::DIRECTORY).join(access::AGENT_TOOLS)
+    opts.root.join(access::DIRECTORY).join(TOOLS)
 }
+/// Measured tool state lives with the tools it measures, so removing the cache resets both.
+const STATE: &str = "cache/tools/state.json";
 static VERIFIED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
 static STATES: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<ToolState>>>>> = OnceLock::new();
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -219,7 +222,7 @@ fn source(opts: &Options) -> Result<(PathBuf, ToolCatalog)> {
     if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(err("invalid payload digest"));
     }
-    let dir = opts.root.join(".workspace/environment/tools/archives");
+    let dir = agent_tools(opts).join("archives");
     fs::create_dir_all(&dir)?;
     let archive = dir.join(format!("{sha}.zip"));
     if !archive.exists() {
@@ -350,7 +353,8 @@ fn prepare(opts: &Options) -> Result<(PathBuf, ToolCatalog)> {
     }
     let target = agent_tools(opts).join("payload").join(digest);
     let mut verified = VERIFIED.get_or_init(Default::default).lock().unwrap();
-    if !verified.contains(&target) {
+    // The cache may be deleted while the Engine runs; a missing tree is extracted again.
+    if !verified.contains(&target) || !target.is_dir() {
         let valid = target.is_dir()
             && catalog.files.iter().all(|item| {
                 member(&item.path).ok().is_some_and(|relative| {
@@ -439,11 +443,11 @@ fn state(opts: &Options) -> Result<Arc<Mutex<ToolState>>> {
         return Ok(state.clone());
     }
     let store = Store::open(&opts.root)?;
-    let mut value = match store.read::<ToolState>("environment/tools/state.json") {
+    let mut value = match store.read::<ToolState>(STATE) {
         Ok(Some(value)) => value,
         Ok(None) => ToolState::default(),
         Err(_) => {
-            store.quarantine("environment/tools/state.json")?;
+            store.quarantine(STATE)?;
             ToolState::default()
         }
     };
@@ -463,7 +467,7 @@ fn persist(opts: &Options, state: &mut ToolState) -> Result<()> {
         .revision
         .checked_add(1)
         .ok_or_else(|| Error::business("overflow", "tool revision overflow"))?;
-    Store::open(&opts.root)?.write("environment/tools/state.json", state)
+    Store::open(&opts.root)?.write(STATE, state)
 }
 pub fn status(shared: &Arc<Mutex<Environment>>) -> Result<ToolsStatus> {
     let (opts, active) = {
@@ -705,7 +709,7 @@ mod tests {
         assert!(
             !opts
                 .root
-                .join(".workspace/environment/generations")
+                .join(".workspace/cache/generations")
                 .exists()
         );
         VERIFIED.get().unwrap().lock().unwrap().remove(&tree);
@@ -743,7 +747,7 @@ mod tests {
         };
         let store = Store::open(&opts.root).unwrap();
         store
-            .write_bytes("environment/tools/state.json", b"[]")
+            .write_bytes(STATE, b"[]")
             .unwrap();
         let recovered = state(&opts).unwrap();
         assert!(recovered.lock().unwrap().tools.is_empty());

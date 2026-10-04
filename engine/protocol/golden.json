@@ -110,6 +110,12 @@
               "monoFontSize": 13.0,
               "theme": "system"
             },
+            "environment": {
+              "env": {},
+              "packages": [],
+              "post_scripts": [],
+              "version": 1
+            },
             "launcher": [
               "workbench",
               "proxy",
@@ -171,6 +177,12 @@
               "fontScale": 1.0,
               "monoFontSize": 13.0,
               "theme": "system"
+            },
+            "environment": {
+              "env": {},
+              "packages": [],
+              "post_scripts": [],
+              "version": 1
             },
             "launcher": [
               "workbench",

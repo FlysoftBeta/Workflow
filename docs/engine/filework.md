@@ -12,18 +12,17 @@ The Engine periodically refreshes tracked disk files. Clean files adopt external
 
 ## Paths and explicit configuration
 
-Ordinary paths must be workspace-relative, cannot traverse parents, and cannot cross a symlink, even one pointing back into the workspace. The root listing always contains `.workspace`, even when hidden files are off, as a protected folder. Environment's `access` module is its only allowlist, and FileWork enforces it for listings, reads, drafts, saves, creation, uploads and attachments. Every entry is a fixed folder, editable configuration or read-only content; any other entry is private, absent from listings and refused by every file API. A nested directory that happens to be named `.workspace` stays hidden as before.
+Ordinary paths must be workspace-relative, cannot traverse parents, and cannot cross a symlink, even one pointing back into the workspace. The root listing always contains `.workspace`, even when hidden files are off, as a protected folder. Environment's `access` module is its only allowlist, and FileWork enforces it for listings, reads, drafts, saves, creation, uploads and attachments. Every entry is a fixed folder or editable configuration; any other entry is private, absent from listings and refused by every file API. A nested directory that happens to be named `.workspace` stays hidden as before.
 
 | `.workspace/` entry | Access |
 | --- | --- |
 | `.workspace`, `proxy/`, `services/`, `services/<id>/`, `agents/`, `agents/codex/`, `agents/claude/` | Fixed folder: listed, never created, renamed, moved, copied or deleted |
-| `config.json`, `env.json`, files below `proxy/` and `services/<id>/` | Editable configuration |
+| `config.json` (including its `environment` declaration), files below `proxy/` and `services/<id>/` | Editable configuration |
 | `agents/codex/`: `config.toml`, `AGENTS.md`, `prompts/`, `rules/`, `skills/` | Editable Codex configuration |
 | `agents/claude/`: `settings.json`, `CLAUDE.md`, `agents/`, `commands/`, `skills/` | Editable Claude Code configuration |
-| `agents/tools/` | Read-only Engine-installed tools: listed and read, never written |
-| `state/`, `environment/`, `documents/`, `uploads/`, `corrupt/`, `trash/`, `engine.lock`, backups, agent credentials, sessions, history, logs and anything unlisted | Private |
+| `state/`, `environment/`, `documents/`, `corrupt/`, `trash/`, `cache/`, `engine.lock`, backups, agent credentials, sessions, history, logs and anything unlisted | Private |
 
-Names below `.workspace` must be safe identifiers. Agent credentials, namely Codex `auth.json` and Claude Code `.credentials.json` and `.claude.json`, are explicitly private even if the allowlist grows. Rename, move, copy, delete and trash refuse every `.workspace` path, and uploads remain limited to explicit service assets. Editing or saving a read-only entry fails with `read_only` before a draft is stored. Explicit configuration actions continue to open `.workspace/config.json`, `.workspace/env.json` and canonical `.workspace/proxy/` files through the same paths.
+Names below `.workspace` must be safe identifiers. Agent credentials, namely Codex `auth.json` and Claude Code `.credentials.json` and `.claude.json`, are explicitly private even if the allowlist grows. Rename, move, copy, delete and trash refuse every `.workspace` path, and uploads remain limited to explicit service assets. Editing or saving a fixed folder fails with `read_only` before a draft is stored. Explicit configuration actions continue to open `.workspace/config.json`, positioned at its `environment` section when editing the environment, and canonical `.workspace/proxy/` files through the same paths.
 
 Environment centralizes private path construction and classifies editable configuration. FileWork uses the owning configuration validator when saving those files. A settings save and editor save refer to the same original file, so disk versions and document sidecars detect conflicts instead of creating independent copies. The proxy root is `.workspace/proxy/`; version 1.0.0 does not migrate the earlier service path.
 

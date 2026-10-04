@@ -1,31 +1,37 @@
 # Environment
 
-An environment is the complete runtime in which terminals and coding agents work: its image, packages, language versions, variables, mounts, home, and process lifecycle. `.workspace/env.json` is its declaration, rather than the environment itself. `engine/environment` is package `workflow-environment`. It owns that declaration's application and publishes measured health; Android renders the result. The [protocol](protocol.md) defines the client boundary, and the [image format](image-format.md) defines the distributable archive.
+An environment is the complete runtime in which terminals and coding agents work: its image, packages, language versions, variables, mounts, home, and process lifecycle. The `environment` section of `.workspace/config.json` is its declaration, rather than the environment itself. `engine/environment` is package `workflow-environment`. It owns that declaration's application and publishes measured health; Android renders the result. The [protocol](protocol.md) defines the client boundary, and the [image format](image-format.md) defines the distributable archive.
 
 Both Android ABIs ship a customized `workspace` image with the APK. These images contain the `work` user, shell, development tools, uv, nvm, Python, Node, and `envctl`, so using default toolchains does not require an initial network installation. Additional versions or packages can require downloads. A `base` image is only a build or runtime-test input and cannot serve as the application's environment or release fallback. The Engine tools distribution is a separate verified, architecture-specific payload. APK assets carry `assets/environment/tools/tools.json` and `tools.zip`; a standalone Server can receive the same pair through `--tools`. Codex is not packaged as an Android JNI executable.
 
-The catalog records archive identity, architecture, each member's size, SHA-256 and executable flag, mandatory tool versions and optional Claude release pins. Extraction rejects unsafe paths, links, unexpected members, size mismatches and digest mismatches. The Engine extracts the content-addressed payload to `.workspace/agents/tools/payload/<sha256>/` and binds it at `/opt/workflow/tools`, including for existing generations, without rerunning user post-scripts or migrating private state. The archive cache and measured tool state remain private below `.workspace/environment/tools/`. The only mandatory tool is `codex/bin/codex` under that prefix. The payload also requires its sibling `codex/bin/codex-code-mode-host`, because Codex resolves its Code Mode host beside its own executable and otherwise fails Code Mode closed, plus the Codex and Claude Code notices. Chat runs inside Server and needs no Java runtime or service artifact. The managed `/usr/local/bin/codex` entry, generated at `.workspace/agents/tools/launchers/codex`, adds `--no-daemon`; Chat launches `codex app-server` directly.
+The catalog records archive identity, architecture, each member's size, SHA-256 and executable flag, mandatory tool versions and optional Claude release pins. Extraction rejects unsafe paths, links, unexpected members, size mismatches and digest mismatches. The Engine extracts the content-addressed payload to `.workspace/cache/tools/payload/<sha256>/` and binds it at `/opt/workflow/tools`, including for existing generations, without rerunning user post-scripts or migrating private state. The archive copy and measured tool state also live below `.workspace/cache/tools/`; a payload tree removed with the cache is extracted again on next use. The only mandatory tool is `codex/bin/codex` under that prefix. The payload also requires its sibling `codex/bin/codex-code-mode-host`, because Codex resolves its Code Mode host beside its own executable and otherwise fails Code Mode closed, plus the Codex and Claude Code notices. Chat runs inside Server and needs no Java runtime or service artifact. The managed `/usr/local/bin/codex` entry, generated at `.workspace/cache/tools/launchers/codex`, adds `--no-daemon`; Chat launches `codex app-server` directly.
 
 Missing or unusable payload components cause explicit failure; there is no host execution fallback. Tool artifact readiness and chat protocol readiness remain separate measurements.
 
-Claude is a pinned optional Engine-owned installation at `/opt/workflow/tools/claude/bin/claude`, stored in `.workspace/agents/tools/claude/<version>/`. `environment.tools.install` starts an asynchronous job, and `environment.tools.status` exposes revision, version, architecture, progress, operation ID and measured outcome. Engine downloads and verifies the pinned binary, checks its version and records interrupted work as failed. Unchanged failed work requires an explicit retry. Android submits only the tool ID and retry intent; it does not download, probe executables or install software itself.
+Claude is a pinned optional Engine-owned installation at `/opt/workflow/tools/claude/bin/claude`, stored in `.workspace/cache/tools/claude/<version>/`; removing the cache uninstalls it and resets its measured state. `environment.tools.install` starts an asynchronous job, and `environment.tools.status` exposes revision, version, architecture, progress, operation ID and measured outcome. Engine downloads and verifies the pinned binary, checks its version and records interrupted work as failed. Unchanged failed work requires an explicit retry. Android submits only the tool ID and retry intent; it does not download, probe executables or install software itself.
 
 ## Declaring an environment
 
-The current declaration is version 1 and lives at `<workspace-root>/.workspace/env.json`. The Engine does not import `container.json`, old `.workflow` directories, or historical runtime state.
+The current declaration is version 1 and lives in the `environment` section of `<workspace-root>/.workspace/config.json`. A new workspace writes it with empty package, variable and post-script lists; a configuration without the section declares the image defaults and keeps it absent when other settings are saved. The Engine does not import a former `.workspace/env.json`, `container.json`, old `.workflow` directories, or historical runtime state.
 
 ```json
 {
-  "version": 1,
-  "python": ["3.14", "3.13"],
-  "node": ["24", "22"],
-  "packages": ["ripgrep"],
-  "env": {"PIP_INDEX_URL": "https://mirrors.example/pypi/simple"},
-  "post_scripts": [
-    {"id": "prepare", "run": "mkdir -p \"$HOME/.config/example\"", "user": "work"}
-  ]
+  "version": 2,
+  "appearance": {"theme": "system"},
+  "environment": {
+    "version": 1,
+    "python": ["3.14", "3.13"],
+    "node": ["24", "22"],
+    "packages": ["ripgrep"],
+    "env": {"PIP_INDEX_URL": "https://mirrors.example/pypi/simple"},
+    "post_scripts": [
+      {"id": "prepare", "run": "mkdir -p \"$HOME/.config/example\"", "user": "work"}
+    ]
+  }
 }
 ```
+
+The outer `version` is the configuration format; the declaration keeps its own `version`.
 
 Python specifications may be a major version, minor series, or exact patch, such as `3`, `3.14`, or `3.14.7`. Node follows the equivalent forms `24`, `24.1`, or `24.1.0`. Missing arrays use the image's declared defaults; empty arrays disable the managed language. For nonempty arrays, the first entry is the default and the other versions remain installed alongside it. Duplicates and invalid specifications are errors.
 
@@ -37,31 +43,33 @@ Matching uses dotted version prefixes, so an installed `3.14.7` satisfies `3.14`
 
 ## Persistent stores and guest paths
 
-The Engine owns generations, activation records, logs, home, and toolchains beneath `.workspace/environment/`. A generation contains its own root filesystem. `/home/work` is backed by `stores/home/work`, and `/opt/toolchains` by `stores/toolchains`, allowing home and installed toolchain caches to survive a generation rebuild. User files appear at `/workspace`.
+The Engine keeps the activation record in `.workspace/environment/environment.json` and the persistent `/home/work` store in `.workspace/environment/stores/home/work`. Everything a build recreates is disposable and lives in `.workspace/cache/`: generations, each with its own root filesystem, in `cache/generations/`; extracted image archives in `cache/images/`; and the `/opt/toolchains` store in `cache/toolchains/`, so installed toolchains survive a generation rebuild but not a removed cache. User files appear at `/workspace`.
 
-Agents live in the visible `.workspace/agents/` tree:
+When the Engine starts and finds that an activation's generation or the toolchain store is missing, it forgets that activation. An environment whose active generation is gone becomes unavailable with stage `cache_removed`, and declaration monitoring rebuilds it; the home store is untouched.
+
+Agent homes live in the visible `.workspace/agents/` tree, and their tools in the cache:
 
 | Workspace path | Guest path | Contents |
 | --- | --- | --- |
 | `.workspace/agents/codex/` | `/home/work/.codex` (`CODEX_HOME`) | Codex home: configuration, credentials, sessions and logs |
 | `.workspace/agents/claude/` | `/home/work/.claude` (`CLAUDE_CONFIG_DIR`) | Claude Code configuration directory, including its credentials and `.claude.json` |
-| `.workspace/agents/tools/payload/<sha256>/` | `/opt/workflow/tools` | Verified mandatory payload: Codex and notices |
-| `.workspace/agents/tools/claude/<version>/` | `/opt/workflow/tools/claude` | Optional pinned Claude Code installation, also bound at `/usr/local/bin/claude` once present |
-| `.workspace/agents/tools/launchers/codex` | `/usr/local/bin/codex` | Engine-generated Codex entry point |
+| `.workspace/cache/tools/payload/<sha256>/` | `/opt/workflow/tools` | Verified mandatory payload: Codex, its Code Mode host and notices |
+| `.workspace/cache/tools/claude/<version>/` | `/opt/workflow/tools/claude` | Optional pinned Claude Code installation, also bound at `/usr/local/bin/claude` once present |
+| `.workspace/cache/tools/launchers/codex` | `/usr/local/bin/codex` | Engine-generated Codex entry point |
 
-Chat and terminal processes bind the homes, mode 0700, over the persistent home and receive `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, so both use one login and configuration per agent. Provisioning commands and post-scripts see neither the workspace nor these homes, and the post-script home stage never copies them. Version 1.0.0 has no migration: homes left in `stores/home/work/.codex` or `.claude` and payloads in the former `environment/tools/payloads` or `optional` directories are not read, so an earlier login must be repeated.
+Chat and terminal processes bind the homes, mode 0700, over the persistent home and receive `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, so both use one login and configuration per agent. Provisioning commands and post-scripts see neither the workspace nor these homes, and the post-script home stage never copies them. Version 1.0.0 has no migration: homes left in `stores/home/work/.codex` or `.claude` are not read, so an earlier login must be repeated, and payloads in the former `agents/tools/`, `environment/tools/payloads` or `optional` directories are ignored.
 
-The typed `access` module classifies every `.workspace/` entry as a fixed folder, editable configuration, read-only content or private. FileWork enforces that allowlist, which the [FileWork reference](filework.md#paths-and-explicit-configuration) tabulates. Agent credentials (`auth.json`, `.credentials.json` and `.claude.json`) are private: they are never listed, read or written through file APIs and never logged. The guest mask is derived from the same tables. Processes that mount the workspace hide `state`, `environment`, `documents`, `uploads`, `corrupt`, `trash`, `engine.lock` and the whole `agents` tree below `/workspace/.workspace`. `config.json`, `env.json`, `proxy/` and `services/` remain readable and writable there. Agent configuration is edited in the guest at `~/.codex` and `~/.claude`, and tools are used at their mount points.
+The typed `access` module classifies every `.workspace/` entry as a fixed folder, editable configuration or private. FileWork enforces that allowlist, which the [FileWork reference](filework.md#paths-and-explicit-configuration) tabulates. Agent credentials (`auth.json`, `.credentials.json` and `.claude.json`) are private: they are never listed, read or written through file APIs and never logged. The guest mask is derived from the same tables. Processes that mount the workspace hide `state`, `environment`, `documents`, `corrupt`, `trash`, `engine.lock`, `cache` and the whole `agents` tree below `/workspace/.workspace`. `config.json`, `proxy/` and `services/` remain readable and writable there. Agent configuration is edited in the guest at `~/.codex` and `~/.claude`, and tools are used at their mount points.
 
 The runtime matches hides against resolved guest paths and maps a directory back to the guest through its longest host prefix. Masking individual credential files below `/workspace` would still let a recursive walk reach them through the home mount, so the alias is masked as a whole. The guest user can still read its own credentials at the agent home, where the agents need them; the mask keeps workspace walks, archives and searches of `/workspace` from reaching them.
 
 The customized Debian image defines a `work` user with UID/GID 1000, home `/home/work`, and `/bin/bash`. Passwordless sudo provides virtual guest root for package and environment work. Toolchains live under `/opt/toolchains`: uv stores Python installations in `uv/python`, nvm stores Node installations in `nvm/versions/node`, and immutable profiles select their defaults and complete version sets. The `active` symlink points to a profile. Home seeds apply only when the store is absent; toolchain seeds merge missing entries without replacing existing contents or an existing active selection.
 
-The runtime supplies its device allowlist and `/proc`; Environment binds the current reported DNS to guest `/etc/resolv.conf` without changing host DNS. `TZ` can be declared in `env.json`, otherwise the image's default applies. Bound host files do not have the generation's virtual attribute store: they appear owned by `work` with their host permission bits, excluding set-ID bits. Detailed image paths, default environment variables, and archive rules are specified in the [image format](image-format.md).
+The runtime supplies its device allowlist and `/proc`; Environment binds the current reported DNS to guest `/etc/resolv.conf` without changing host DNS. `TZ` can be declared in the declaration's `env`, otherwise the image's default applies. The bound resolver file lives in `.workspace/cache/network/`. Bound host files do not have the generation's virtual attribute store: they appear owned by `work` with their host permission bits, excluding set-ID bits. Detailed image paths, default environment variables, and archive rules are specified in the [image format](image-format.md).
 
 ## Reconciliation and activation
 
-First use explicitly asks the Server to reconcile. That enrolls the environment in automatic declaration monitoring. Afterwards saved or externally edited `env.json` changes are checked by the Engine, including after reconnect. A connection used only for files or local proxy services does not extract an environment that has never been requested. The attempted declaration is remembered so malformed or failed input cannot cause an endless rebuild loop.
+First use explicitly asks the Server to reconcile. That enrolls the environment in automatic declaration monitoring. Afterwards saved or externally edited changes to the `environment` section are checked by the Engine, including after reconnect. Change detection hashes only that section in canonical form, so editing appearance or other settings in the same file never schedules a build. A connection used only for files or local proxy services does not extract an environment that has never been requested. The attempted declaration is remembered so malformed or failed input cannot cause an endless rebuild loop.
 
 A build prepares a candidate generation and persistent toolchain stores, installs additional packages, resolves and installs requested language versions, verifies all requested tools and packages, and finally runs post-scripts. Scripts execute from `/` inside the candidate; the user's workspace is not mounted during this configuration step. The Engine, not `envctl`, controls ordering, generation isolation, and retry behavior.
 
@@ -110,4 +118,4 @@ Environment also owns workspace-delivered appearance, palette, fonts, overlay/cl
 
 Canonical proxy YAML, providers and redacted logs live in `.workspace/proxy/`. The `services.proxy` document namespace still addresses those original files, while private content-hash/revision sidecars remain under `.workspace/documents/`. Other service files retain their classified service directories. Version 1.0.0 does not migrate the former `.workspace/services/proxy/` location. The [App configuration](../app/configuration.md) and [proxy](../app/proxy.md) references describe revision checks and measured local execution.
 
-The `runtime` API owns guest commands, pipes, PTYs, process groups and stop/wait; [Runtime](runtime.md) implements the isolation executable and [Loader](loader.md) the guest transfer. Domains do not invoke the concrete guest directly. Public declaration remains `.workspace/env.json`; `.workspace/environment/environment.json` is the private lifecycle record. Their field names and existing declaration/activation fingerprints remain unchanged.
+The `runtime` API owns guest commands, pipes, PTYs, process groups and stop/wait; [Runtime](runtime.md) implements the isolation executable and [Loader](loader.md) the guest transfer. Domains do not invoke the concrete guest directly. The public declaration is the `environment` section of `.workspace/config.json`; `.workspace/environment/environment.json` is the private lifecycle record. The declaration's field names and the activation fingerprint, computed over the declaration with image defaults filled in, are unchanged. Saving `config.json` through the file APIs validates the declaration, while settings updates only require it to parse, so a bad declaration never blocks unrelated settings; the build reports it as a configuration failure.

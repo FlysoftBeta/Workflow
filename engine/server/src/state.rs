@@ -9,7 +9,7 @@ use workflow_environment::{
     persist::now,
     store::{
         Store,
-        keys::{CONFIG, DECLARATION, WORKSPACE_STATE},
+        keys::{CONFIG, UPLOADS, WORKSPACE_STATE},
     },
 };
 use workflow_filework::{
@@ -360,7 +360,7 @@ pub struct ClientConfigReply {
 impl Workspace {
     pub fn load(root: PathBuf) -> Result<Self> {
         let store = Store::open(&root)?;
-        for key in store.list("uploads")? {
+        for key in store.list(UPLOADS)? {
             if store.metadata(&key)?.is_some_and(|m| m.is_file) {
                 let _ = store.remove(&key);
             }
@@ -399,17 +399,6 @@ impl Workspace {
             out.store.write(CONFIG, &out.state.config)?;
         }
         out.reload_config();
-        if !out.store.exists(DECLARATION)? {
-            out.store.write(
-                DECLARATION,
-                &workflow_environment::EnvironmentSpec {
-                    packages: Some(vec![]),
-                    env: Some(Default::default()),
-                    post_scripts: Some(vec![]),
-                    ..Default::default()
-                },
-            )?;
-        }
         out.maintenance()?;
         out.persist()?;
         Ok(out)
@@ -850,11 +839,12 @@ fn validate_text(path: &str, text: &str) -> Result<()> {
         if !matches!(patch.version, FieldPatch::Value(2)) {
             return Err(Error::invalid("config.version must be 2"));
         }
-        ClientConfig::default().patch(patch)?;
-    }
-    if path == ".workspace/env.json" {
-        let spec = strict_json(text.as_bytes()).map_err(|e| Error::invalid(&e.to_string()))?;
-        workflow_environment::validate(&spec)?;
+        let mut config = ClientConfig::default();
+        config.patch(patch)?;
+        // Settings updates tolerate a bad declaration; an explicit save of the file does not.
+        if let Some(environment) = &config.environment {
+            workflow_environment::validate(environment)?;
+        }
     }
     Ok(())
 }

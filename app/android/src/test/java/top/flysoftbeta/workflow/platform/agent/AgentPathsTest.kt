@@ -36,7 +36,7 @@ class AgentPathsTest {
         assertEquals("/home/work/.codex/prompts/review.md", paths.toAgent(".workspace/agents/codex/prompts/review.md"))
         assertEquals("/home/work/.claude", paths.toAgent(".workspace/agents/claude"))
         // Other configuration stays at its workspace path, which the guest can read.
-        assertEquals("/workspace/.workspace/env.json", paths.toAgent(".workspace/env.json"))
+        assertEquals("/workspace/.workspace/config.json", paths.toAgent(".workspace/config.json"))
         assertNull(paths.toWorkspace("/home/work/.codex/../.bashrc"))
         assertNull(paths.toWorkspace("/home/work/.codexx/config.toml"))
         assertNull(paths.toWorkspace("/home/work/.bashrc"))

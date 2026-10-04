@@ -337,8 +337,8 @@ class WorkspaceStoreTest {
         assertEquals(original, h.fs.readText(".workspace/config.json"))
         assertTrue(store.saveFile(".workspace/config.json", "{\"version\":2,\"appearance\":{\"density\":\"standard\"}}") is SaveResult.Saved)
         assertEquals(Density.STANDARD, store.state.value.config.appearance.density)
-        val withValidator = h.ready(StoreOptions(validators = mapOf(".workspace/env.json" to { text -> if ("bad" in text) "env.json: bad" else null })))
-        assertEquals(SaveResult.Invalid("env.json: bad"), withValidator.saveFile(".workspace/env.json", "bad"))
+        val withValidator = h.ready(StoreOptions(validators = mapOf(".workspace/proxy/config.yaml" to { text -> if ("bad" in text) "config.yaml: bad" else null })))
+        assertEquals(SaveResult.Invalid("config.yaml: bad"), withValidator.saveFile(".workspace/proxy/config.yaml", "bad"))
     }
 
     @Test fun `unsupported config remains untouched and is never copied or upgraded`() = runTest {

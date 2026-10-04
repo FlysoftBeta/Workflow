@@ -69,7 +69,7 @@ class ExplorerModelTest {
         assertFalse(ExplorerModel.isProtected(".workspaces"))
         assertFalse(ExplorerModel.isProtected("docs/.workspace"))
         assertFalse(ExplorerModel.canMoveInto(listOf(".workspace"), "docs"))
-        assertFalse(ExplorerModel.canMoveInto(listOf(".workspace/env.json"), ""))
+        assertFalse(ExplorerModel.canMoveInto(listOf(".workspace/config.json"), ""))
         assertFalse(ExplorerModel.canMoveInto(listOf("docs/guide.md"), ".workspace/agents/claude/commands"))
         assertFalse(ExplorerModel.canImportInto(".workspace/proxy"))
         assertTrue(ExplorerModel.canImportInto("docs"))
