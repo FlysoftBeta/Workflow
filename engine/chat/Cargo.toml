@@ -13,5 +13,10 @@ sha2.workspace = true
 uuid.workspace = true
 base64.workspace = true
 
+[features]
+# In-memory fakes and the recorded-transcript replay harness for tests.
+testing = []
+
 [dev-dependencies]
+workflow-chat = { path = ".", features = ["testing"] }
 tempfile.workspace = true

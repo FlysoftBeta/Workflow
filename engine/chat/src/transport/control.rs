@@ -1,196 +1,332 @@
-//! Claude control directions. Echoes cannot complete unrelated outgoing requests.
-use super::raw::{RawJson, present};
-use crate::error::{ChatError, ErrorKind, Result};
+//! Claude Code stream-json plus its control protocol, one JSON object per line in both directions.
+//!
+//! Our `control_request`s carry our own `request_id`; only the matching `control_response`
+//! completes them. The CLI echoes our own responses on stdout, so a response for an ID we are not
+//! waiting on is ignored and counted. CLI `control_request`s keep their `request_id` verbatim and
+//! are answered only through `respond` or `respond_error` by the owner. A
+//! `control_cancel_request` withdraws one; `keep_alive` is dropped.
+use super::channel::{self, LineEvent, StderrTail, Threads, Writer};
+use crate::{
+    error::{ChatError, ErrorKind, Result},
+    model::{OpaqueJson, OpaqueObject},
+    ports::AgentStdio,
+    wire::{self, Json, Str},
+};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
-    sync::mpsc::{self, Receiver, Sender},
+    collections::HashMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+        mpsc,
+    },
+    time::Duration,
 };
-#[derive(Deserialize)]
-struct Envelope {
-    #[serde(rename = "type")]
-    kind: Option<String>,
-    request_id: Option<String>,
-    request: Option<RawJson>,
-    response: Option<ControlResponse>,
-}
-#[derive(Deserialize)]
-struct Subtype {
-    subtype: String,
-}
-#[derive(Deserialize)]
-struct ControlResponse {
-    request_id: Option<String>,
-    subtype: Option<String>,
-    error: Option<String>,
-    #[serde(default, deserialize_with = "present")]
-    response: Option<RawJson>,
-}
-#[derive(Clone, Debug)]
-pub enum Inbound {
+
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(240);
+
+pub enum ControlInbound {
+    Message {
+        kind: String,
+        raw: OpaqueJson,
+    },
     Request {
         id: String,
         subtype: String,
-        request: RawJson,
-        raw: RawJson,
+        request: OpaqueJson,
+        raw: OpaqueJson,
     },
     Cancel {
         id: String,
-        raw: RawJson,
+        raw: OpaqueJson,
     },
-    Message {
-        kind: String,
-        raw: RawJson,
+    Malformed {
+        preview: String,
+        reason: String,
     },
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Envelope {
+    #[serde(rename = "type")]
+    kind: Str,
+    request_id: Str,
+    request: Json,
+    response: Json,
+}
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ResponseBody {
+    request_id: Str,
+    subtype: Str,
+    error: Str,
+    response: Json,
+}
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Subtype {
+    subtype: Str,
+}
+#[derive(Serialize)]
+struct RequestBody<'a> {
+    subtype: &'a str,
+    #[serde(flatten)]
+    fields: &'a OpaqueObject,
 }
 #[derive(Serialize)]
 struct Outgoing<'a> {
     #[serde(rename = "type")]
     kind: &'static str,
     request_id: &'a str,
-    request: &'a RawJson,
+    request: RequestBody<'a>,
 }
 #[derive(Serialize)]
-struct ResponseBody<'a> {
+struct Answer<'a> {
     subtype: &'static str,
     request_id: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    response: Option<&'a RawJson>,
+    response: Option<&'a OpaqueJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<&'a str>,
 }
 #[derive(Serialize)]
-struct Response<'a> {
+struct AnswerFrame<'a> {
     #[serde(rename = "type")]
     kind: &'static str,
-    response: ResponseBody<'a>,
+    response: Answer<'a>,
 }
+
+type Reply = Result<OpaqueJson>;
 #[derive(Default)]
-pub struct ControlRouter {
-    pending_out: BTreeMap<String, Sender<Result<RawJson>>>,
-    pending_in: BTreeMap<String, String>,
-    pub ignored_responses: u64,
-    closed: bool,
+struct State {
+    pending_out: HashMap<String, mpsc::Sender<Reply>>,
+    pending_in: HashMap<String, String>,
+    closed: Option<String>,
 }
-impl ControlRouter {
-    pub fn begin(
-        &mut self,
-        id: &str,
-        request: &RawJson,
-    ) -> Result<(RawJson, Receiver<Result<RawJson>>)> {
-        if self.closed {
-            return Err(ChatError::new(ErrorKind::Closed, "connection closed"));
-        }
-        if self.pending_out.contains_key(id) {
-            return Err(ChatError::new(
-                ErrorKind::InvalidArgument,
-                "duplicate control ID",
-            ));
-        }
-        let (send, receive) = mpsc::channel();
-        self.pending_out.insert(id.into(), send);
-        Ok((
-            RawJson::encode(&Outgoing {
-                kind: "control_request",
-                request_id: id,
-                request,
-            })?,
-            receive,
-        ))
+
+pub struct ControlConnection {
+    writer: Writer,
+    state: Mutex<State>,
+    ignored: AtomicU64,
+    stderr: Arc<StderrTail>,
+    threads: Threads,
+    ids: Box<dyn Fn() -> String + Send + Sync>,
+}
+pub type ControlHandler = Box<dyn FnMut(&Arc<ControlConnection>, ControlInbound) + Send>;
+
+/// `wf_<random>_<n>`: our control request IDs never collide with the CLI's.
+pub fn default_ids() -> Box<dyn Fn() -> String + Send + Sync> {
+    let prefix = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let counter = AtomicU64::new(0);
+    Box::new(move || format!("wf_{prefix}_{}", counter.fetch_add(1, Ordering::SeqCst) + 1))
+}
+
+impl ControlConnection {
+    pub fn open(
+        stdio: AgentStdio,
+        ids: Box<dyn Fn() -> String + Send + Sync>,
+        mut handler: ControlHandler,
+    ) -> Arc<Self> {
+        let connection = Arc::new(Self {
+            writer: Writer::new(stdio.stdin),
+            state: Mutex::new(State::default()),
+            ignored: AtomicU64::new(0),
+            stderr: Arc::new(StderrTail::default()),
+            threads: Threads::default(),
+            ids,
+        });
+        let (sender, receiver) = mpsc::sync_channel::<ControlInbound>(channel::INBOUND_CAPACITY);
+        let routing = connection.clone();
+        let closing = connection.clone();
+        connection.threads.add(channel::spawn_reader(
+            stdio.stdout,
+            move |event| {
+                if let Some(inbound) = routing.route(event) {
+                    let _ = sender.send(inbound);
+                }
+            },
+            move |failure| closing.close(failure.unwrap_or_else(|| "process closed stdout".into())),
+        ));
+        connection.threads.add(channel::spawn_stderr(
+            stdio.stderr,
+            connection.stderr.clone(),
+        ));
+        let owner = connection.clone();
+        connection
+            .threads
+            .add(channel::spawn_dispatcher(receiver, move |m| handler(&owner, m)));
+        connection
     }
-    pub fn cancel_outgoing(&mut self, id: &str) {
-        self.pending_out.remove(id);
-    }
-    pub fn route(&mut self, raw: RawJson) -> Result<Option<Inbound>> {
-        let Ok(frame) = serde_json::from_str::<Envelope>(raw.text()) else {
-            return Ok(Some(Inbound::Message {
-                kind: String::new(),
-                raw,
-            }));
+
+    fn route(&self, event: LineEvent) -> Option<ControlInbound> {
+        let raw = match event {
+            LineEvent::Frame(raw) => raw,
+            LineEvent::Malformed { preview, reason } => {
+                return Some(ControlInbound::Malformed { preview, reason });
+            }
         };
-        let kind = frame.kind.unwrap_or_default();
+        let frame: Envelope = wire::project(&raw);
+        let kind = frame.kind.or("");
         match kind.as_str() {
             "control_response" => {
-                if let Some(response) = frame.response {
-                    if let Some(waiter) = response
-                        .request_id
-                        .and_then(|id| self.pending_out.remove(&id))
-                    {
-                        let result = if response.subtype.as_deref() == Some("error") {
+                let response: Option<ResponseBody> = frame.response.object().map(wire::project);
+                let waiter = response.as_ref().and_then(|r| {
+                    r.request_id
+                        .get()
+                        .and_then(|id| self.state.lock().unwrap().pending_out.remove(id))
+                });
+                match (response, waiter) {
+                    (Some(response), Some(waiter)) => {
+                        let reply = if response.subtype.get() == Some("error") {
                             Err(ChatError::new(
                                 ErrorKind::Vendor,
-                                response
-                                    .error
-                                    .unwrap_or_else(|| "control request failed".into()),
-                            )
-                            .with_vendor(raw))
+                                response.error.or("control request failed"),
+                            ))
                         } else {
-                            Ok(response.response.unwrap_or(RawJson::parse("{}")?))
+                            Ok(response
+                                .response
+                                .object()
+                                .cloned()
+                                .unwrap_or_else(wire::empty_object))
                         };
-                        let _ = waiter.send(result);
-                        return Ok(None);
+                        let _ = waiter.send(reply);
+                    }
+                    _ => {
+                        self.ignored.fetch_add(1, Ordering::SeqCst);
                     }
                 }
-                self.ignored_responses += 1;
-                Ok(None)
+                None
             }
             "control_request" => {
-                if let (Some(id), Some(request)) = (frame.request_id, frame.request) {
-                    if let Ok(Subtype { subtype }) = request.decode() {
-                        self.pending_in.insert(id.clone(), subtype.clone());
-                        return Ok(Some(Inbound::Request {
+                let request = frame.request.object().cloned();
+                let subtype = request
+                    .as_ref()
+                    .and_then(|r| wire::project::<Subtype>(r).subtype.owned());
+                match (frame.request_id.owned(), request, subtype) {
+                    (Some(id), Some(request), Some(subtype)) => {
+                        self.state
+                            .lock()
+                            .unwrap()
+                            .pending_in
+                            .insert(id.clone(), subtype.clone());
+                        Some(ControlInbound::Request {
                             id,
                             subtype,
                             request,
                             raw,
-                        }));
+                        })
                     }
-                }
-                Ok(Some(Inbound::Message { kind, raw }))
-            }
-            "control_cancel_request" => {
-                if let Some(id) = frame.request_id {
-                    self.pending_in.remove(&id);
-                    Ok(Some(Inbound::Cancel { id, raw }))
-                } else {
-                    Ok(Some(Inbound::Message { kind, raw }))
+                    _ => Some(ControlInbound::Message {
+                        kind: "control_request".into(),
+                        raw,
+                    }),
                 }
             }
-            "keep_alive" => Ok(None),
-            _ => Ok(Some(Inbound::Message { kind, raw })),
+            "control_cancel_request" => match frame.request_id.owned() {
+                Some(id) => {
+                    self.state.lock().unwrap().pending_in.remove(&id);
+                    Some(ControlInbound::Cancel { id, raw })
+                }
+                None => Some(ControlInbound::Message {
+                    kind: "control_cancel_request".into(),
+                    raw,
+                }),
+            },
+            "keep_alive" => None,
+            _ => Some(ControlInbound::Message { kind, raw }),
         }
     }
-    pub fn open_requests(&self) -> Vec<String> {
-        self.pending_in.keys().cloned().collect()
+
+    fn close(&self, reason: String) {
+        let mut state = self.state.lock().unwrap();
+        if state.closed.is_none() {
+            state.closed = Some(reason.clone());
+        }
+        for (_, waiter) in state.pending_out.drain() {
+            let _ = waiter.send(Err(ChatError::new(ErrorKind::Closed, reason.clone())));
+        }
+        state.pending_in.clear();
     }
-    pub fn forget(&mut self, id: &str) {
-        self.pending_in.remove(id);
+
+    /// Sends `control_request{subtype, ...fields}` and returns the success `response` object.
+    pub fn control(&self, subtype: &str, fields: &OpaqueObject) -> Result<OpaqueJson> {
+        self.control_timeout(subtype, fields, DEFAULT_TIMEOUT)
     }
-    fn take(&mut self, id: &str) -> Result<()> {
-        self.pending_in.remove(id).map(|_| ()).ok_or_else(|| {
-            ChatError::new(
-                ErrorKind::RequestExpired,
-                "control request is no longer open",
-            )
-        })
+    pub fn control_timeout(
+        &self,
+        subtype: &str,
+        fields: &OpaqueObject,
+        timeout: Duration,
+    ) -> Result<OpaqueJson> {
+        let id = (self.ids)();
+        let (sender, receiver) = mpsc::channel();
+        {
+            let mut state = self.state.lock().unwrap();
+            if let Some(reason) = &state.closed {
+                return Err(ChatError::new(ErrorKind::Closed, reason.clone()));
+            }
+            state.pending_out.insert(id.clone(), sender);
+        }
+        let sent = self.writer.send(&Outgoing {
+            kind: "control_request",
+            request_id: &id,
+            request: RequestBody { subtype, fields },
+        });
+        let result = match sent {
+            Ok(()) => receiver.recv_timeout(timeout).unwrap_or_else(|e| match e {
+                mpsc::RecvTimeoutError::Timeout => Err(ChatError::new(
+                    ErrorKind::Timeout,
+                    format!("{subtype} was not answered in time"),
+                )),
+                mpsc::RecvTimeoutError::Disconnected => {
+                    Err(ChatError::new(ErrorKind::Closed, "connection closed"))
+                }
+            }),
+            Err(e) => Err(e),
+        };
+        self.state.lock().unwrap().pending_out.remove(&id);
+        result
     }
-    pub fn respond(&mut self, id: &str, payload: Option<&RawJson>) -> Result<RawJson> {
+
+    /// Writes a stream-json message such as a `user` prompt.
+    pub fn send(&self, message: &OpaqueJson) -> Result<()> {
+        self.writer.send(message)
+    }
+
+    fn take(&self, id: &str) -> Result<()> {
+        self.state
+            .lock()
+            .unwrap()
+            .pending_in
+            .remove(id)
+            .map(|_| ())
+            .ok_or_else(|| {
+                ChatError::new(
+                    ErrorKind::RequestExpired,
+                    format!("no open control request {id}"),
+                )
+            })
+    }
+
+    pub fn respond(&self, id: &str, response: Option<&OpaqueJson>) -> Result<()> {
         self.take(id)?;
-        RawJson::encode(&Response {
+        self.writer.send(&AnswerFrame {
             kind: "control_response",
-            response: ResponseBody {
+            response: Answer {
                 subtype: "success",
                 request_id: id,
-                response: payload,
+                response,
                 error: None,
             },
         })
     }
-    pub fn reject(&mut self, id: &str, error: &str) -> Result<RawJson> {
+
+    pub fn respond_error(&self, id: &str, error: &str) -> Result<()> {
         self.take(id)?;
-        RawJson::encode(&Response {
+        self.writer.send(&AnswerFrame {
             kind: "control_response",
-            response: ResponseBody {
+            response: Answer {
                 subtype: "error",
                 request_id: id,
                 response: None,
@@ -198,14 +334,37 @@ impl ControlRouter {
             },
         })
     }
-    pub fn close(&mut self) {
-        self.closed = true;
-        for (_, waiter) in std::mem::take(&mut self.pending_out) {
-            let _ = waiter.send(Err(ChatError::new(
-                ErrorKind::Closed,
-                "process closed stdout",
-            )));
-        }
-        self.pending_in.clear();
+
+    /// Forgets an inbound request without answering it (an undeclared `request_user_dialog`).
+    pub fn forget(&self, id: &str) {
+        self.state.lock().unwrap().pending_in.remove(id);
+    }
+    pub fn open_inbound_requests(&self) -> Vec<String> {
+        let mut ids: Vec<_> = self
+            .state
+            .lock()
+            .unwrap()
+            .pending_in
+            .keys()
+            .cloned()
+            .collect();
+        ids.sort();
+        ids
+    }
+    pub fn ignored_responses(&self) -> u64 {
+        self.ignored.load(Ordering::SeqCst)
+    }
+    pub fn closed_reason(&self) -> Option<String> {
+        self.state.lock().unwrap().closed.clone()
+    }
+    pub fn stderr_tail(&self, chars: usize) -> String {
+        self.stderr.last(chars)
+    }
+    pub fn close_input(&self) {
+        self.writer.close();
+    }
+    pub fn join(&self) {
+        self.threads.join();
     }
 }
+

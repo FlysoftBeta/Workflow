@@ -15,9 +15,7 @@ pub fn filtered(base: &BTreeMap<String, String>) -> BTreeMap<String, String> {
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect()
 }
+/// A credential held in memory only. Its `Debug` form is redacted and it is never persisted.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Secret(pub String);
-impl std::fmt::Debug for Secret {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.write_str("<redacted>")
-    }
-}
+

@@ -1121,6 +1121,8 @@ pub struct AccountState {
     pub requires_auth: Option<bool>,
     pub login: Option<LoginFlow>,
     pub raw: Option<OpaqueJson>,
+    /// The latest failed or unanswered account read. Any answered read clears it; it never changes `state`.
+    pub check_error: Option<String>,
 }
 impl Default for AccountState {
     fn default() -> Self {
@@ -1133,6 +1135,7 @@ impl Default for AccountState {
             requires_auth: None,
             login: None,
             raw: None,
+            check_error: None,
         }
     }
 }
@@ -1378,6 +1381,10 @@ pub enum AgentEvent {
         backend: BackendKind,
         flow: Option<LoginFlow>,
     },
+    AccountCheckFailed {
+        backend: BackendKind,
+        message: String,
+    },
     RateLimitsChanged {
         backend: BackendKind,
         limits: RateLimitState,
@@ -1571,6 +1578,7 @@ impl AgentEvent {
             Self::ServerInfo { backend, .. } => *backend,
             Self::AccountChanged { backend, .. } => *backend,
             Self::LoginChanged { backend, .. } => *backend,
+            Self::AccountCheckFailed { backend, .. } => *backend,
             Self::RateLimitsChanged { backend, .. } => *backend,
             Self::ModelsChanged { backend, .. } => *backend,
             Self::McpServerChanged { backend, .. } => *backend,
@@ -1714,6 +1722,34 @@ impl Item {
             Self::Notice(v) => v.status = status,
             Self::Unknown(v) => v.status = status,
         }
+    }
+}
+impl LoginFlow {
+    pub fn login_id(&self) -> Option<&str> {
+        match self {
+            Self::DeviceCode { login_id, .. }
+            | Self::Browser { login_id, .. }
+            | Self::Progress { login_id, .. }
+            | Self::Completed { login_id, .. } => login_id.as_deref(),
+            Self::Terminal { .. } => None,
+        }
+    }
+    /// A waiting attempt: device code, browser, or an unanswered start (`Progress` with an ID and no error).
+    pub fn is_pending(flow: Option<&Self>) -> bool {
+        matches!(
+            flow,
+            Some(Self::DeviceCode { .. })
+                | Some(Self::Browser { .. })
+                | Some(Self::Progress {
+                    login_id: Some(_),
+                    error: None,
+                    ..
+                })
+        )
+    }
+    /// A successful completion reported for the current process.
+    pub fn is_confirmed_success(flow: Option<&Self>) -> bool {
+        matches!(flow, Some(Self::Completed { success: true, .. }))
     }
 }
 impl Default for ProcessState {
