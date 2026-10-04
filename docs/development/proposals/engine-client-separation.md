@@ -1,6 +1,6 @@
 # Complete Engine and client separation
 
-Status: implemented with targeted integrated acceptance. Owner: coordinator. Updated: 2026-10-03.
+Status: implemented with targeted integrated acceptance; the JVM chat service it describes was later replaced by the in-process Rust `workflow-chat` and deleted. Owner: coordinator. Updated: 2026-10-04.
 
 ## Problem and intended outcome
 

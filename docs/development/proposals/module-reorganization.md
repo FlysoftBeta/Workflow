@@ -1,6 +1,6 @@
 # Module reorganization: Engine domains and a thin App
 
-Status: decided; implementation is partial. Owner: coordinator. Updated: 2026-10-03.
+Status: decided; implementation is partial. Owner: coordinator. Updated: 2026-10-04.
 
 ## Problem and intended outcome
 
@@ -83,10 +83,10 @@ Each appendix maps current source to its target, defines the public interfaces t
 
 Round 1 splits the Cargo domains, types storage/protocol, exports schema and golden fixtures, updates build paths and preserves current Android wire behavior. Its handoff requires source-bound `rust-server` (including domain tests and contract drift), `runtime-host`, `native`, `image`, `infrastructure`, `documentation` and `android-apk` results. Cargo uses at most two jobs under the shared build lease.
 
-Round 2 develops Rust Chat with replay/codec/reducer parity as the required cutover gate, checks Kotlin bindings against the Rust export, relocates App modules, repairs terminal interactions and reorganizes documentation. The current Chat work is partial, so JRE/Kotlin production remains. The integrated matrix must be recorded separately from contributor checks. The `runtime-dedup` task owns runtime extraction and its host, both-ABI build and isolated API 28 exec/PTY/stop gate; this round does not claim its implementation. Compilation is not acceptance: user-visible behavior needs the documented device matrix through `tools/workflow device`, using disposable AVDs only in this task. No result on host or API 28 x86_64 establishes physical ARM64 acceptance. Each appendix ends with owned paths, dependencies and checks.
+Round 2 develops Rust Chat with replay/codec/reducer parity as the required cutover gate, checks Kotlin bindings against the Rust export, relocates App modules, repairs terminal interactions and reorganizes documentation. Rust Chat replaced the Kotlin service on 2026-10-04, and the JRE/Kotlin path was then deleted by explicit user decision before its isolated API 28 acceptance. The integrated matrix must be recorded separately from contributor checks. The `runtime-dedup` task owns runtime extraction and its host, both-ABI build and isolated API 28 exec/PTY/stop gate; this round does not claim its implementation. Compilation is not acceptance: user-visible behavior needs the documented device matrix through `tools/workflow device`, using disposable AVDs only in this task. No result on host or API 28 x86_64 establishes physical ARM64 acceptance. Each appendix ends with owned paths, dependencies and checks.
 
 ## Decision and completion
 
 The module layout and ownership decisions are accepted. Maintained references now live in [Engine](../../engine/README.md) and [App](../../app/README.md). Environment owns configuration and service state; Chat owns backend defaults; Terminal owns terminal settings; Server owns mapping and composition. Canonical proxy files use `.workspace/proxy/`, retaining `services.proxy` document identifiers with no migration.
 
-Implementation remains partial: Rust Chat does not yet replace the Kotlin production service, adapter parity and guest/device cutover are unproven, and the client event reducer remains until a later projection protocol. Runtime deduplication is a separately owned task. Actual source identity and check results belong to contributor handoffs and the integrated report; this decided proposal is not an acceptance claim.
+Implementation remains partial. Rust Chat is the only chat implementation and passes host adapter, reducer and approval parity; the Kotlin service, `:agent`, `:engine-chat`, JAR and JRE were deleted before guest/device acceptance, which remains unproven. The client event reducer remains until a later projection protocol. Runtime deduplication is a separately owned task. Actual source identity and check results belong to contributor handoffs and the integrated report; this decided proposal is not an acceptance claim.

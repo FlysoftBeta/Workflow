@@ -1,10 +1,10 @@
 # Appendix: Chat (`workflow-chat`)
 
-Status: decided; partial Rust implementation, production JVM service retained pending parity and device acceptance. Owner: Engine contributor. Updated: 2026-10-03.
+Status: decided; Rust implementation in production and the JVM path deleted (CH-7, CH-8) before device acceptance, by explicit user decision. Owner: Engine contributor. Updated: 2026-10-04.
 
 This appendix plans the port of chat from the Kotlin guest service to a pure Rust crate at `engine/chat/`. The inventory was rechecked against `f1ed8994ae513bd1e04106bbf162df56919cf2b6`, including the guest service, shared model, adapter fixtures and App projection. The Environment, Server-domains and App appendices now settle the shared contracts. This entire Rust port is round 2: round 1 retains `engine/chat/` unchanged and only types/moves its Rust bridge and runtime supervision.
 
-The current round-2 Rust result is a partial typed core with policies and ports, not a complete Codex/Claude adapter and service replacement. All deletion tasks below remain gated. The production JRE/JAR, Kotlin adapters and shared client event reducer are retained; no Rust production Chat acceptance is claimed.
+The Rust crate now contains the complete adapters and service, and Server runs it in-process ([cutover report](../../../report/2026-10-04-rust-chat-cutover.md)). The user then chose to delete the JRE/JAR, Kotlin service and adapters without waiting for the gate described below ([deletion report](../../../report/2026-10-04-kotlin-chat-deletion.md)). The protocol assets and coverage golden were deleted with `:agent` rather than moved (CH-0's asset move was not done). The shared client event reducer is retained, and isolated API 28 acceptance of Rust Chat is still pending; the plan below is kept as the decision record.
 
 ## Key decisions
 

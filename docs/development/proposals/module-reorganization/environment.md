@@ -397,7 +397,7 @@ The coordinator should freeze `engine/server/src/{environment,process,tools,home
 | ENV-4 | Server cutover to `workflow-environment` | ENV-3; before any server-domains split | astra-max |
 | ENV-5 | Relocate the runtime, loader and tools packager | ENV-1 merged (shares `engine/Cargo.toml`) | sol-high |
 | ENV-6 | Single-tree runtime with cfg platform modules | ENV-5 | astra-max |
-| ENV-7 | Remove the JRE and chat JAR from the tools payload | ENV-4, Rust chat cutover (chat appendix), App removal of `:engine-chat` | sol-high |
+| ENV-7 | Remove the JRE and chat JAR from the tools payload (done 2026-10-04, before device acceptance by user decision) | ENV-4, Rust chat cutover (chat appendix), App removal of `:engine-chat` | sol-high |
 | ENV-8 | Boundary guard and environment documentation set | ENV-4, ENV-6, documentation reorganization (App appendix) | sol-high |
 
 **ENV-1.**

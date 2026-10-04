@@ -10,6 +10,9 @@ implementations and watcher. `environment/` contains the earlier installer, plan
 writer. The production equivalents live in `engine/server/` and `engine/environment/runtime/`; Android
 reference tests supply their filesystem adapter from `app/android/src/androidTest/`.
 
+`kotlin/top/flysoftbeta/workflow/agent/process/` holds the launch port that instrumentation uses to run
+guest commands through the Server process API; it is not a production path.
+
 Keep fixes that preserve oracle validity here, and keep real product behavior in the Rust owner.
 Report reference-test results separately from protocol, real-image and device acceptance. See
 the [core module guide](../../README.md) for production contracts and the normal test command.
