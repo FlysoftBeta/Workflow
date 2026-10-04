@@ -13,8 +13,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
@@ -22,6 +26,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import top.flysoftbeta.workflow.ui.design.SeamCallbacks
+import top.flysoftbeta.workflow.ui.design.seamGestures
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -56,7 +62,11 @@ class TerminalTouchAcceptanceTest {
         override fun onSelection(text: String, x: Int, y: Int) { selection.set(text) }
         override fun onGone() {}
     }
-    private class Host(val page: TerminalWebView, val events: Events, val stolen: AtomicInteger, val activity: ComponentActivity)
+    private class Host(val page: TerminalWebView, val events: Events, val stolen: AtomicInteger, val activity: ComponentActivity) {
+        /** Drags claimed by the Workbench seam beside the page, when [withTerminal] hosts one. */
+        val seamDrags = AtomicInteger()
+        val seamPosition = AtomicReference(Float.NaN)
+    }
 
     @Test fun tapLinksAndFilesButScrollingDoesNotOpenThem() = withTerminal { host ->
         val page = host.page
@@ -132,6 +142,39 @@ class TerminalTouchAcceptanceTest {
         onMain { page.write("new streamed output\r\n") }
         await("stream parsed") { max(page) > maximum }
         assertEquals(before, value(page))
+    }
+
+    @Test fun scrollbarDragsBesideAVerticalSeamReachTheTerminalWhileSidewaysDragsMoveTheSeam() = withTerminal(seam = true) { host ->
+        val page = host.page
+        onMain { page.reset((1..800).joinToString("\r\n", postfix = "\r\n") { "seam row $it" }) }
+        await("scrollback scrollbar") { max(page) > 500 }
+        val width = JSONArray(js(page, "[window.innerWidth]")).getDouble(0)
+        // The seam lies 2dp beyond the page's right edge with a 20dp band, so the thumb's outer 4dp are inside it.
+        val thumb = rect(page, "document.querySelector('.workflow-scroll-thumb')", xFraction = 40.0 / 44)
+        assertTrue("thumb point ${thumb.x} of $width lies in the seam band", width + 2 - thumb.x < 10)
+        val top = rect(page, "document.querySelector('.workflow-scrollbar')", yFraction = 0.0)
+        val finger = Finger(page, thumb)
+        // One coarse, steep first move that exceeds touch slop along both axes at once.
+        finger.move(thumb.copy(x = thumb.x - 10, y = thumb.y - 30), steps = 1)
+        finger.move(thumb.copy(x = thumb.x - 8, y = top.y - 40), steps = 16)
+        await("scrollbar drag beside the seam reached the first rows") { value(page) < max(page) * 0.05 }
+        finger.up()
+        assertEquals("the seam must not claim a vertical drag", 0, host.seamDrags.get())
+        // A sideways drag from the gap between the page and the container edge, at mid height, moves the seam.
+        val height = JSONArray(js(page, "[window.innerHeight]")).getDouble(0)
+        val gap = Point(width + 2, height / 2, width)
+        Finger(page, gap).apply { move(gap.copy(x = gap.x + 60), steps = 12); up() }
+        assertEquals(1, host.seamDrags.get())
+        // The page starts at the seam container's origin, so container px are page CSS px times the scale.
+        val scale = onMainValue { page.width } / width
+        assertEquals("seam follows the finger", ((gap.x + 60) * scale).toFloat(), host.seamPosition.get(), (2 * scale).toFloat())
+        // A sideways drag that starts on the thumb inside the band still resizes.
+        val before = value(page)
+        val outer = rect(page, "document.querySelector('.workflow-scroll-thumb')", xFraction = 40.0 / 44)
+        Finger(page, outer).apply { move(outer.copy(x = outer.x - 60), steps = 12); up() }
+        assertEquals(2, host.seamDrags.get())
+        assertEquals(before, value(page))
+        assertEquals(0, host.stolen.get())
     }
 
     @Test fun linkTapsOpenWhileOutputStreamsIncludingHardWrappedAndOsc8Links() = withTerminal { host ->
@@ -301,7 +344,8 @@ class TerminalTouchAcceptanceTest {
     private fun max(page: TerminalWebView) = js(page, "Number(document.querySelector('.workflow-scrollbar').getAttribute('aria-valuemax'))").toDouble().toInt()
     private fun height(page: TerminalWebView) = onMainValue { page.height }
 
-    private fun withTerminal(test: (Host) -> Unit) {
+    /** With [seam], a vertical Workbench seam (the production detector) lies 2dp beyond the page's right edge. */
+    private fun withTerminal(seam: Boolean = false, test: (Host) -> Unit) {
         check(Build.HARDWARE in setOf("ranchu", "goldfish"))
         // The disposable AVD has a hardware keyboard; show the soft keyboard anyway so IME resizes are real.
         val imeSetting = probe.shell("settings get secure show_ime_with_hard_keyboard")
@@ -321,7 +365,19 @@ class TerminalTouchAcceptanceTest {
                         Box(Modifier.fillMaxSize().pointerInput(Unit) {
                             detectDragGestures { change, _ -> change.consume(); stolen.incrementAndGet() }
                         }) {
-                            AndroidView(factory = { page }, modifier = Modifier.fillMaxSize())
+                            if (!seam) AndroidView(factory = { page }, modifier = Modifier.fillMaxSize())
+                            else {
+                                val density = LocalDensity.current
+                                val width = IntArray(1)
+                                Box(Modifier.fillMaxSize().onSizeChanged { width[0] = it.width }
+                                    .seamGestures(horizontal = true, bandPx = with(density) { 20.dp.toPx() }, callbacks = object : SeamCallbacks {
+                                        override fun seams() = listOf(width[0] - with(density) { 22.dp.toPx() })
+                                        override fun onDragStart(index: Int) { host.seamDrags.incrementAndGet() }
+                                        override fun onDrag(index: Int, position: Float) { host.seamPosition.set(position) }
+                                    })) {
+                                    AndroidView(factory = { page }, modifier = Modifier.fillMaxSize().padding(end = 24.dp))
+                                }
+                            }
                         }
                     }
                 }

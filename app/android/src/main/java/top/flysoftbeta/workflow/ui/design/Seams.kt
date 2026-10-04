@@ -27,9 +27,34 @@ internal interface SeamCallbacks {
 private class TapMemory { var index = -1; var time = 0L }
 
 /**
- * Seam gestures observed in the Initial pass of the container, so the content keeps receiving touches:
- * a down within [bandPx]/2 of a seam only becomes a drag after moving past touch slop along the axis;
- * a gesture that moves across the axis first is left alone. Two quick taps on a seam = double tap.
+ * A seam claims a drag only when the movement is predominantly along its axis: at least [SEAM_AXIS_RATIO]
+ * times the movement across it, which is within about 27° of the axis.
+ */
+internal const val SEAM_AXIS_RATIO = 2f
+
+internal enum class SeamClaim { Undecided, Claim, Release }
+
+/**
+ * Whether a pointer that went down on a seam's band is a seam drag, from its total movement [along] and
+ * [across] the seam's drag axis. Within [slop] of the down position nothing is decided. Beyond it, a
+ * movement steeper than [ratio] belongs to the content (a scroll or a scrollbar drag next to the seam);
+ * otherwise the seam claims it once the movement along the axis exceeds [slop].
+ */
+internal fun seamClaim(along: Float, across: Float, slop: Float, ratio: Float = SEAM_AXIS_RATIO): SeamClaim {
+    val a = abs(along)
+    val c = abs(across)
+    return when {
+        a * a + c * c <= slop * slop -> SeamClaim.Undecided
+        a < ratio * c -> SeamClaim.Release
+        a > slop -> SeamClaim.Claim
+        else -> SeamClaim.Undecided
+    }
+}
+
+/**
+ * Seam gestures observed in the Initial pass of the container, before the content (including an embedded
+ * WebView) sees the touch. Until [seamClaim] decides, nothing is consumed and the content keeps receiving
+ * the stream; a released gesture is left to the content entirely. Two quick taps on a seam = double tap.
  */
 internal fun Modifier.seamGestures(horizontal: Boolean, bandPx: Float, callbacks: SeamCallbacks): Modifier = composed {
     val current by rememberUpdatedState(callbacks)
@@ -64,10 +89,10 @@ internal fun Modifier.seamGestures(horizontal: Boolean, bandPx: Float, callbacks
                     if (!dragging) {
                         val moved = along(change.position) - along(down.position)
                         val across = acrossOf(change.position) - acrossOf(down.position)
-                        if (abs(across) > slop && abs(moved) <= slop) break // not ours: a scroll across the seam
-                        if (abs(moved) > slop) {
-                            dragging = true
-                            current.onDragStart(index)
+                        when (seamClaim(moved, across, slop)) {
+                            SeamClaim.Undecided -> continue
+                            SeamClaim.Release -> break // not ours: the content scrolls or drags across the seam
+                            SeamClaim.Claim -> { dragging = true; current.onDragStart(index) }
                         }
                     }
                     if (dragging) {
