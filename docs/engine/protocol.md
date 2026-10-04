@@ -6,7 +6,7 @@ This document and the generated [`engine/protocol/contract.json`](../../engine/p
 
 The implemented transport is bidirectional stdio to a local process. Messages are UTF-8 JSON-RPC 2.0 objects, one per line; batches are unsupported. Request IDs must be returned unchanged. Stdin and stdout are exclusively protocol channels, while credential-free diagnostics go to stderr. A frame may contain at most 32 MiB; binary data is base64-encoded in chunks of at most 65,536 raw bytes.
 
-The first request must be `hello` with `{protocol:"workflow.workspace/1",clientId:"..."}`. Its result contains the same protocol string, `engineVersion`, `workspaceRoot`, and `capabilities`. A protocol mismatch is rejected immediately. Unknown methods return `-32601`, invalid parameters return `-32602`, and business failures return `-32000` with a structured `data.kind`; failures must never appear as silent success.
+The first request must be `hello` with `{protocol:"workflow.workspace/1",clientId:"..."}`. Its result contains the same protocol string, `engineVersion`, `workspaceRoot`, `capabilities`, and `agentHomes`. Each `agentHomes` entry pairs an agent home's guest path with the `.workspace/agents/<id>` path that shows its configuration, so a client maps agent paths without knowing vendor layouts. A protocol mismatch is rejected immediately. Unknown methods return `-32601`, invalid parameters return `-32602`, and business failures return `-32000` with a structured `data.kind`; failures must never appear as silent success.
 
 The Server's command line is:
 

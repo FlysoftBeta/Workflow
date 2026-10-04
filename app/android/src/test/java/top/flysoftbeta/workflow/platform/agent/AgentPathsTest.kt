@@ -5,7 +5,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AgentPathsTest {
-    private val paths = AgentPaths("/workspace")
+    /** Engine reports these in its handshake; Android source never names them. */
+    private val homes = mapOf("/home/work/.codex" to ".workspace/agents/codex", "/home/work/.claude" to ".workspace/agents/claude")
+    private val paths = AgentPaths("/workspace", homes)
 
     @Test fun hostRootsAreRejected() {
         org.junit.Assert.assertThrows(IllegalArgumentException::class.java) { AgentPaths("/data/host") }
@@ -41,6 +43,12 @@ class AgentPathsTest {
         assertNull(paths.toWorkspace("/home/work/.codexx/config.toml"))
         assertNull(paths.toWorkspace("/home/work/.bashrc"))
         assertEquals(AgentPaths.Link(".workspace/agents/codex/config.toml", 3, null), paths.parseLink("/home/work/.codex/config.toml:3"))
+    }
+
+    @Test fun homesAreOnlyThoseEngineReported() {
+        val unreported = AgentPaths()
+        assertNull(unreported.toWorkspace("/home/work/.codex/config.toml"))
+        assertEquals("/workspace/.workspace/agents/codex/config.toml", unreported.toAgent(".workspace/agents/codex/config.toml"))
     }
 
     @Test fun parsesLineAndColumnSuffixes() {

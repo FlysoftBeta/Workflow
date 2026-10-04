@@ -41,7 +41,9 @@ class WorkspaceRpc(
     private val waiting = ConcurrentHashMap<String, CompletableDeferred<JsonElement>>()
     private val writer = Mutex()
     private val handshake = Mutex()
-    private var greeting: Pair<String, Map<String, Any?>>? = null
+    @Volatile private var greeting: Pair<String, Map<String, Any?>>? = null
+    /** The Engine's reply to [hello], once the handshake succeeded. */
+    val helloResult: Map<String, Any?>? get() = greeting?.second
     private val mutableFailure = MutableStateFlow<String?>(null)
     val failure: StateFlow<String?> = mutableFailure.asStateFlow()
     private val output = transport.output.buffered(64 * 1024)

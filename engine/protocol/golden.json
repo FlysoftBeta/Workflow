@@ -17,6 +17,16 @@
       "id": "client-1",
       "jsonrpc": "2.0",
       "result": {
+        "agentHomes": [
+          {
+            "guest": "/home/work/.codex",
+            "path": ".workspace/agents/codex"
+          },
+          {
+            "guest": "/home/work/.claude",
+            "path": ".workspace/agents/claude"
+          }
+        ],
         "capabilities": {
           "chat": true,
           "documents": true,

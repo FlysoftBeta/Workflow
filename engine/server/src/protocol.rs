@@ -301,6 +301,15 @@ pub struct HelloResult {
     pub engine_version: String,
     pub workspace_root: String,
     pub capabilities: Capabilities,
+    /// Where agents see their homes, so clients can map paths without knowing vendor layouts.
+    pub agent_homes: Vec<AgentHomePath>,
+}
+/// A coding agent's home: its guest path and the workspace path that shows its configuration.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHomePath {
+    pub guest: String,
+    pub path: String,
 }
 impl HelloResult {
     pub fn new(root: &std::path::Path) -> Self {
@@ -308,6 +317,13 @@ impl HelloResult {
             protocol: PROTOCOL.into(),
             engine_version: "1.0.0".into(),
             workspace_root: root.to_string_lossy().into_owned(),
+            agent_homes: workflow_environment::access::AGENT_HOMES
+                .iter()
+                .map(|home| AgentHomePath {
+                    guest: home.guest.into(),
+                    path: format!(".workspace/{}", home.key()),
+                })
+                .collect(),
             capabilities: Capabilities {
                 workspace: true,
                 files: true,

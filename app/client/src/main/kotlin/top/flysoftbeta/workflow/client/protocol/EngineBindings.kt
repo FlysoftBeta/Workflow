@@ -5,7 +5,7 @@ import java.math.BigInteger
 import java.math.BigDecimal
 import kotlinx.serialization.json.*
 
-const val ENGINE_CONTRACT_SHA256 = "c2d074903686852a52586ecdc598625e3e4e3617c2bff9034b3f0ce2a593e15d"
+const val ENGINE_CONTRACT_SHA256 = "b6672593cd325b9c948f3b8c94ef4b5c562f75dc2f5b0767e1e78cd59febf710"
 
 class Activation private constructor(override val json: JsonElement) : WireValue {
     private val fields = Wire.obj(json)
@@ -28,6 +28,13 @@ class AgentConfig private constructor(override val json: JsonElement) : WireValu
     val `permissions`: String? = Wire.optional(fields, "permissions")?.let { value -> Wire.nullable(value) { Wire.string(it) } }
     val additional: Map<String, OpaqueJson> = fields.filterKeys { it !in setOf<String>("backend", "backends", "permissions") }.mapValues { (_, value) -> OpaqueJson.decode(value) }
     companion object { fun decode(value: JsonElement) = AgentConfig(value) }
+}
+
+class AgentHomePath private constructor(override val json: JsonElement) : WireValue {
+    private val fields = Wire.obj(json)
+    val `guest`: String = Wire.member(fields, "guest").let { value -> Wire.string(value) }
+    val `path`: String = Wire.member(fields, "path").let { value -> Wire.string(value) }
+    companion object { fun decode(value: JsonElement) = AgentHomePath(value) }
 }
 
 class AgentPatch private constructor(override val json: JsonElement) : WireValue {
@@ -1333,6 +1340,7 @@ class HelloParams private constructor(override val json: JsonElement) : WireValu
 
 class HelloResult private constructor(override val json: JsonElement) : WireValue {
     private val fields = Wire.obj(json)
+    val `agentHomes`: List<AgentHomePath> = Wire.member(fields, "agentHomes").let { value -> Wire.array(value).map { AgentHomePath.decode(it) } }
     val `capabilities`: Capabilities = Wire.member(fields, "capabilities").let { value -> Capabilities.decode(value) }
     val `engineVersion`: String = Wire.member(fields, "engineVersion").let { value -> Wire.string(value) }
     val `protocol`: String = Wire.member(fields, "protocol").let { value -> Wire.string(value) }

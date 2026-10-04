@@ -822,6 +822,22 @@
         "$ref": "#/$defs/OpaqueJson"
       }
     },
+    "AgentHomePath": {
+      "description": "A coding agent's home: its guest path and the workspace path that shows its configuration.",
+      "type": "object",
+      "properties": {
+        "guest": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "guest",
+        "path"
+      ]
+    },
     "AgentPatch": {
       "type": "object",
       "properties": {
@@ -3609,6 +3625,13 @@
     "HelloResult": {
       "type": "object",
       "properties": {
+        "agentHomes": {
+          "description": "Where agents see their homes, so clients can map paths without knowing vendor layouts.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentHomePath"
+          }
+        },
         "capabilities": {
           "$ref": "#/$defs/Capabilities"
         },
@@ -3626,7 +3649,8 @@
         "protocol",
         "engineVersion",
         "workspaceRoot",
-        "capabilities"
+        "capabilities",
+        "agentHomes"
       ]
     },
     "IdSchema": {

@@ -12,6 +12,7 @@ import kotlinx.serialization.json.*
 import top.flysoftbeta.workflow.agent.SendMode
 import top.flysoftbeta.workflow.agent.model.*
 import top.flysoftbeta.workflow.agent.rpc.*
+import top.flysoftbeta.workflow.client.protocol.HelloResult
 import top.flysoftbeta.workflow.core.connection.RemoteWorkspaceStore
 import top.flysoftbeta.workflow.core.connection.WorkspaceRpc
 import top.flysoftbeta.workflow.core.connection.WorkspaceClosedException
@@ -148,7 +149,14 @@ class AgentHub(
     private inline fun <reified T> encoded(value: T): Any? = CoreJson.parse(ChatWire.stringify(value))
     fun entry(id: String) = metadata.value.conversations.firstOrNull { it.id == id }
     fun threadKey(entry: ConversationEntry) = entry.backendThreadId?.let { ThreadKey(entry.backend, it) }
-    fun paths(@Suppress("UNUSED_PARAMETER") kind: BackendKind) = AgentPaths()
+    /** Agent paths with the homes Engine reported in its handshake; before it, workspace paths only. */
+    fun paths(@Suppress("UNUSED_PARAMETER") kind: BackendKind): AgentPaths {
+        val hello = (store as? RemoteWorkspaceStore)?.rpc?.helloResult ?: return AgentPaths()
+        agentPaths?.takeIf { it.first === hello }?.let { return it.second }
+        val homes = HelloResult.decode(wire(hello)).agentHomes.associate { it.guest to it.path }
+        return AgentPaths(homes = homes).also { agentPaths = hello to it }
+    }
+    @Volatile private var agentPaths: Pair<Map<String, Any?>, AgentPaths>? = null
     fun defaultBackend() = metadata.value.defaultBackend
     fun permissions() = metadata.value.permissions
     fun loginMethods(kind: BackendKind) = metadata.value.loginMethods[kind].orEmpty()
