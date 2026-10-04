@@ -87,7 +87,11 @@ class EngineController(context: Context, val scope: CoroutineScope, private val 
             else -> EnvironmentHealth.Unavailable("工作区返回了未知环境状态")
         }
     }
-    suspend fun awaitUsable() {
+    /**
+     * Waits until the environment is usable. [waitThroughFailure] keeps waiting while it is failed or unavailable,
+     * so the caller resumes after the user retries the environment instead of failing.
+     */
+    suspend fun awaitUsable(waitThroughFailure: Boolean = false) {
         start()
         // A terminal/user action enrolls an unused environment; attaching to a ready one is read-only.
         store().awaitReady()
@@ -96,7 +100,9 @@ class EngineController(context: Context, val scope: CoroutineScope, private val 
             rpc.request("environment.reconcile")
             refresh()
         }
-        val state = health.first { it.usable || it is EnvironmentHealth.Unavailable || it is EnvironmentHealth.Failed }
+        val state = health.first {
+            it.usable || (!waitThroughFailure && (it is EnvironmentHealth.Unavailable || it is EnvironmentHealth.Failed))
+        }
         if (!state.usable) throw EnvironmentUnavailableException(state, describe(state))
     }
     fun retry() { scope.launch {

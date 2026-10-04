@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -238,9 +239,12 @@ internal class TerminalController(
     override fun onDrop(payload: DragPayload) {
         val files = payload as? FilesDragPayload ?: return
         context.scope.launch {
-            val text = ShellQuote.pasteText(files.paths, session?.currentDirectory(), session?.paths ?: host.backend.paths)
+            val current = session ?: return@launch
+            // A path delivered to a new terminal waits for its shell, which may wait for the environment.
+            if (current.status.first { it !is TerminalStatus.Starting } !is TerminalStatus.Running) return@launch
+            val text = ShellQuote.pasteText(files.paths, current.currentDirectory(), current.paths)
             val page = view
-            if (page != null && page.isReady) page.paste(text) else session?.write(text)
+            if (page != null && page.isReady) page.paste(text) else current.write(text)
             requestInputFocus()
         }
     }
@@ -308,12 +312,12 @@ internal class TerminalController(
                     is TerminalStatus.Failed -> current.message
                     else -> "已结束"
                 }
-                val environmentFailed = current is TerminalStatus.Failed && current.environment
-                NoticeBar(message, if (environmentFailed) NoticeTone.Error else NoticeTone.Neutral, Modifier.testTag("terminal:ended"),
-                    actions = buildList {
-                        add(TextAction(if (environmentFailed) "重试" else "重启") { if (environmentFailed) host.environment?.retry(); restart() })
-                        add(TextAction("关闭") { context.layout(LayoutOp.Close(listOf(context.panelId))) })
-                    })
+                // An environment that is not yet usable is shown by EnvironmentNotice while the terminal waits.
+                NoticeBar(message, NoticeTone.Neutral, Modifier.testTag("terminal:ended"),
+                    actions = listOf(
+                        TextAction("重启") { restart() },
+                        TextAction("关闭") { context.layout(LayoutOp.Close(listOf(context.panelId))) },
+                    ))
             }
             if (!ended && (pinnedKeys || (frame.focused && frame.imeVisible))) {
                 ExtraKeysRow(keys, ::onExtraKey, groups = ExtraKeyLayouts.Terminal)

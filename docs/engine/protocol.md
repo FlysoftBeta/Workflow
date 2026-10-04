@@ -146,7 +146,7 @@ Android addresses stable terminal resources, not generic process IDs. Metadata i
 
 | Method | Contract |
 | --- | --- |
-| `terminal.create` | `{directory,rows?,columns?}` with workspace-relative directory → metadata |
+| `terminal.create` | `{directory,rows?,columns?}` with workspace-relative directory → metadata; allocates the resource at once, and while no environment is usable returns `starting` without a process |
 | `terminal.attach` | `{terminalId,rows?,columns?}` → metadata; attaches without restarting an existing live or exited process, and rehydrates a resource with no process after Server restart |
 | `terminal.restart` | `{terminalId,rows?,columns?}` → metadata after an explicit resource restart |
 | `terminal.status` | `{terminalId}` → metadata |
@@ -159,7 +159,7 @@ Android addresses stable terminal resources, not generic process IDs. Metadata i
 | `terminal.clear` | `{terminalId}` → metadata after clearing retained output and advancing generation |
 | `terminal.resolvePaths` | `{terminalId,generation,candidates:[string]}` → `{terminalId,generation,cwd,paths:[{text,path?,kind?,line?,column?}]}` |
 
-A generation mismatch resets reading to offset zero. Clipped reads disclose the retained starting offset. The client applies a frame's metadata, generation reset and bytes together, and continues observing after EOF so another client's restart becomes visible. Closing a view cancels only its attachment. Engine examines references in live workspace sessions, retaining an unreferenced terminal for a fifteen-second grace period before cleanup. A real environment activation restores previously running terminal resources; a no-op restart leaves them unchanged.
+A terminal created while no environment is usable keeps its identity, directory and size as a `starting` resource without a process, so a client can open its panel immediately. The first `terminal.attach` after the environment becomes usable starts it; until then attach fails with `environment_unavailable`. A generation mismatch resets reading to offset zero. Clipped reads disclose the retained starting offset. The client applies a frame's metadata, generation reset and bytes together, and continues observing after EOF so another client's restart becomes visible. Closing a view cancels only its attachment. Engine examines references in live workspace sessions, retaining an unreferenced terminal for a fifteen-second grace period before cleanup. A real environment activation restores previously running terminal resources; a no-op restart leaves them unchanged.
 
 `terminal.resolvePaths` resolves output candidates against the current Engine-owned cwd under terminal identity and generation checks. Server composes Terminal context with FileWork existence and path-safety checks. An accepted item contains the original `text`, workspace-relative `path`, its `kind` and optional zero-based line/column location. A rejected candidate returns only its `text`; a stale generation fails with `stale_terminal` instead of resolving against another process lifetime. Guest home/system paths, nonlocal file URIs, symlinks, parent escapes and private Engine paths do not become workspace targets. Android opens or reveals returned paths and does not guess candidates by calling `listDirectory`.
 

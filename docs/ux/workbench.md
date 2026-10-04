@@ -93,6 +93,8 @@ The key groups are `Esc Tab Ctrl Alt`, arrows, `Home End PgUp PgDn`, common char
 
 Visible URLs and file paths have persistent dashed underlines because touch has no hover. Pressing changes the underline to solid, and release opens the target. URLs go to the system browser. `path[:line[:column]]` opens in the focused editor Stack; relative paths use the terminal's reported working directory, and `~` uses the environment home. Long press enters selection with handles and Copy, Paste, and Select all. When a process ends, its output dims and an Ended row offers Restart and Close.
 
+New terminal and Open in terminal open the panel at once, titled Terminal n. When the environment is not yet usable, the notice at the top of the terminal shows its preparation, or its failure with Details and Retry. The terminal body stays empty and ignores input, and the shell starts in the same panel as soon as the environment is usable. The terminal does not fail on its own while it waits. A path pasted or dropped into a new terminal is pasted once the shell runs.
+
 ## Session navigation and archive decisions
 
 At 600dp or wider, the Session view is a 400dp modal side sheet sliding from the left with scrim; below that it is full screen. Its 44dp header contains a 36dp search field for names and resources plus New temporary Session. Named entries are 48dp two-line rows with a `titleSm` name, resource captions, relative time, and a primary dot on the current Session. Their automatic ranking is defined by the product's archive and Session policy.

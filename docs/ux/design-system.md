@@ -84,6 +84,7 @@ Loading indicators wait 300ms before appearing. A longer operation uses a region
 | Backend is logged out | Centered Log in action naming the backend; Send disabled |
 | Environment is preparing | A wavy linear progress indicator and Preparing environment n% at the terminal top; a small loading indicator in the send position |
 | Environment status cannot be read | A neutral Checking environment line at the terminal top; the last known readiness still applies |
+| Terminal opens before the environment is usable | The environment's progress or failure with Retry at the terminal top over an empty terminal; the shell starts when the environment is usable |
 | Conversation opens before its entry exists | The environment's progress or failure with Retry environment, or an error row with Retry when the open failed |
 | Verified replacement awaits activation | Environment configuration changed with Restart environment at the terminal top; Settings gains a dot |
 | Copy or archive completes | A concise Snackbar such as Copied or Archived · Undo |

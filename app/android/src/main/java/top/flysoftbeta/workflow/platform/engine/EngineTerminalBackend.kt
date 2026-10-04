@@ -15,16 +15,21 @@ import top.flysoftbeta.workflow.core.terminal.*
 class EngineTerminalBackend(private val controller: EngineController) : ManagedTerminalBackend {
     override val paths = ShellPaths(Guest.WORKSPACE, Guest.HOME)
 
+    /** Engine allocates the terminal at once; without a usable environment it stays `starting` until [attach]. */
     override suspend fun create(spec: TerminalSpec): ManagedTerminalProcess {
         require(WorkspacePaths.normalizeOrNull(spec.directory) == spec.directory)
         require(spec.argv == null && spec.env.isEmpty()) { "Engine chooses the terminal shell and environment" }
-        controller.awaitUsable()
         return Attachment(metadata(controller.rpc.request("terminal.create", mapOf(
             "directory" to spec.directory, "rows" to spec.rows, "columns" to spec.columns,
         ), 60_000)))
     }
 
+    /**
+     * Attaching may start the terminal, which needs the environment: wait for it, through a failure the user can
+     * retry from the terminal's environment notice.
+     */
     override suspend fun attach(id: String, rows: Int?, columns: Int?): ManagedTerminalProcess {
+        controller.awaitUsable(waitThroughFailure = true)
         val args = mutableMapOf<String, Any?>("terminalId" to id)
         rows?.let { args["rows"] = it }; columns?.let { args["columns"] = it }
         return Attachment(metadata(controller.rpc.request("terminal.attach", args, 60_000)))

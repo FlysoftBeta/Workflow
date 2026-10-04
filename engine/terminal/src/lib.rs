@@ -19,7 +19,9 @@ use std::{
 use workflow_environment::{
     Environment, Error, Result, Store,
     json::OpaqueObject,
-    runtime::{Dimensions, OutputStream, Processes, ReadOutput, SpawnOptions, WaitStatus},
+    runtime::{
+        Dimensions, OutputStream, Processes, ReadOutput, SpawnOptions, WaitStatus, dimensions,
+    },
     store::keys::TERMINAL_STATE as STATE_KEY,
 };
 
@@ -126,7 +128,18 @@ impl Terminals {
             ordinal,
             working_directory(options.directory.as_deref().unwrap_or(""))?,
         ));
-        start(&mut terminal, processes, environment, options)?;
+        // Identity never waits for the environment: until one is usable the resource stays
+        // `starting` without a process, and the first attach after that starts it.
+        if environment.lock().unwrap().status().usable {
+            start(&mut terminal, processes, environment, options)?;
+        } else {
+            let size = dimensions(
+                options.rows.unwrap_or(terminal.metadata.rows),
+                options.columns.unwrap_or(terminal.metadata.columns),
+            )?;
+            terminal.metadata.rows = size.rows;
+            terminal.metadata.columns = size.columns;
+        }
         let metadata = terminal.metadata.clone();
         items.insert(id, terminal);
         self.save(&items)?;
@@ -619,6 +632,60 @@ mod tests {
                 )
                 .unwrap()
                 .reset
+        );
+    }
+    #[test]
+    fn creation_without_a_usable_environment_keeps_identity_until_attach() {
+        let dir = tempfile::tempdir().unwrap();
+        let environment = Arc::new(Mutex::new(
+            Environment::load(
+                workflow_environment::Options {
+                    root: dir.path().to_owned(),
+                    ..Default::default()
+                },
+                Arc::new(AtomicUsize::new(0)),
+            )
+            .unwrap(),
+        ));
+        assert!(!environment.lock().unwrap().status().usable);
+        let registry = Terminals::load(dir.path()).unwrap();
+        let processes = processes();
+        let options = StartOptions {
+            directory: Some("src".into()),
+            rows: Some(30),
+            columns: Some(100),
+            ..StartOptions::default()
+        };
+        let created = registry.create(&processes, &environment, &options).unwrap();
+        assert_eq!(created.status, Status::Starting);
+        assert_eq!(
+            (created.cwd.as_str(), created.rows, created.columns),
+            ("/workspace/src", 30, 100)
+        );
+        assert!(registry.items.lock().unwrap()[&created.id].process.is_none());
+        let saved = Store::open(dir.path())
+            .unwrap()
+            .read::<Saved>(STATE_KEY)
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.terminals[0].id, created.id);
+        // Attach starts the resource only once an environment is usable.
+        let refused = registry
+            .attach(&processes, &environment, &created.id, &StartOptions::default())
+            .unwrap_err();
+        assert_eq!(refused.kind, "environment_unavailable");
+        registry.reap(&HashSet::new(), &processes).unwrap();
+        assert_eq!(registry.status(&created.id).unwrap().status, Status::Starting);
+        let invalid = StartOptions {
+            rows: Some(0),
+            ..StartOptions::default()
+        };
+        assert_eq!(
+            registry
+                .create(&processes, &environment, &invalid)
+                .unwrap_err()
+                .kind,
+            "invalid_params"
         );
     }
     #[test]

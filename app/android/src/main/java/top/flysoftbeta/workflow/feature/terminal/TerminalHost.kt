@@ -12,13 +12,13 @@ import top.flysoftbeta.workflow.core.terminal.*
 import top.flysoftbeta.workflow.app.AppGraph
 import top.flysoftbeta.workflow.platform.engine.EngineController
 import top.flysoftbeta.workflow.platform.engine.EngineTerminalBackend
-import top.flysoftbeta.workflow.platform.engine.EnvironmentUnavailableException
 
 sealed interface TerminalStatus {
+    /** Created or attaching; a terminal created before the environment is usable waits here for it. */
     data object Starting : TerminalStatus
     data object Running : TerminalStatus
     data class Ended(val exitCode: Int) : TerminalStatus
-    data class Failed(val message: String, val environment: Boolean = false) : TerminalStatus
+    data class Failed(val message: String) : TerminalStatus
 }
 
 /** Connection-scoped UI attachments. Engine owns IDs, process lifecycle and reference cleanup. */
@@ -41,7 +41,8 @@ class TerminalHost internal constructor(
         val id = managed?.initial?.id ?: "fixture-${UUID.randomUUID()}"
         val session = TerminalSession(id, managed?.initial?.ordinal ?: fixtureOrdinals.incrementAndGet(), backend, scope)
         sessions[id] = session
-        session.bind(process)
+        // Created before the environment was usable: attaching waits for it and starts the shell.
+        if (managed?.initial?.status == "starting") session.attach() else session.bind(process)
         return id
     }
 
@@ -127,7 +128,7 @@ class TerminalSession internal constructor(
     }
 
     private fun fail(error: Exception) {
-        mutableStatus.value = TerminalStatus.Failed(error.message ?: "终端连接失败", error is EnvironmentUnavailableException)
+        mutableStatus.value = TerminalStatus.Failed(error.message ?: "终端连接失败")
     }
 
     private suspend fun consume(attached: TerminalProcess) {
@@ -153,6 +154,7 @@ class TerminalSession internal constructor(
                     mutableTitle.value = metadata.title
                     mutableCustomTitle.value = metadata.customTitle
                     mutableStatus.value = when (metadata.status) {
+                        "starting" -> TerminalStatus.Starting
                         "running" -> TerminalStatus.Running
                         "ended" -> TerminalStatus.Ended(metadata.exitCode ?: 0)
                         else -> TerminalStatus.Failed(metadata.error ?: "终端不可用")
