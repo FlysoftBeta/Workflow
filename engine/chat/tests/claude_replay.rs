@@ -485,6 +485,7 @@ fn process_exit_fails_turns_and_expires_requests() {
     let state = h.store.wait("expired", |s| {
         t(s, SESSION).run_state == RunState::NotLoaded
             && request(s, &allow).is_some_and(|r| r.status == RequestStatus::Expired)
+            && t(s, SESSION).notices.iter().any(|n| n.code.as_deref() == Some("processExited"))
     });
     assert_eq!(turn_status(&state, SESSION, U2), Some(TurnStatus::Failed));
     assert!(

@@ -561,3 +561,154 @@ pub fn final_message(turn: &Turn) -> Option<&AgentMessageItem> {
 pub fn request<'a>(state: &'a AgentState, key: &RequestKey) -> Option<&'a PendingRequest> {
     state.requests.get(key)
 }
+
+/// In-memory implementations of the remaining Chat ports.
+pub mod ports {
+    use crate::{
+        config::{AgentConfig, AgentPatch},
+        error::{ChatError, ErrorKind, Result},
+        ports::*,
+        service::{
+            index::IndexDocument,
+            ledger::{SendRecord, SubmittedComposer},
+        },
+    };
+    use std::{
+        collections::BTreeMap,
+        sync::{Mutex, atomic::{AtomicUsize, Ordering}},
+    };
+    use workflow_environment::{
+        config::ConfigSection,
+        tools::{ToolPhase, ToolStatus, ToolsStatus},
+    };
+
+    #[derive(Default)]
+    pub struct MemoryStore {
+        pub index: Mutex<Option<String>>,
+        pub sends: Mutex<BTreeMap<String, SendRecord>>,
+    }
+    impl ChatStore for MemoryStore {
+        fn read_index(&self) -> Result<Option<IndexDocument>> {
+            self.index
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|s| IndexDocument::decode(s.as_bytes()))
+                .transpose()
+        }
+        fn write_index(&self, document: &IndexDocument) -> Result<()> {
+            *self.index.lock().unwrap() = Some(serde_json::to_string(document)?);
+            Ok(())
+        }
+        fn quarantine_index(&self) -> Result<()> {
+            self.index.lock().unwrap().take();
+            Ok(())
+        }
+        fn read_send(&self, key: &str) -> Result<Option<SendRecord>> {
+            Ok(self.sends.lock().unwrap().get(key).cloned())
+        }
+        fn write_send(&self, key: &str, record: &SendRecord) -> Result<()> {
+            self.sends.lock().unwrap().insert(key.into(), record.clone());
+            Ok(())
+        }
+        fn remove_sends(&self, conversation: &str) -> Result<()> {
+            self.sends
+                .lock()
+                .unwrap()
+                .retain(|_, r| r.conversation_id.as_deref() != Some(conversation));
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    pub struct MemoryPreferences(pub Mutex<AgentConfig>);
+    impl AgentPreferences for MemoryPreferences {
+        fn get(&self) -> AgentConfig {
+            self.0.lock().unwrap().clone()
+        }
+        fn update(&self, patch: AgentPatch) -> Result<()> {
+            self.0
+                .lock()
+                .unwrap()
+                .apply(patch)
+                .map_err(|e| ChatError::new(ErrorKind::Store, e.message))
+        }
+    }
+
+    #[derive(Default)]
+    pub struct MemoryWorkspace {
+        pub files: Mutex<BTreeMap<String, Vec<u8>>>,
+        pub acknowledged: Mutex<Vec<SubmittedComposer>>,
+        pub removed: Mutex<Vec<String>>,
+    }
+    impl WorkspaceBridge for MemoryWorkspace {
+        fn read_attachment(&self, path: &str, max: usize) -> Result<Option<Vec<u8>>> {
+            Ok(self.files.lock().unwrap().get(path).map(|b| b[..b.len().min(max)].to_vec()))
+        }
+        fn acknowledge_composer(&self, submitted: &SubmittedComposer) -> Result<()> {
+            self.acknowledged.lock().unwrap().push(submitted.clone());
+            Ok(())
+        }
+        fn remove_conversation(&self, id: &str) -> Result<()> {
+            self.removed.lock().unwrap().push(id.into());
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    pub struct MemoryHome(pub Mutex<BTreeMap<String, Vec<u8>>>);
+    impl GuestHome for MemoryHome {
+        fn read(&self, path: &str, max: usize) -> Result<Option<Vec<u8>>> {
+            match self.0.lock().unwrap().get(path) {
+                Some(b) if b.len() > max => Err(ChatError::invalid("too large")),
+                other => Ok(other.cloned()),
+            }
+        }
+    }
+
+    /// Tool status with a settable phase per tool; installs mark Claude installing.
+    pub struct FakeTools {
+        pub phases: Mutex<BTreeMap<String, ToolPhase>>,
+        pub installs: AtomicUsize,
+    }
+    impl FakeTools {
+        pub fn new(codex: ToolPhase, claude: ToolPhase) -> Self {
+            Self {
+                phases: Mutex::new(BTreeMap::from([("codex".into(), codex), ("claude".into(), claude)])),
+                installs: AtomicUsize::new(0),
+            }
+        }
+        pub fn set(&self, id: &str, phase: ToolPhase) {
+            self.phases.lock().unwrap().insert(id.into(), phase);
+        }
+        fn snapshot(&self) -> ToolsStatus {
+            ToolsStatus {
+                revision: 1,
+                tools: self
+                    .phases
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .map(|(id, phase)| {
+                        serde_json::from_value::<ToolStatus>(serde_json::json!({
+                            "id": id,
+                            "binary": format!("/opt/workflow/tools/{id}/bin/{id}"),
+                            "phase": phase,
+                        }))
+                        .unwrap()
+                    })
+                    .collect(),
+            }
+        }
+    }
+    impl AgentTools for FakeTools {
+        fn status(&self) -> Result<ToolsStatus> {
+            Ok(self.snapshot())
+        }
+        fn install_claude(&self, _retry: bool) -> Result<ToolsStatus> {
+            self.installs.fetch_add(1, Ordering::SeqCst);
+            self.set("claude", ToolPhase::Installing);
+            Ok(self.snapshot())
+        }
+    }
+}
