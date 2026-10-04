@@ -2,6 +2,7 @@ package top.flysoftbeta.workflow.feature.editor
 
 import android.content.Context
 import android.content.MutableContextWrapper
+import android.util.Log
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.compose.foundation.background
@@ -129,7 +130,10 @@ internal class TextEditorController(private val path: String, private val contex
 
     private suspend fun load(initial: Boolean) {
         try {
-            if (initial) withContext(Dispatchers.IO) { runCatching { SoraGrammars.load(appContext) } }
+            if (initial) withContext(Dispatchers.IO) {
+                // Without grammars the file still opens, as plain text; keep the cause in logcat.
+                runCatching { SoraGrammars.load(appContext) }.onFailure { Log.w(LOG_TAG, "TextMate grammars failed to load", it) }
+            }
             val snapshot = store.openFile(path)
             if (snapshot.tooLarge) { phase = Phase.TOO_LARGE; return }
             if (snapshot.binary && snapshot.draft == null) { phase = Phase.BINARY; return }
@@ -268,7 +272,7 @@ internal class TextEditorController(private val path: String, private val contex
             SoraGrammars.scope(path)?.let { scope ->
                 view.setEditorLanguage(TextMateLanguage.create(scope, false).apply { isAutoCompleteEnabled = false })
             }
-        }
+        }.onFailure { Log.w(LOG_TAG, "Syntax highlighting unavailable for ${SoraGrammars.scope(path)}", it) }
         applying = true
         try { view.setText(loadedText) } finally { applying = false }
         pendingCursor?.let { cursor -> moveTo(view, cursor, makeVisible = pendingScrollLine == null) }
@@ -501,6 +505,7 @@ internal class TextEditorController(private val path: String, private val contex
 
     companion object {
         private const val PUSH_DELAY_MS = 150L
+        private const val LOG_TAG = "WorkflowEditor"
         private val PROSE = setOf("md", "markdown", "txt", "text", "rst", "adoc", "log", "")
 
         fun defaultWrap(path: String, view: PanelView): Boolean =
