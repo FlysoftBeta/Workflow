@@ -1,7 +1,5 @@
 package top.flysoftbeta.workflow.feature.terminal
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.MutableContextWrapper
@@ -10,10 +8,8 @@ import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -26,16 +22,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -71,7 +61,6 @@ import top.flysoftbeta.workflow.ui.design.dnd.AreaStyle
 import top.flysoftbeta.workflow.ui.design.dnd.DragPayload
 import top.flysoftbeta.workflow.ui.design.dnd.FilesDragPayload
 import top.flysoftbeta.workflow.ui.design.icons.Sym
-import top.flysoftbeta.workflow.ui.design.theme.WorkflowShapes
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
 
 /** Terminals in the bottom stack (docs/ux/README.md §4.4). Processes live in [TerminalHost]. */
@@ -104,7 +93,6 @@ internal class TerminalController(
     private var pinnedKeys by mutableStateOf(context.store.state.value.config.terminal.extraKeysPinned)
     private var renaming by mutableStateOf(false)
     private var restartPending = false
-    private var selection by mutableStateOf<Pair<String, IntOffset>?>(null)
     /** End offset of the output already written to the page, and the session generation it belongs to. */
     private var rendered = -1L
     private var renderedGeneration = -1L
@@ -178,7 +166,6 @@ internal class TerminalController(
     }
 
     override fun onInput(data: String) {
-        selection = null
         val modifiers = keys.consume()
         session?.write(TerminalKeys.applyModifiers(data, modifiers.ctrl, modifiers.alt))
     }
@@ -220,10 +207,6 @@ internal class TerminalController(
             catch (_: Exception) { emptyList() }
             view?.linksChecked(requestId, texts.indices.map { paths.getOrNull(it)?.path != null })
         }
-    }
-
-    override fun onSelection(text: String, x: Int, y: Int) {
-        selection = if (text.isEmpty() && x == 0 && y == 0) null else text to IntOffset(x, y)
     }
 
     override fun onGone() {
@@ -280,7 +263,6 @@ internal class TerminalController(
         val colors = WorkflowTheme.colors
         val dark = WorkflowTheme.isDark
         val activity = LocalContext.current
-        val density = LocalDensity.current
         // Views are created with the wrapper: point it at the activity first (popups, IME, themes).
         if (wrapper.baseContext !== activity) wrapper.baseContext = activity
         val page = remember { ensureView() }
@@ -318,16 +300,8 @@ internal class TerminalController(
                     modifier = Modifier.fillMaxSize(),
                     onRelease = { (it.parent as? ViewGroup)?.removeView(it) },
                 )
+                // Selection handles and the floating Copy / Paste / Select all toolbar are platform chrome of the page view.
                 if (ended) Box(Modifier.matchParentSize().background(colors.surface.copy(alpha = 0.45f)))
-                selection?.let { (_, at) ->
-                    // Above the touch point when there is room, else below it (never over the selection start).
-                    val y = if (at.y >= 64) at.y.dp - 52.dp else at.y.dp + 28.dp
-                    val offset = with(density) { IntOffset((at.x.dp - 40.dp).roundToPx().coerceAtLeast(0), y.roundToPx()) }
-                    Popup(offset = offset, onDismissRequest = { selection = null },
-                        properties = PopupProperties(focusable = false, dismissOnClickOutside = false)) {
-                        SelectionToolbar()
-                    }
-                }
             }
             if (ended) {
                 val message = when (current) {
@@ -346,32 +320,6 @@ internal class TerminalController(
             }
         }
         if (renaming) RenameDialog()
-    }
-
-    @Composable
-    private fun SelectionToolbar() {
-        val colors = WorkflowTheme.colors
-        Row(
-            Modifier.background(colors.surfaceContainerHigh, WorkflowShapes.sm).padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = {
-                val text = selection?.first.orEmpty()
-                if (text.isNotEmpty()) {
-                    appContext.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("终端", text))
-                }
-                selection = null
-                view?.clearSelection()
-            }) { Text("复制", style = WorkflowTheme.text.label) }
-            TextButton(onClick = {
-                val clip = appContext.getSystemService(ClipboardManager::class.java)?.primaryClip
-                val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(appContext)?.toString().orEmpty()
-                selection = null
-                view?.clearSelection()
-                if (text.isNotEmpty()) view?.paste(text)
-            }) { Text("粘贴", style = WorkflowTheme.text.label) }
-            TextButton(onClick = { view?.selectAll() }) { Text("全选", style = WorkflowTheme.text.label) }
-        }
     }
 
     @Composable

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.ViewModelProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -66,7 +67,7 @@ class TerminalWorkbenchAcceptanceTest {
         val stale = runBlocking { runCatching { session.rpc.request("terminal.resolvePaths", mapOf("terminalId" to terminal.id,
             "generation" to terminal.generation.value - 1, "candidates" to listOf("target.txt"))) }.exceptionOrNull() }
         assertNotNull("Stale terminal generation must be refused", stale)
-        // Copy uses the actual panel toolbar and system clipboard, not a test clipboard implementation.
+        // Copy uses the platform floating toolbar of the actual panel and the system clipboard.
         fun web(view: View): TerminalWebView? = when (view) {
             is TerminalWebView -> view
             is ViewGroup -> (0 until view.childCount).firstNotNullOfOrNull { web(view.getChildAt(it)) }
@@ -75,9 +76,9 @@ class TerminalWorkbenchAcceptanceTest {
         var page: TerminalWebView? = null
         compose.runOnUiThread { page = web(compose.activity.window.decorView); page?.selectAll() }
         assertNotNull(page)
-        compose.waitForIdle()
-        compose.onNodeWithText("复制").performClick()
+        compose.waitUntil(10_000) { page!!.selectionChrome.actionMode?.type == android.view.ActionMode.TYPE_FLOATING }
+        TerminalDeviceProbe(InstrumentationRegistry.getInstrumentation()).tapToolbarItem(compose.activity.getString(android.R.string.copy))
         val clipboard = compose.activity.getSystemService(android.content.ClipboardManager::class.java)
-        assertTrue(clipboard.primaryClip!!.getItemAt(0).text.contains("target.txt:3:2"))
+        compose.waitUntil(10_000) { clipboard.primaryClip?.getItemAt(0)?.text?.contains("target.txt:3:2") == true }
     }
 }

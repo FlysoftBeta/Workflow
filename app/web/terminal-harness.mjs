@@ -41,11 +41,12 @@ export async function terminal(t, { cols = 40, rows = 8, bridge = {}, pointer = 
   };
   if (pointer) w.PointerEvent = w.MouseEvent;
   else w.PointerEvent = undefined;
-  const calls = { urls: [], paths: [], checks: [], selections: [], input: [], keys: [], resize: [], ready: 0 };
+  const calls = { urls: [], paths: [], checks: [], selections: [], states: [], input: [], keys: [], resize: [], ready: 0 };
   w.Workflow = {
     ready() { calls.ready++; }, input(text) { calls.input.push(text); }, key(text) { calls.keys.push(text); },
     resize(...size) { calls.resize.push(size); }, openUrl(url) { calls.urls.push(url); }, openPath(path) { calls.paths.push(path); },
-    checkLinks(id, json) { calls.checks.push({ id, texts: JSON.parse(json) }); }, selection(...args) { calls.selections.push(args); }, ...bridge
+    checkLinks(id, json) { calls.checks.push({ id, texts: JSON.parse(json) }); }, selection(...args) { calls.selections.push(args); },
+    selectionState(json) { calls.states.push(JSON.parse(json)); }, ...bridge
   };
   w.eval(scripts[0]);
   const RealTerminal = w.Terminal;
@@ -91,13 +92,25 @@ export async function terminal(t, { cols = 40, rows = 8, bridge = {}, pointer = 
     touch('touchend', { x: p.x + dx * 10, y: p.y + dy * 22 }, w.document);
     await settle();
   }
+  // A one-finger swipe with real elapsed time between moves; `pause` ms before release suppresses a fling.
+  async function swipe(start, dy, { steps = 6, stepMs = 16, pause = 0, dx = 0 } = {}) {
+    touch('touchstart', start);
+    let last = start;
+    for (let step = 1; step <= steps; step++) {
+      await sleep(stepMs);
+      last = { x: start.x + dx * step / steps, y: start.y + dy * step / steps };
+      touch('touchmove', last);
+    }
+    if (pause) await sleep(pause);
+    return touch('touchend', last);
+  }
   function key(target, value) {
     const event = new w.KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true });
     target.dispatchEvent(event); return event;
   }
   const text = () => Array.from({ length: term.buffer.active.length }, (_, index) => term.buffer.active.getLine(index)?.translateToString(true) ?? '').join('\n');
-  t.after(() => { w.dispatchEvent(new w.Event('blur')); term.dispose(); w.close(); });
-  return { w, term, api, host, screen, calls, settle, sleep, position, touch, tap, mouse, pointerEvent, key,
+  t.after(() => { w.dispatchEvent(new w.Event('blur')); api.clearSelection(); term.dispose(); w.close(); });
+  return { w, term, api, host, screen, calls, settle, sleep, position, touch, tap, mouse, pointerEvent, key, swipe,
     longPress, handle, dragHandle, text, scrollbar: () => host.querySelector('.workflow-scrollbar'),
     async write(value) { api.write(value); await settle(); }, async reset(value = '') { api.reset(value); await settle(); } };
 }
