@@ -1,17 +1,13 @@
 package top.flysoftbeta.workflow.feature.chat
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -21,11 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.MenuAnchorPosition
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -33,7 +26,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,37 +34,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import top.flysoftbeta.workflow.agent.model.BackendKind
 import top.flysoftbeta.workflow.agent.model.ConversationEntry
-import top.flysoftbeta.workflow.agent.model.LoginFlow
-import top.flysoftbeta.workflow.agent.model.LoginMethod
 import top.flysoftbeta.workflow.agent.model.LoginPhase
 import top.flysoftbeta.workflow.agent.model.LoginState
 import top.flysoftbeta.workflow.agent.model.LoginView
 import top.flysoftbeta.workflow.agent.model.isPending
 import top.flysoftbeta.workflow.agent.model.ProcessState
-import top.flysoftbeta.workflow.ui.design.CompositeMenu
 import top.flysoftbeta.workflow.ui.design.InlineError
-import top.flysoftbeta.workflow.ui.design.InlineLoading
-import top.flysoftbeta.workflow.ui.design.MenuEntry
-import top.flysoftbeta.workflow.ui.design.MenuGroup
 import top.flysoftbeta.workflow.ui.design.SearchField
+import top.flysoftbeta.workflow.ui.design.SignInContent
+import top.flysoftbeta.workflow.ui.design.openSignInLink
 import top.flysoftbeta.workflow.ui.design.SymbolIcon
 import top.flysoftbeta.workflow.ui.design.TextAction
-import top.flysoftbeta.workflow.ui.design.WfIconButton
-import top.flysoftbeta.workflow.ui.design.icons.Sym
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowShapes
 import top.flysoftbeta.workflow.ui.design.theme.WorkflowTheme
 
@@ -172,162 +152,24 @@ internal fun LoginPrompt(c: ConversationController, modifier: Modifier) {
 }
 
 /**
- * Login phases inline (docs/ux/conversations.md "Signing in"): starting, waiting for the browser with
- * cancel, failure with Retry, and an unreadable account with Check again. Device code is the primary method.
+ * Login phases inline (docs/ux/conversations.md "Signing in"), from the shared sign-in that Settings also
+ * uses: starting, waiting for the browser with Cancel, failure with Retry, and an unreadable account with
+ * Check again. Device code is the primary method.
  */
 @Composable
 private fun LoginBody(c: ConversationController) {
-    val entry = c.entry ?: return
-    val kind = entry.backend
-    val name = ChatText.backendName(kind)
-    val colors = WorkflowTheme.colors
+    val signIn = c.signIn ?: return
     val account = c.backend?.account ?: return
-    val phase = LoginView.phase(account)
-    var apiKey by remember { mutableStateOf<String?>(null) }
-    val context = c.context.appContext
     val chatConfiguration by c.hub.configuration.collectAsState()
-    fun open(url: String) = runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
-    // Returning from the browser re-reads the account a bounded number of times.
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    DisposableEffect(lifecycle, c) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) c.recheckAfterResume() }
-        lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
-    }
-    Column(Modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        c.loginProblem?.let { problem ->
-            InlineError("登录操作没有完成", Modifier.fillMaxWidth(), listOf(TextAction("重新检查") { c.recheckAccount() }))
-            Detail(problem)
-            Spacer(Modifier.height(8.dp))
-        }
-        when (phase) {
-            is LoginPhase.Starting -> Busy("正在开始登录…") { c.cancelLogin(phase.attemptId) }
-            is LoginPhase.Waiting -> when (val flow = phase.flow) {
-                is LoginFlow.DeviceCode -> {
-                    Text("在浏览器中打开下面的链接，并输入代码", style = WorkflowTheme.text.body, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            flow.verificationUrl, Modifier.weight(1f, fill = false).clip(WorkflowShapes.sm).clickable { open(flow.verificationUrl) }.padding(4.dp),
-                            style = WorkflowTheme.text.body, color = colors.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                        WfIconButton(Sym.OpenInNew, "打开链接", { open(flow.verificationUrl) })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(flow.userCode, style = WorkflowTheme.text.mono.copy(fontSize = 26.sp, lineHeight = 32.sp, letterSpacing = 2.sp), color = colors.onSurface)
-                        WfIconButton(Sym.ContentCopy, "复制代码", { c.copy(flow.userCode) })
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Busy("等待确认…") { flow.loginId?.let(c::cancelLogin) }
-                    CheckNote(phase.checkError)
-                }
-                is LoginFlow.Browser -> {
-                    Button(onClick = { open(flow.authUrl) }) { Text("在浏览器中继续") }
-                    Spacer(Modifier.height(8.dp))
-                    Busy("等待确认…") { flow.loginId?.let(c::cancelLogin) }
-                    CheckNote(phase.checkError)
-                }
-                else -> Unit
-            }
-            is LoginPhase.Terminal -> {
-                Text("在终端中运行下面的命令完成登录", style = WorkflowTheme.text.body, color = colors.onSurfaceVariant)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(phase.flow.argv.joinToString(" "), style = WorkflowTheme.text.mono, color = colors.onSurface)
-                    WfIconButton(Sym.ContentCopy, "复制命令", { c.copy(phase.flow.argv.joinToString(" ")) })
-                }
-                TextButton(onClick = c::recheckAccount) { Text("我已完成登录") }
-            }
-            LoginPhase.SignedIn -> Unit
-            LoginPhase.Checking, is LoginPhase.Idle -> {
-                val methods = chatConfiguration.loginMethods[kind].orEmpty()
-                val primary = methods.firstOrNull()
-                val ready = c.backend?.process is ProcessState.Ready
-                val idle = phase as? LoginPhase.Idle
-                when {
-                    idle?.failure != null -> {
-                        val retry = c.lastLoginMethod ?: primary
-                        InlineError("登录没有完成", Modifier.fillMaxWidth(), listOfNotNull(
-                            retry?.takeIf { ready && !c.loginStarting }?.let { method -> TextAction("重试") { c.login(method) } },
-                            TextAction("重新检查") { c.recheckAccount() },
-                        ))
-                        Detail(idle.failure)
-                        Detail(idle.checkError?.let { "账户状态：$it" })
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    idle?.checkError != null -> {
-                        InlineError("无法读取 $name 账户状态", Modifier.fillMaxWidth(), listOf(TextAction("重试") { c.recheckAccount() }))
-                        Detail(idle.checkError)
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
-                var more by remember { mutableStateOf(false) }
-                if (c.loginStarting) {
-                    Busy("正在开始登录…", onCancel = null)
-                } else if (apiKey == null) {
-                    Button(onClick = { primary?.let { c.login(it) } }, enabled = primary != null && ready) { Text("登录 $name") }
-                    Box {
-                        TextButton(onClick = { more = true }, enabled = ready) { Text("其他方式") }
-                        CompositeMenu(
-                            expanded = more, onDismissRequest = { more = false },
-                            anchorPosition = MenuAnchorPosition.Below,
-                            groups = listOf(MenuGroup("methods", methods.drop(1).map { method ->
-                                MenuEntry.Action(method.name, ChatText.loginLabel(method), if (method.name.endsWith("API_KEY") || method == LoginMethod.CLAUDE_SETUP_TOKEN) Sym.Key else Sym.OpenInNew) {
-                                    if (method == LoginMethod.CODEX_API_KEY || method == LoginMethod.CLAUDE_API_KEY || method == LoginMethod.CLAUDE_SETUP_TOKEN) apiKey = "" else c.login(method)
-                                }
-                            })),
-                        )
-                    }
-                    InlineLoading(!ready || phase is LoginPhase.Checking)
-                } else {
-                    OutlinedTextField(
-                        value = apiKey ?: "", onValueChange = { apiKey = it }, singleLine = true,
-                        label = { Text("API Key") }, visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { apiKey = null }) { Text("取消") }
-                        Spacer(Modifier.width(8.dp))
-                        Button(onClick = {
-                            val method = methods.first { it == LoginMethod.CODEX_API_KEY || it == LoginMethod.CLAUDE_API_KEY }
-                            c.login(method, apiKey)
-                            apiKey = null
-                        }, enabled = !apiKey.isNullOrBlank() && ready) { Text("登录") }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** A secondary line under a login error or waiting row; vendor text is shown verbatim, never credentials. */
-@Composable
-private fun Detail(text: String?) {
-    if (text.isNullOrBlank()) return
-    Text(text, Modifier.fillMaxWidth().padding(top = 4.dp), style = WorkflowTheme.text.caption, color = WorkflowTheme.colors.onSurfaceVariant, textAlign = TextAlign.Center)
-}
-
-/** A failing background account check while waiting; the attempt continues. */
-@Composable
-private fun CheckNote(checkError: String?) {
-    checkError ?: return
-    Detail("暂时无法确认登录状态，正在重试：$checkError")
-}
-
-/** A running login step with an indicator and, when the step can be cancelled, a Cancel action. */
-@Composable
-private fun Busy(label: String, onCancel: (() -> Unit)?) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        InlineLoading(true)
-        Spacer(Modifier.width(8.dp))
-        Text(label, style = WorkflowTheme.text.label, color = WorkflowTheme.colors.onSurfaceVariant)
-        if (onCancel != null) {
-            Spacer(Modifier.width(8.dp))
-            TextButton(onClick = onCancel) { Text("取消") }
-        }
-    }
+    val context = c.context.appContext
+    SignInContent(
+        state = signIn,
+        account = account,
+        methods = chatConfiguration.loginMethods[signIn.kind].orEmpty(),
+        ready = c.backend?.process is ProcessState.Ready,
+        openUrl = { url -> openSignInLink(context, url) },
+        copy = { _, text -> c.copy(text) },
+    )
 }
 
 @Composable
