@@ -20,6 +20,14 @@ use std::{
 };
 const PREFIX: &str = "/opt/workflow/tools";
 const CLAUDE: &str = "/opt/workflow/tools/claude/bin/claude";
+/// Members every payload carries. Codex resolves `codex-code-mode-host` beside its own executable;
+/// without it Code Mode fails closed.
+const REQUIRED: [&str; 4] = [
+    "codex/bin/codex",
+    "codex/bin/codex-code-mode-host",
+    "notices/codex-LICENSE",
+    "notices/claude-code-LICENSE",
+];
 /// Host directory of the visible, read-only agent tools below `.workspace/`.
 fn agent_tools(opts: &Options) -> PathBuf {
     opts.root.join(access::DIRECTORY).join(access::AGENT_TOOLS)
@@ -290,11 +298,7 @@ fn extract(archive: &Path, catalog: &ToolCatalog, target: &Path) -> Result<()> {
             fs::Permissions::from_mode(if item.executable { 0o755 } else { 0o644 }),
         )?;
     }
-    for required in [
-        "codex/bin/codex",
-        "notices/codex-LICENSE",
-        "notices/claude-code-LICENSE",
-    ] {
+    for required in REQUIRED {
         if !seen.contains(required) {
             return Err(err("incomplete required tools payload"));
         }
@@ -318,11 +322,7 @@ fn validate_catalog(catalog: &ToolCatalog) -> Result<()> {
             return Err(err("invalid tools inventory"));
         }
     }
-    for path in [
-        "codex/bin/codex",
-        "notices/codex-LICENSE",
-        "notices/claude-code-LICENSE",
-    ] {
+    for path in REQUIRED {
         if !seen.contains(path) {
             return Err(err("missing mandatory tool artifact"));
         }
@@ -679,6 +679,12 @@ mod tests {
                 & 0o777,
             0o755
         );
+        assert!(destination.join("codex/bin/codex-code-mode-host").is_file());
+        let mut without_host = catalog.clone();
+        without_host
+            .files
+            .retain(|f| f.path != "codex/bin/codex-code-mode-host");
+        assert!(validate_catalog(&without_host).is_err());
         catalog.files[0].sha256 = "0".repeat(64);
         assert!(extract(&archive, &catalog, &temp.path().join("bad")).is_err());
         catalog.files[0].path = "../escape".into();
@@ -769,11 +775,7 @@ pub(crate) fn fixture(directory: &Path) -> ToolCatalog {
     let archive = directory.join("tools.zip");
     let mut zip = zip::ZipWriter::new(File::create(&archive).unwrap());
     let mut files = vec![];
-    for path in [
-        "codex/bin/codex",
-        "notices/codex-LICENSE",
-        "notices/claude-code-LICENSE",
-    ] {
+    for path in REQUIRED {
         zip.start_file(path, zip::write::SimpleFileOptions::default())
             .unwrap();
         zip.write_all(b"test").unwrap();

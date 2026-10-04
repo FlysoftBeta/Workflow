@@ -33,12 +33,15 @@ def build(arch, output):
                 if isinstance(data,bytes): dest.write(data)
                 else: shutil.copyfileobj(data,dest)
             files.append({'path':name,'size':p.stat().st_size,'sha256':digest(p),'executable':executable})
-        c=codex['abis'][abi]; archive=fetch(c,ROOT/f'third_party/.cache/engine/codex/{codex["version"]}/{arch}.tar.gz')
-        with tarfile.open(archive) as t:
-            member=t.getmember(c['member'])
-            if not member.isfile(): raise ValueError('Codex must be regular file')
-            put('codex/bin/codex',t.extractfile(member),True)
-        if files[-1]['sha256']!=c['sha256'] or files[-1]['size']!=c['bytes']: raise ValueError('Codex binary identity mismatch')
+        # Codex 0.157 runs Code Mode in a sibling host executable; without it Code Mode fails closed.
+        c=codex['abis'][abi]
+        for name,entry,cache in [('codex',c,arch),('codex-code-mode-host',c['codeModeHost'],f'{arch}-code-mode-host')]:
+            archive=fetch(entry,ROOT/f'third_party/.cache/engine/codex/{codex["version"]}/{cache}.tar.gz')
+            with tarfile.open(archive) as t:
+                member=t.getmember(entry['member'])
+                if not member.isfile(): raise ValueError(f'{name} must be regular file')
+                put(f'codex/bin/{name}',t.extractfile(member),True)
+            if files[-1]['sha256']!=entry['sha256'] or files[-1]['size']!=entry['bytes']: raise ValueError(f'{name} binary identity mismatch')
         for name in ['codex','claude-code']:
             for file in ['manifest.json','LICENSE']:
                 put(f'notices/{name}-{file}',(ROOT/f'third_party/{name}/{file}').read_bytes())
