@@ -6,9 +6,9 @@ User-facing behavior is defined in the [product specification](../product/README
 
 ## Paths and ownership
 
-Cross-module paths are relative to the workspace root, separated with `/`, and contain no leading slash or `.` or `..` components. The empty string denotes the root. Absolute paths, parent traversal, and symlink traversal are rejected. User files occupy the workspace root; configuration and private state occupy its `.workspace/` directory, which the normal explorer always hides.
+Cross-module paths are relative to the workspace root, separated with `/`, and contain no leading slash or `.` or `..` components. The empty string denotes the root. Absolute paths, parent traversal, and symlink traversal are rejected. User files occupy the workspace root; configuration and private state occupy its `.workspace/` directory, which the explorer shows as a protected folder.
 
-Explicit file actions may access `.workspace/config.json`, `.workspace/env.json`, and safe service-file paths. They cannot open, save, or attach other private state. The guest also hides state, environment internals, documents, upload staging, corrupt originals, trash, and the Engine lock. `WorkspaceStore` is the connection's command-and-snapshot interface; Android does not keep a second durable copy of sessions, drafts, or layouts.
+Panel targets and explorer state accept user paths plus the `.workspace` entries that Environment's allowlist classifies as visible (editable configuration such as `config.json`, `env.json`, proxy and service files and agent configuration, and the read-only `agents/tools/`). They cannot open, save, or attach private state. The guest also hides state, environment internals, documents, upload staging, corrupt originals, trash, and the Engine lock. `WorkspaceStore` is the connection's command-and-snapshot interface; Android does not keep a second durable copy of sessions, drafts, or layouts.
 
 ## Sessions and discovery
 

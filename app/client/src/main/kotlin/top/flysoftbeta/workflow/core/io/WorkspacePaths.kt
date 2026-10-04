@@ -52,6 +52,6 @@ object WorkspacePaths {
     fun isReserved(path: String): Boolean =
         (isWithin(path, INTERNAL) && !isWithin(path, PROXY) && path != CONFIG && path != ENVIRONMENT) || path.isEmpty()
 
-    /** Hidden in the explorer even when "show hidden files" is on. */
+    /** Reference-store filter only; production listings follow the Engine's `.workspace` allowlist. */
     fun isHiddenInExplorer(path: String): Boolean = isWithin(path, INTERNAL)
 }

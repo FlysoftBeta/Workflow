@@ -43,7 +43,7 @@ The user chooses a root that appears as `/workspace` in the environment. User fi
     corrupt/                     original data retained during recovery
 ```
 
-The normal explorer hides `.workspace`. Explicit configuration actions can open allowed files, including `.workspace/proxy/`; the file API rejects private state. Environment supplies the guest mask for private state. Runtime metadata inside a generation uses `.workflow-engine/`, a separate implementation directory. Version 1.0.0 has no migration or scan for historical layouts. The proxy directory is `.workspace/proxy/`; the earlier `.workspace/services/proxy/` location is not imported.
+The explorer shows `.workspace` as a protected folder: Environment's typed allowlist (`access.rs`) marks editable configuration, read-only agent tools, and hidden private state, and FileWork and Workspace layout enforce it, so panels can open allowed files such as `.workspace/proxy/` while the file API rejects private state. Environment supplies the guest mask for private state. Runtime metadata inside a generation uses `.workflow-engine/`, a separate implementation directory. Version 1.0.0 has no migration or scan for historical layouts. The proxy directory is `.workspace/proxy/`; the earlier `.workspace/services/proxy/` location is not imported.
 
 The Server commits session/layout state and Working Resources in one workspace transaction through the Environment store. Keeping their domain ownership separate must not split archive protection into independently acknowledged writes. Atomic publication, backup and quarantine happen before a committed revision is acknowledged.
 
